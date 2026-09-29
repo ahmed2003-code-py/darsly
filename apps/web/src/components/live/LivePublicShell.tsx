@@ -8,7 +8,13 @@ import ColorModeToggle from '../ColorModeToggle';
  * session page, a guest's own page. Same tokens as the rest of Darsly, and
  * the same light/dark switch (these pages have no app shell to carry it).
  */
-export default function LivePublicShell({ children, back }: { children: ReactNode; back?: ReactNode }) {
+export default function LivePublicShell({
+  children,
+  back,
+}: {
+  children: ReactNode;
+  back?: ReactNode;
+}) {
   const { i18n } = useTranslation();
   return (
     <div className="min-h-screen bg-surface text-on-surface" dir={i18n.dir()}>

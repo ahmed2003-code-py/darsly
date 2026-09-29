@@ -26,7 +26,14 @@ export function commerceStack(prisma: PrismaService) {
   const proofReader = { read: async () => null } as any;
   const ledger = new LedgerService(prisma);
   const targets = new PaymentTargets();
-  const manual = new ManualPaymentsService(prisma, ledger, notifications, proofs, proofReader, targets);
+  const manual = new ManualPaymentsService(
+    prisma,
+    ledger,
+    notifications,
+    proofs,
+    proofReader,
+    targets,
+  );
   const wallet = new WalletService(prisma, ledger, notifications, proofs, proofReader);
   const matching = new PaymentMatchingService(prisma, manual, wallet);
   const terms = new CommercialTermsService(prisma);
@@ -82,8 +89,12 @@ export async function commerceWorld(
   const teacher = await prisma.user.create({
     data: { role: 'TEACHER', fullName: `Teacher ${k}`, email: `lc-t-${k}@it.test` },
   });
-  const tp = await prisma.teacherProfile.create({ data: { userId: teacher.id, slug: `lc-${k}`, status: 'APPROVED' } });
-  await prisma.academy.create({ data: { id: tp.id, slug: `lc-${k}`, name: `A ${k}`, ownerUserId: teacher.id } });
+  const tp = await prisma.teacherProfile.create({
+    data: { userId: teacher.id, slug: `lc-${k}`, status: 'APPROVED' },
+  });
+  await prisma.academy.create({
+    data: { id: tp.id, slug: `lc-${k}`, name: `A ${k}`, ownerUserId: teacher.id },
+  });
   let academyId = tp.id;
   if (opts.center) {
     const c = await prisma.academy.create({
@@ -96,7 +107,13 @@ export async function commerceWorld(
       },
     });
     await prisma.academyMembership.create({
-      data: { userId: teacher.id, academyId: c.id, role: 'TEACHER', status: 'ACTIVE', joinedAt: new Date() },
+      data: {
+        userId: teacher.id,
+        academyId: c.id,
+        role: 'TEACHER',
+        status: 'ACTIVE',
+        joinedAt: new Date(),
+      },
     });
     academyId = c.id;
   }
@@ -129,13 +146,22 @@ export async function commerceWorld(
 }
 
 /** Put real money in a student's wallet, the way a verified top-up does. */
-export async function fundWallet(prisma: PrismaService, ledger: LedgerService, studentId: string, cents: number) {
+export async function fundWallet(
+  prisma: PrismaService,
+  ledger: LedgerService,
+  studentId: string,
+  cents: number,
+) {
   await ledger.creditWallet(studentId, cents, 'test top-up');
 }
 
 /** Sum of every entry on an account (credits − debits). */
 export async function accountBalance(prisma: PrismaService, account: string) {
-  const rows = await prisma.ledgerEntry.groupBy({ by: ['direction'], where: { account }, _sum: { amountCents: true } });
+  const rows = await prisma.ledgerEntry.groupBy({
+    by: ['direction'],
+    where: { account },
+    _sum: { amountCents: true },
+  });
   const c = rows.find((r) => r.direction === 'CREDIT')?._sum.amountCents ?? 0;
   const d = rows.find((r) => r.direction === 'DEBIT')?._sum.amountCents ?? 0;
   return c - d;
@@ -146,7 +172,9 @@ export async function assertLedgerBalanced(prisma: PrismaService, txnIds: string
   for (const id of txnIds) {
     const entries = await prisma.ledgerEntry.findMany({ where: { transactionId: id } });
     const d = entries.filter((e) => e.direction === 'DEBIT').reduce((a, e) => a + e.amountCents, 0);
-    const c = entries.filter((e) => e.direction === 'CREDIT').reduce((a, e) => a + e.amountCents, 0);
+    const c = entries
+      .filter((e) => e.direction === 'CREDIT')
+      .reduce((a, e) => a + e.amountCents, 0);
     if (d !== c) throw new Error(`ledger transaction ${id} does not balance: ${d} != ${c}`);
   }
 }

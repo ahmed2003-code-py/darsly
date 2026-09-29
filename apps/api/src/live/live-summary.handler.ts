@@ -26,14 +26,20 @@ export type { GroundedSummary } from './summary/grounded-summary';
  * tokens) — gpt-6-luna at its published $0.10 / $0.50 unless configured
  * otherwise. Chosen by the 2026-09-27 benchmark; see summary/grounded-summary.ts.
  */
-export function liveSummaryModel(env: NodeJS.ProcessEnv = process.env): { model: string; price: AiPrice } {
+export function liveSummaryModel(env: NodeJS.ProcessEnv = process.env): {
+  model: string;
+  price: AiPrice;
+} {
   const n = (k: string, d: number) => {
     const v = Number(env[k]);
     return Number.isFinite(v) && v >= 0 ? v : d;
   };
   return {
     model: env.LIVE_SUMMARY_MODEL?.trim() || 'gpt-6-luna',
-    price: { inPerMToken: n('LIVE_SUMMARY_PRICE_IN', 10), outPerMToken: n('LIVE_SUMMARY_PRICE_OUT', 50) },
+    price: {
+      inPerMToken: n('LIVE_SUMMARY_PRICE_IN', 10),
+      outPerMToken: n('LIVE_SUMMARY_PRICE_OUT', 50),
+    },
   };
 }
 
@@ -84,7 +90,9 @@ export class LiveSummaryHandler implements AiJobHandler {
   async handle(job: AiJob): Promise<AiJobResult | void> {
     const liveSessionId = (job.input as { liveSessionId?: string })?.liveSessionId;
     if (!liveSessionId) throw new AiJobError('No liveSessionId on job', 'TERMINAL');
-    return withAiTrace({ liveSessionId, aiJobId: job.id, stage: 'LIVE_SUMMARY' }, () => this.run(job, liveSessionId));
+    return withAiTrace({ liveSessionId, aiJobId: job.id, stage: 'LIVE_SUMMARY' }, () =>
+      this.run(job, liveSessionId),
+    );
   }
 
   private async run(job: AiJob, liveSessionId: string): Promise<AiJobResult | void> {
@@ -119,12 +127,15 @@ export class LiveSummaryHandler implements AiJobHandler {
 
     const t0 = Date.now();
     const lastTry = job.attempts >= maxAttemptsFor(job.type);
-    this.logger.log(`live.summary.started liveSession=${liveSessionId} job=${job.id} attempt=${job.attempts}`);
+    this.logger.log(
+      `live.summary.started liveSession=${liveSessionId} job=${job.id} attempt=${job.attempts}`,
+    );
     const transcript = await this.transcriptFor(session, lastTry);
     if (!transcript) {
       const unavailable =
         session.provider !== 'CLOUDFLARE' &&
-        (session.transcriptStatus === 'FAILED' || (await this.providers.forSession(session).transcripts?.available()) === false);
+        (session.transcriptStatus === 'FAILED' ||
+          (await this.providers.forSession(session).transcripts?.available()) === false);
       const reason = unavailable ? 'TRANSCRIPTION_UNAVAILABLE' : 'NO_TRANSCRIPT';
       // The summary fails; the transcript is left exactly as it is (a short
       // Darsly transcript is still a transcript).
@@ -136,7 +147,9 @@ export class LiveSummaryHandler implements AiJobHandler {
           ...(session.provider !== 'CLOUDFLARE' ? { transcriptStatus: 'FAILED' as const } : {}),
         },
       });
-      this.logger.warn(`live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=${reason}`);
+      this.logger.warn(
+        `live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=${reason}`,
+      );
       throw new AiJobError(`No transcript available for this session (${reason})`, 'TERMINAL');
     }
 
@@ -154,7 +167,14 @@ export class LiveSummaryHandler implements AiJobHandler {
     let path: 'single' | 'sections';
     let data: Record<string, unknown>;
     try {
-      ({ path, data } = await this.generate(session.title, transcript, partial, model, price, charge));
+      ({ path, data } = await this.generate(
+        session.title,
+        transcript,
+        partial,
+        model,
+        price,
+        charge,
+      ));
     } catch (e) {
       const usage = e instanceof AiJobError ? e.usage : undefined;
       if (usage) spent += this.ai.costMillicents(usage.inputTokens, usage.outputTokens, price);
@@ -167,8 +187,15 @@ export class LiveSummaryHandler implements AiJobHandler {
           data: { summaryStatus: 'FAILED', summaryError: 'AI_FAILED' },
         });
       }
-      this.logger.warn(`live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=AI_FAILED last=${lastTry}`);
-      throw new AiJobError(`Summary generation failed: ${(e as Error).message}`, 'RETRYABLE', undefined, SUMMARY_RETRY_MS);
+      this.logger.warn(
+        `live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=AI_FAILED last=${lastTry}`,
+      );
+      throw new AiJobError(
+        `Summary generation failed: ${(e as Error).message}`,
+        'RETRYABLE',
+        undefined,
+        SUMMARY_RETRY_MS,
+      );
     }
 
     const grounded = groundSummary(data, transcript);
@@ -210,14 +237,24 @@ export class LiveSummaryHandler implements AiJobHandler {
               transcriptText: transcript,
               transcriptStatus: 'READY' as const,
               transcriptRevision: { increment: 1 },
-              summaryMeta: { ...summaryMeta, transcriptRevision: session.transcriptRevision + 1 } as unknown as Prisma.InputJsonValue,
+              summaryMeta: {
+                ...summaryMeta,
+                transcriptRevision: session.transcriptRevision + 1,
+              } as unknown as Prisma.InputJsonValue,
             }
           : {}),
       },
     });
     if (written.count === 0) {
-      this.logger.log(`live.summary.stale liveSession=${liveSessionId} job=${job.id}: transcript changed, regenerating`);
-      throw new AiJobError('The transcript changed while the summary was made', 'RETRYABLE', undefined, 5_000);
+      this.logger.log(
+        `live.summary.stale liveSession=${liveSessionId} job=${job.id}: transcript changed, regenerating`,
+      );
+      throw new AiJobError(
+        'The transcript changed while the summary was made',
+        'RETRYABLE',
+        undefined,
+        5_000,
+      );
     }
 
     await this.notifications
@@ -266,7 +303,11 @@ export class LiveSummaryHandler implements AiJobHandler {
         timeoutMs: 5 * 60_000,
         maxRetries: 1,
       });
-      await charge({ inputTokens: r.inputTokens, outputTokens: r.outputTokens, reasoningTokens: r.reasoningTokens ?? 0 });
+      await charge({
+        inputTokens: r.inputTokens,
+        outputTokens: r.outputTokens,
+        reasoningTokens: r.reasoningTokens ?? 0,
+      });
       return r.data;
     };
     const cutOff = (e: unknown) => e instanceof AiJobError && /cut off/i.test(e.message);
@@ -282,7 +323,12 @@ export class LiveSummaryHandler implements AiJobHandler {
           if (!cutOff(e)) throw e;
           last = e;
           const u = (e as AiJobError).usage;
-          if (u) await charge({ inputTokens: u.inputTokens, outputTokens: u.outputTokens, reasoningTokens: 0 });
+          if (u)
+            await charge({
+              inputTokens: u.inputTokens,
+              outputTokens: u.outputTokens,
+              reasoningTokens: 0,
+            });
         }
       }
       // Two cut-off answers: too rich for one answer — sections, if there is
@@ -292,18 +338,27 @@ export class LiveSummaryHandler implements AiJobHandler {
     const notes: Record<string, unknown>[] = [];
     for (const [i, part] of parts.entries()) {
       const user = `Class title: ${title}\nPart ${i + 1} of ${parts.length} of the class, in order.\n\n<<<TRANSCRIPT PART>>>\n${part}\n<<<END TRANSCRIPT PART>>>`;
-      notes.push({ part: i + 1, ...(await ask(user, 'class_section_notes', SECTION_SCHEMA, lim.sectionOutput)) });
+      notes.push({
+        part: i + 1,
+        ...(await ask(user, 'class_section_notes', SECTION_SCHEMA, lim.sectionOutput)),
+      });
     }
     const merge =
       `Class title: ${title}\nBelow are notes on each part of ONE class, in order. Merge them into the final study notes. ` +
       `Use only what the notes contain; keep each item's evidence quote exactly as given; drop duplicates; ` +
       `a later correction overrides an earlier statement.\n\n${JSON.stringify(notes)}`;
-    return { path: 'sections', data: await ask(merge, 'class_study_notes', FINAL_SCHEMA, lim.mergeOutput) };
+    return {
+      path: 'sections',
+      data: await ask(merge, 'class_study_notes', FINAL_SCHEMA, lim.mergeOutput),
+    };
   }
 
   private async spentByJob(aiJobId: string): Promise<number> {
     try {
-      const agg = await this.prisma.aiCallLog.aggregate({ where: { aiJobId }, _sum: { costMillicents: true } });
+      const agg = await this.prisma.aiCallLog.aggregate({
+        where: { aiJobId },
+        _sum: { costMillicents: true },
+      });
       return agg._sum.costMillicents ?? 0;
     } catch (e) {
       this.logger.warn(`Could not read prior AI spend for job ${aiJobId}: ${(e as Error).message}`);
@@ -315,7 +370,9 @@ export class LiveSummaryHandler implements AiJobHandler {
     if (millicents <= 0) return;
     await this.prisma.aiJob
       .update({ where: { id: aiJobId }, data: { costCents: Math.ceil(millicents / 1000) } })
-      .catch((e: Error) => this.logger.warn(`Could not record AI spend on job ${aiJobId}: ${e.message}`));
+      .catch((e: Error) =>
+        this.logger.warn(`Could not record AI spend on job ${aiJobId}: ${e.message}`),
+      );
   }
 
   /**
@@ -324,31 +381,51 @@ export class LiveSummaryHandler implements AiJobHandler {
    * a transcript still being written.
    */
   private async transcriptFor(
-    session: { id: string; transcriptText: string | null; roomName: string | null; provider?: string | null },
+    session: {
+      id: string;
+      transcriptText: string | null;
+      roomName: string | null;
+      provider?: string | null;
+    },
     lastTry: boolean,
   ): Promise<string | null> {
     const own = session.transcriptText?.trim();
     if (own && own.length >= MIN_TRANSCRIPT_CHARS) return own;
-    const transcripts = session.provider === 'CLOUDFLARE' ? null : this.providers.forSession(session).transcripts;
+    const transcripts =
+      session.provider === 'CLOUDFLARE' ? null : this.providers.forSession(session).transcripts;
     if (!session.roomName || !transcripts) return null;
     const deadline = Date.now() + TRANSCRIPT_WAIT.maxMs;
     for (;;) {
       const found = await transcripts.find(session.roomName);
-      if (found.state === 'ready') return found.text.length >= MIN_TRANSCRIPT_CHARS ? found.text : null;
+      if (found.state === 'ready')
+        return found.text.length >= MIN_TRANSCRIPT_CHARS ? found.text : null;
       if (found.state === 'none') return null;
       if (found.state === 'error') {
         if (lastTry) await this.giveUp(session.id, 'PROVIDER_UNREACHABLE');
-        throw new AiJobError('Could not reach the transcript provider', 'RETRYABLE', undefined, SUMMARY_RETRY_MS);
+        throw new AiJobError(
+          'Could not reach the transcript provider',
+          'RETRYABLE',
+          undefined,
+          SUMMARY_RETRY_MS,
+        );
       }
       if (Date.now() >= deadline) {
         if (lastTry) await this.giveUp(session.id, 'TRANSCRIPT_PENDING');
-        throw new AiJobError('Transcript is still being processed by the provider', 'RETRYABLE', undefined, SUMMARY_RETRY_MS);
+        throw new AiJobError(
+          'Transcript is still being processed by the provider',
+          'RETRYABLE',
+          undefined,
+          SUMMARY_RETRY_MS,
+        );
       }
       await new Promise((r) => setTimeout(r, TRANSCRIPT_WAIT.pollMs));
     }
   }
 
   private giveUp(sessionId: string, reason: string) {
-    return this.prisma.liveSession.update({ where: { id: sessionId }, data: { summaryStatus: 'FAILED', summaryError: reason } });
+    return this.prisma.liveSession.update({
+      where: { id: sessionId },
+      data: { summaryStatus: 'FAILED', summaryError: reason },
+    });
   }
 }

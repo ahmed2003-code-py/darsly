@@ -3,7 +3,13 @@ import { PaperImport, PaperImportPage, Prisma } from '@prisma/client';
 import { withAiTrace } from '../academy-site/ai/ai-trace';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageProvider } from '../storage/storage.provider';
-import { DraftQuestion, DraftWarning, ExamDraft, partialTranscriptWarning, sourceConflictWarning } from './extraction.schema';
+import {
+  DraftQuestion,
+  DraftWarning,
+  ExamDraft,
+  partialTranscriptWarning,
+  sourceConflictWarning,
+} from './extraction.schema';
 import { mergeSources, transcriptChunks } from './live-sources';
 import { ExamSpec, normalizeSpec, PlannedQuestion, specFromQuestions } from './exam-spec';
 import { gradeQuestions, findDuplicates, GradedQuestion } from './question-quality';
@@ -127,7 +133,10 @@ export class ContentGenerationService {
       return { millicents };
     }
 
-    const chunks = await this.buildChunks(record.id, record.sourceMeta as { transcriptKey?: string } | null);
+    const chunks = await this.buildChunks(
+      record.id,
+      record.sourceMeta as { transcriptKey?: string } | null,
+    );
     this.logger.log(`READ_SUMMARY ${JSON.stringify({ ...summary, chunks })}`);
     this.logger.log(
       `Import ${record.id}: read ${record.pages.length} page(s) into ${chunks} chunk(s), ` +
@@ -253,7 +262,10 @@ export class ContentGenerationService {
   }
 
   /** Clean the pages, drop the running header, cut into chunks, store them. */
-  private async buildChunks(importId: string, meta: { transcriptKey?: string } | null): Promise<number> {
+  private async buildChunks(
+    importId: string,
+    meta: { transcriptKey?: string } | null,
+  ): Promise<number> {
     const rows = await this.prisma.paperImportPage.findMany({
       where: { importId, textKey: { not: null } },
       orderBy: { pageNumber: 'asc' },
@@ -275,15 +287,22 @@ export class ContentGenerationService {
       }
     }
 
-    let chunks: SourceChunk[] = chunkSource(stripRunningLines(pages)).map((c) => ({ ...c, sourceKind: 'DOCUMENT' as const }));
+    let chunks: SourceChunk[] = chunkSource(stripRunningLines(pages)).map((c) => ({
+      ...c,
+      sourceKind: 'DOCUMENT' as const,
+    }));
     // A Live class's transcript chosen as a second source: laid beside the
     // uploaded material (see live-sources.ts). No model call — it is text.
     if (meta?.transcriptKey) {
       try {
-        const segments = JSON.parse((await this.storage.getBuffer(meta.transcriptKey)).toString('utf8')) as { text: string }[];
+        const segments = JSON.parse(
+          (await this.storage.getBuffer(meta.transcriptKey)).toString('utf8'),
+        ) as { text: string }[];
         chunks = mergeSources(chunks, transcriptChunks(segments));
       } catch (e) {
-        this.logger.warn(`Import ${importId}: the class transcript could not be read: ${(e as Error).message}`);
+        this.logger.warn(
+          `Import ${importId}: the class transcript could not be read: ${(e as Error).message}`,
+        );
       }
     }
     await this.prisma.$transaction([
@@ -389,9 +408,11 @@ export class ContentGenerationService {
     const warnings: DraftWarning[] = [];
     // Written from a Live class's transcript that has gaps: said again with
     // every draft, so the teacher reviewing it is never left unaware.
-    if ((record.sourceMeta as { partial?: boolean } | null)?.partial) warnings.push(partialTranscriptWarning());
+    if ((record.sourceMeta as { partial?: boolean } | null)?.partial)
+      warnings.push(partialTranscriptWarning());
     // The class and the file disagree somewhere: said, never settled.
-    if (report.sourceConflicts?.length) warnings.push(sourceConflictWarning(report.sourceConflicts));
+    if (report.sourceConflicts?.length)
+      warnings.push(sourceConflictWarning(report.sourceConflicts));
 
     // The spec is rewritten to match the exam that actually exists, so
     // "change the settings" opens the real numbers; the warning below says
@@ -647,7 +668,8 @@ export class ContentGenerationService {
       sourceFile: r.sourceFile,
       page: r.page,
       tokensApprox: r.tokensApprox,
-      sourceKind: r.sourceKind === 'LIVE_TRANSCRIPT' ? ('LIVE_TRANSCRIPT' as const) : ('DOCUMENT' as const),
+      sourceKind:
+        r.sourceKind === 'LIVE_TRANSCRIPT' ? ('LIVE_TRANSCRIPT' as const) : ('DOCUMENT' as const),
     }));
   }
 

@@ -22,7 +22,10 @@ import { LiveCommerceWorker } from './commerce/live-commerce.worker';
   // AcademySiteModule for the AI job queue the summary runs on — the one this
   // project already has, rather than a second queue beside it.
   imports: [AcademyModule, AcademySiteModule, LiveProvidersModule, VideoModule],
-  controllers: [LiveController, LiveRtcController, LiveCommerceController,
+  controllers: [
+    LiveController,
+    LiveRtcController,
+    LiveCommerceController,
     AdminLiveCommerceController,
     PublicLiveController,
   ],

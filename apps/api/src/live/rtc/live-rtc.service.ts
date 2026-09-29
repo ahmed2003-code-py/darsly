@@ -630,7 +630,8 @@ export class LiveRtcService {
       maxSpeakers: maxSpeakers(),
       recording: recording > 0,
       transcribing: capture.active,
-      transcription: g.role === 'TEACHER' ? { mode: capture.mode, available: capture.available } : undefined,
+      transcription:
+        g.role === 'TEACHER' ? { mode: capture.mode, available: capture.available } : undefined,
       participants: [...roleOf.entries()].map(([uid, role]) => ({
         userId: uid,
         name: nameOf.get(uid) ?? '',

@@ -241,7 +241,10 @@ export class LiveController {
 
   @Get('teacher/live/:id')
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] One session: seats, sales (teacher side), share link and what may still change' })
+  @ApiOperation({
+    summary:
+      '[academy] One session: seats, sales (teacher side), share link and what may still change',
+  })
   teacherSessionDetail(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     return this.live.teacherDetail(scopeOf(ctx), id);
   }
@@ -455,7 +458,9 @@ export class LiveController {
   @Post('teacher/live/:id/summary/regenerate')
   @HttpCode(200)
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] Make the summary again from the current transcript (never re-transcribes)' })
+  @ApiOperation({
+    summary: '[academy] Make the summary again from the current transcript (never re-transcribes)',
+  })
   regenerateSummary(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     return this.live.requestSummary(scopeOf(ctx), id, { regenerate: true });
   }
@@ -463,7 +468,10 @@ export class LiveController {
   @Post('teacher/live/:id/transcript/retry')
   @HttpCode(200)
   @AcademyStaff('live.manage')
-  @ApiOperation({ summary: '[academy] Try the parts of the transcript that failed again (their audio is still kept)' })
+  @ApiOperation({
+    summary:
+      '[academy] Try the parts of the transcript that failed again (their audio is still kept)',
+  })
   retryTranscript(@CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
     return this.live.retryTranscript(scopeOf(ctx), id);
   }
@@ -491,7 +499,6 @@ export class LiveController {
   }
 
   @Get('live/:id/chat')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Messages sent inside the classroom' })
@@ -500,7 +507,6 @@ export class LiveController {
   }
 
   @Post('live/:id/chat')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Send a message to the classroom' })
@@ -535,7 +541,6 @@ export class LiveController {
   }
 
   @Post('live/:id/replay/:replayId/end')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @HttpCode(200)
@@ -551,7 +556,6 @@ export class LiveController {
   // ── Presence (either side of the classroom) ──────────────────────────────
 
   @Post('live/:id/heartbeat')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Still in the room — what attendance time is counted from' })
@@ -560,7 +564,6 @@ export class LiveController {
   }
 
   @Post('live/:id/leave')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Left the room (best effort — heartbeats are the record)' })

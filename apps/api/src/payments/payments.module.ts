@@ -26,6 +26,12 @@ import { PaymentExpiryWorker } from './payment-expiry.worker';
     UnmatchedTransfersService,
     PaymentExpiryWorker,
   ],
-  exports: [LedgerService, PaymentMatchingService, PaymentTargets, PaymentAccountsService, UnmatchedTransfersService],
+  exports: [
+    LedgerService,
+    PaymentMatchingService,
+    PaymentTargets,
+    PaymentAccountsService,
+    UnmatchedTransfersService,
+  ],
 })
 export class PaymentsModule {}

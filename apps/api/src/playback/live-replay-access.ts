@@ -77,7 +77,9 @@ export async function assertLiveReplayKey(db: Db, claims: PlaybackClaims): Promi
   if (s.recordingVisibility !== 'STUDENTS') return deny('Recording not shared');
   // A guest's seat is its purchase (no booking): judged by its own frozen
   // replay rights, like any paid seat.
-  const guest = db.guestBuyer ? await db.guestBuyer.findUnique({ where: { userId: r.userId }, select: { id: true } }) : null;
+  const guest = db.guestBuyer
+    ? await db.guestBuyer.findUnique({ where: { userId: r.userId }, select: { id: true } })
+    : null;
   if (guest && db.livePurchase) {
     const p = await db.livePurchase.findFirst({
       where: { sessionId: s.id, guestBuyerId: guest.id },

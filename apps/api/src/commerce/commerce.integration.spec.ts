@@ -29,23 +29,48 @@ const guard = () => {
   return available;
 };
 
-async function academy(kind: 'PERSONAL' | 'CENTER' = 'PERSONAL', teacherSharePercent: number | null = null) {
+async function academy(
+  kind: 'PERSONAL' | 'CENTER' = 'PERSONAL',
+  teacherSharePercent: number | null = null,
+) {
   const k = randomUUID().slice(0, 8);
-  const user = await prisma.user.create({ data: { role: 'TEACHER', fullName: `T ${k}`, email: `ct-${k}@it.test` } });
-  const tp = await prisma.teacherProfile.create({ data: { userId: user.id, slug: `ct-${k}`, status: 'APPROVED' } });
+  const user = await prisma.user.create({
+    data: { role: 'TEACHER', fullName: `T ${k}`, email: `ct-${k}@it.test` },
+  });
+  const tp = await prisma.teacherProfile.create({
+    data: { userId: user.id, slug: `ct-${k}`, status: 'APPROVED' },
+  });
   const personal = await prisma.academy.create({
     data: { id: tp.id, slug: `ct-${k}`, name: `A ${k}`, ownerUserId: user.id },
   });
   await prisma.academyMembership.create({
-    data: { userId: user.id, academyId: personal.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+    data: {
+      userId: user.id,
+      academyId: personal.id,
+      role: 'OWNER',
+      status: 'ACTIVE',
+      joinedAt: new Date(),
+    },
   });
   let academyId = personal.id;
   if (kind === 'CENTER') {
     const c = await prisma.academy.create({
-      data: { slug: `cc-${k}`, name: `C ${k}`, kind: 'CENTER', ownerUserId: user.id, teacherSharePercent },
+      data: {
+        slug: `cc-${k}`,
+        name: `C ${k}`,
+        kind: 'CENTER',
+        ownerUserId: user.id,
+        teacherSharePercent,
+      },
     });
     await prisma.academyMembership.create({
-      data: { userId: user.id, academyId: c.id, role: 'OWNER', status: 'ACTIVE', joinedAt: new Date() },
+      data: {
+        userId: user.id,
+        academyId: c.id,
+        role: 'OWNER',
+        status: 'ACTIVE',
+        joinedAt: new Date(),
+      },
     });
     academyId = c.id;
   }
@@ -71,19 +96,31 @@ function liveService() {
     terms,
   );
 }
-const inAnHour = () => new Date(Date.now() + 3600_000 + Math.floor(Math.random() * 1e8)).toISOString();
+const inAnHour = () =>
+  new Date(Date.now() + 3600_000 + Math.floor(Math.random() * 1e8)).toISOString();
 
 describe('CommercialTerms on Postgres', () => {
   it('ships a platform default of 20% additive, which is what academies pay today', async () => {
     if (!guard()) return;
-    const def = await prisma.commercialTerms.findUnique({ where: { id: 'ct_platform_default_v1' } });
-    expect(def).toMatchObject({ academyId: null, feeType: 'PERCENT', feeBps: 2000, feeMode: 'ADDITIVE' });
+    const def = await prisma.commercialTerms.findUnique({
+      where: { id: 'ct_platform_default_v1' },
+    });
+    expect(def).toMatchObject({
+      academyId: null,
+      feeType: 'PERCENT',
+      feeBps: 2000,
+      feeMode: 'ADDITIVE',
+    });
   });
 
   it('refuses to edit a version — a change is a new row', async () => {
     if (!guard()) return;
     const a = await academy();
-    const v = await terms.createVersion(a.academyId, { feeType: 'PERCENT', feeBps: 1000, feeMode: 'ADDITIVE' }, a.user.id);
+    const v = await terms.createVersion(
+      a.academyId,
+      { feeType: 'PERCENT', feeBps: 1000, feeMode: 'ADDITIVE' },
+      a.user.id,
+    );
     await expect(
       prisma.commercialTerms.update({ where: { id: v.id }, data: { feeBps: 1 } }),
     ).rejects.toThrow(/immutable/);
@@ -95,10 +132,25 @@ describe('CommercialTerms on Postgres', () => {
   it('refuses impossible shapes at the database, not only in code', async () => {
     if (!guard()) return;
     const bad = [
-      { feeType: 'PERCENT' as const, feeBps: null, feeFixedCents: null, feeMode: 'ADDITIVE' as const },
+      {
+        feeType: 'PERCENT' as const,
+        feeBps: null,
+        feeFixedCents: null,
+        feeMode: 'ADDITIVE' as const,
+      },
       { feeType: 'PERCENT' as const, feeBps: 100, feeFixedCents: 5, feeMode: 'ADDITIVE' as const },
-      { feeType: 'PERCENT' as const, feeBps: 10_001, feeFixedCents: null, feeMode: 'ADDITIVE' as const },
-      { feeType: 'PERCENT' as const, feeBps: 10_000, feeFixedCents: null, feeMode: 'DEDUCTED' as const },
+      {
+        feeType: 'PERCENT' as const,
+        feeBps: 10_001,
+        feeFixedCents: null,
+        feeMode: 'ADDITIVE' as const,
+      },
+      {
+        feeType: 'PERCENT' as const,
+        feeBps: 10_000,
+        feeFixedCents: null,
+        feeMode: 'DEDUCTED' as const,
+      },
       { feeType: 'FIXED' as const, feeBps: null, feeFixedCents: -1, feeMode: 'ADDITIVE' as const },
       { feeType: 'FIXED' as const, feeBps: 5, feeFixedCents: 500, feeMode: 'ADDITIVE' as const },
     ];
@@ -111,18 +163,31 @@ describe('CommercialTerms on Postgres', () => {
     if (!guard()) return;
     const a = await academy();
     expect((await terms.effectiveFor(a.academyId)).academyId).toBeNull();
-    const v1 = await terms.createVersion(a.academyId, { feeType: 'PERCENT', feeBps: 1500, feeMode: 'ADDITIVE' }, a.user.id);
+    const v1 = await terms.createVersion(
+      a.academyId,
+      { feeType: 'PERCENT', feeBps: 1500, feeMode: 'ADDITIVE' },
+      a.user.id,
+    );
     expect((await terms.effectiveFor(a.academyId)).id).toBe(v1.id);
     // A version that starts tomorrow does not apply today…
     const future = await terms.createVersion(
       a.academyId,
-      { feeType: 'FIXED', feeFixedCents: 900, feeMode: 'DEDUCTED', effectiveFrom: new Date(Date.now() + 86_400_000).toISOString() },
+      {
+        feeType: 'FIXED',
+        feeFixedCents: 900,
+        feeMode: 'DEDUCTED',
+        effectiveFrom: new Date(Date.now() + 86_400_000).toISOString(),
+      },
       a.user.id,
     );
     expect((await terms.effectiveFor(a.academyId)).id).toBe(v1.id);
     // …and does from then on, without editing the old one.
-    expect((await terms.effectiveFor(a.academyId, new Date(Date.now() + 2 * 86_400_000))).id).toBe(future.id);
-    expect((await prisma.commercialTerms.findUniqueOrThrow({ where: { id: v1.id } })).feeBps).toBe(1500);
+    expect((await terms.effectiveFor(a.academyId, new Date(Date.now() + 2 * 86_400_000))).id).toBe(
+      future.id,
+    );
+    expect((await prisma.commercialTerms.findUniqueOrThrow({ where: { id: v1.id } })).feeBps).toBe(
+      1500,
+    );
   });
 
   it('refuses a backdated version', async () => {
@@ -131,7 +196,12 @@ describe('CommercialTerms on Postgres', () => {
     await expect(
       terms.createVersion(
         a.academyId,
-        { feeType: 'PERCENT', feeBps: 100, feeMode: 'ADDITIVE', effectiveFrom: new Date(Date.now() - 86_400_000).toISOString() },
+        {
+          feeType: 'PERCENT',
+          feeBps: 100,
+          feeMode: 'ADDITIVE',
+          effectiveFrom: new Date(Date.now() - 86_400_000).toISOString(),
+        },
         a.user.id,
       ),
     ).rejects.toMatchObject({ response: { code: 'COMMERCIAL_TERMS_INVALID' } });
@@ -143,7 +213,12 @@ describe('FREE / PAID sessions on Postgres', () => {
     if (!guard()) return;
     const a = await academy();
     const svc = liveService();
-    const scope: LiveScope = { academyId: a.academyId, userId: a.user.id, manageAll: true, role: 'OWNER' };
+    const scope: LiveScope = {
+      academyId: a.academyId,
+      userId: a.user.id,
+      manageAll: true,
+      role: 'OWNER',
+    };
     const free = await svc.create(scope, { title: 'مجانية', startsAt: inAnHour() });
     expect(free).toMatchObject({ accessMode: 'FREE', priceCents: null });
     await expect(
@@ -158,44 +233,107 @@ describe('FREE / PAID sessions on Postgres', () => {
     if (!guard()) return;
     const a = await academy();
     const svc = liveService();
-    const scope: LiveScope = { academyId: a.academyId, userId: a.user.id, manageAll: true, role: 'OWNER' };
-    await expect(svc.create(scope, { title: 'مدفوعة', startsAt: inAnHour(), accessMode: 'PAID' })).rejects.toMatchObject({
-      response: { code: 'LIVE_SESSION_INVALID', fields: [expect.objectContaining({ field: 'priceCents', code: 'PRICE_REQUIRED' })] },
+    const scope: LiveScope = {
+      academyId: a.academyId,
+      userId: a.user.id,
+      manageAll: true,
+      role: 'OWNER',
+    };
+    await expect(
+      svc.create(scope, { title: 'مدفوعة', startsAt: inAnHour(), accessMode: 'PAID' }),
+    ).rejects.toMatchObject({
+      response: {
+        code: 'LIVE_SESSION_INVALID',
+        fields: [expect.objectContaining({ field: 'priceCents', code: 'PRICE_REQUIRED' })],
+      },
     });
     await expect(
-      svc.create(scope, { title: 'مدفوعة', startsAt: inAnHour(), accessMode: 'PAID', priceCents: 10_000, joinUrl: 'https://meet.example/x' }),
-    ).rejects.toMatchObject({ response: { fields: [expect.objectContaining({ code: 'PAID_NEEDS_DARSLY_CLASSROOM' })] } });
-    const paid = await svc.create(scope, { title: 'مدفوعة', startsAt: inAnHour(), accessMode: 'PAID', priceCents: 10_000 });
+      svc.create(scope, {
+        title: 'مدفوعة',
+        startsAt: inAnHour(),
+        accessMode: 'PAID',
+        priceCents: 10_000,
+        joinUrl: 'https://meet.example/x',
+      }),
+    ).rejects.toMatchObject({
+      response: { fields: [expect.objectContaining({ code: 'PAID_NEEDS_DARSLY_CLASSROOM' })] },
+    });
+    const paid = await svc.create(scope, {
+      title: 'مدفوعة',
+      startsAt: inAnHour(),
+      accessMode: 'PAID',
+      priceCents: 10_000,
+    });
     expect(paid).toMatchObject({ accessMode: 'PAID', priceCents: 10_000 });
     const preview = await svc.pricePreview(scope, 10_000, null);
-    expect(preview).toMatchObject({ studentPaysCents: 12_000, feeCents: 2_000, teacherCents: 10_000, centerCents: 0 });
+    expect(preview).toMatchObject({
+      studentPaysCents: 12_000,
+      feeCents: 2_000,
+      teacherCents: 10_000,
+      centerCents: 0,
+    });
   });
 
   it('refuses a price the terms cannot sell, and a Center with no agreed split', async () => {
     if (!guard()) return;
     const a = await academy();
-    await terms.createVersion(a.academyId, { feeType: 'FIXED', feeFixedCents: 5_000, feeMode: 'DEDUCTED' }, a.user.id);
+    await terms.createVersion(
+      a.academyId,
+      { feeType: 'FIXED', feeFixedCents: 5_000, feeMode: 'DEDUCTED' },
+      a.user.id,
+    );
     const svc = liveService();
-    const scope: LiveScope = { academyId: a.academyId, userId: a.user.id, manageAll: true, role: 'OWNER' };
+    const scope: LiveScope = {
+      academyId: a.academyId,
+      userId: a.user.id,
+      manageAll: true,
+      role: 'OWNER',
+    };
     await expect(
-      svc.create(scope, { title: 'رخيصة', startsAt: inAnHour(), accessMode: 'PAID', priceCents: 4_000 }),
+      svc.create(scope, {
+        title: 'رخيصة',
+        startsAt: inAnHour(),
+        accessMode: 'PAID',
+        priceCents: 4_000,
+      }),
     ).rejects.toMatchObject({ response: { code: 'FEE_EXCEEDS_PRICE' } });
 
     const c = await academy('CENTER', null);
-    const cscope: LiveScope = { academyId: c.academyId, userId: c.user.id, manageAll: true, role: 'OWNER' };
+    const cscope: LiveScope = {
+      academyId: c.academyId,
+      userId: c.user.id,
+      manageAll: true,
+      role: 'OWNER',
+    };
     await expect(
-      svc.create(cscope, { title: 'سنتر', startsAt: inAnHour(), accessMode: 'PAID', priceCents: 10_000 }),
+      svc.create(cscope, {
+        title: 'سنتر',
+        startsAt: inAnHour(),
+        accessMode: 'PAID',
+        priceCents: 10_000,
+      }),
     ).rejects.toMatchObject({ response: { code: 'CENTER_REVENUE_SPLIT_NOT_CONFIGURED' } });
     // A FREE Center session needs no split.
-    await expect(svc.create(cscope, { title: 'سنتر مجاني', startsAt: inAnHour() })).resolves.toMatchObject({ accessMode: 'FREE' });
+    await expect(
+      svc.create(cscope, { title: 'سنتر مجاني', startsAt: inAnHour() }),
+    ).resolves.toMatchObject({ accessMode: 'FREE' });
   });
 
   it('splits a Center price after the fee', async () => {
     if (!guard()) return;
     const c = await academy('CENTER', 70);
-    await terms.createVersion(c.academyId, { feeType: 'PERCENT', feeBps: 1000, feeMode: 'DEDUCTED' }, c.user.id);
+    await terms.createVersion(
+      c.academyId,
+      { feeType: 'PERCENT', feeBps: 1000, feeMode: 'DEDUCTED' },
+      c.user.id,
+    );
     const svc = liveService();
-    const scope: LiveScope = { academyId: c.academyId, userId: c.user.id, manageAll: true, role: 'OWNER' };
+    const scope: LiveScope = {
+      academyId: c.academyId,
+      userId: c.user.id,
+      manageAll: true,
+      role: 'OWNER',
+    };
     expect(await svc.pricePreview(scope, 10_000, null)).toMatchObject({
       kind: 'CENTER',
       studentPaysCents: 10_000,

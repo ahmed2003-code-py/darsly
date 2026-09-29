@@ -153,7 +153,9 @@ export default function TeacherLivePage() {
                       }}
                     >
                       <span className="material-symbols-outlined text-base">link</span>
-                      {copiedFor === s.id ? t('liveCommerce.linkCopied') : t('liveCommerce.copyPublicLink')}
+                      {copiedFor === s.id
+                        ? t('liveCommerce.linkCopied')
+                        : t('liveCommerce.copyPublicLink')}
                     </button>
                   )}
                   <button
@@ -221,7 +223,12 @@ export default function TeacherLivePage() {
       </Modal>
 
       {/* What a finished lesson left behind. */}
-      <Modal open={!!detailFor} onClose={() => setDetailFor(null)} title={t('live.sessionRecord')} wide>
+      <Modal
+        open={!!detailFor}
+        onClose={() => setDetailFor(null)}
+        title={t('live.sessionRecord')}
+        wide
+      >
         {detailFor && <SessionSummary sessionId={detailFor} attendance={attendance ?? []} />}
       </Modal>
 

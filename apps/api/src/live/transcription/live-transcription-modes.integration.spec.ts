@@ -74,7 +74,9 @@ async function world(mode: 'OFF' | 'MANUAL' | 'AUTO_WHEN_RECORDING') {
     data: { role: 'TEACHER', fullName: `T ${k}`, email: `tm-${k}@it.test` },
   });
   const tp = await prisma.teacherProfile.create({ data: { userId: teacher.id, slug: `tm-${k}` } });
-  await prisma.academy.create({ data: { id: tp.id, slug: `tma-${k}`, name: `A ${k}`, ownerUserId: teacher.id } });
+  await prisma.academy.create({
+    data: { id: tp.id, slug: `tma-${k}`, name: `A ${k}`, ownerUserId: teacher.id },
+  });
   const ls = await prisma.liveSession.create({
     data: {
       tenantId: tp.id,
@@ -93,8 +95,13 @@ async function world(mode: 'OFF' | 'MANUAL' | 'AUTO_WHEN_RECORDING') {
   const scope: LiveScope = { academyId: tp.id, userId: teacher.id, manageAll: true, role: 'OWNER' };
   return { teacher, tp, ls, scope };
 }
-const cap = (w: Awaited<ReturnType<typeof world>>) => transcriptCaptureState(prisma, w.ls.id, w.ls.roomName);
-const code = (p: Promise<unknown>) => p.then(() => 'ok', (e) => e?.response?.code ?? e?.message);
+const cap = (w: Awaited<ReturnType<typeof world>>) =>
+  transcriptCaptureState(prisma, w.ls.id, w.ls.roomName);
+const code = (p: Promise<unknown>) =>
+  p.then(
+    () => 'ok',
+    (e) => e?.response?.code ?? e?.message,
+  );
 const record = (w: Awaited<ReturnType<typeof world>>, data: Record<string, unknown> = {}) =>
   prisma.liveRecording.create({
     data: {
@@ -114,7 +121,10 @@ describe('Checkpoint C: transcription modes', () => {
     expect(await cap(w)).toMatchObject({ available: true, active: false, everOn: false });
     const rec = await record(w);
     expect((await cap(w)).active).toBe(true);
-    await prisma.liveRecording.update({ where: { id: rec.id }, data: { stopRequestedAt: new Date() } });
+    await prisma.liveRecording.update({
+      where: { id: rec.id },
+      data: { stopRequestedAt: new Date() },
+    });
     const off = await cap(w);
     expect(off).toMatchObject({ active: false, everOn: true });
     expect(off.lastOffAt).toBeInstanceOf(Date);
@@ -126,10 +136,16 @@ describe('Checkpoint C: transcription modes', () => {
     const { svc, realtime } = build();
     await record(w);
     expect((await cap(w)).active).toBe(false);
-    expect(await svc.setTranscription(w.scope, w.ls.id, { capture: true })).toMatchObject({ capturing: true });
-    expect(realtime.emitToLive).toHaveBeenCalledWith(w.ls.id, 'live:rtc-state', { sessionId: w.ls.id });
+    expect(await svc.setTranscription(w.scope, w.ls.id, { capture: true })).toMatchObject({
+      capturing: true,
+    });
+    expect(realtime.emitToLive).toHaveBeenCalledWith(w.ls.id, 'live:rtc-state', {
+      sessionId: w.ls.id,
+    });
     await new Promise((r) => setTimeout(r, 5));
-    expect(await svc.setTranscription(w.scope, w.ls.id, { capture: false })).toMatchObject({ capturing: false });
+    expect(await svc.setTranscription(w.scope, w.ls.id, { capture: false })).toMatchObject({
+      capturing: false,
+    });
     expect((await cap(w)).everOn).toBe(true);
   });
 
@@ -139,7 +155,9 @@ describe('Checkpoint C: transcription modes', () => {
     const { svc } = build();
     await record(w);
     expect(await cap(w)).toMatchObject({ available: false, active: false });
-    expect(await code(svc.setTranscription(w.scope, w.ls.id, { capture: true }))).toBe('NOT_MANUAL');
+    expect(await code(svc.setTranscription(w.scope, w.ls.id, { capture: true }))).toBe(
+      'NOT_MANUAL',
+    );
   });
 
   it('the global switch overrides every mode', async () => {
@@ -149,15 +167,22 @@ describe('Checkpoint C: transcription modes', () => {
     await record(w);
     expect(await cap(w)).toMatchObject({ available: false, active: false });
     const { svc } = build();
-    expect(await code(svc.setTranscription(w.scope, w.ls.id, { capture: true }))).toBe('TRANSCRIPTION_OFF');
+    expect(await code(svc.setTranscription(w.scope, w.ls.id, { capture: true }))).toBe(
+      'TRANSCRIPTION_OFF',
+    );
   });
 
   it('the mode can change until the class ends, not after', async () => {
     if (!guard()) return;
     const w = await world('OFF');
     const { svc } = build();
-    expect(await svc.setTranscription(w.scope, w.ls.id, { mode: 'MANUAL' })).toMatchObject({ mode: 'MANUAL' });
-    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { status: 'ENDED', endedAt: new Date() } });
+    expect(await svc.setTranscription(w.scope, w.ls.id, { mode: 'MANUAL' })).toMatchObject({
+      mode: 'MANUAL',
+    });
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { status: 'ENDED', endedAt: new Date() },
+    });
     expect(await code(svc.setTranscription(w.scope, w.ls.id, { mode: 'OFF' }))).toBe('ENDED');
   });
 
@@ -169,11 +194,15 @@ describe('Checkpoint C: transcription modes', () => {
     const b1 = build();
     await b1.svc.endSession(a.ls.id, 'MANUAL');
     expect(b1.queued.filter((q) => q.input.liveSessionId === a.ls.id)).toEqual([
-      { academyId: a.tp.id, type: 'LIVE_TRANSCRIBE', input: { liveSessionId: a.ls.id, roomName: a.ls.roomName } },
+      {
+        academyId: a.tp.id,
+        type: 'LIVE_TRANSCRIBE',
+        input: { liveSessionId: a.ls.id, roomName: a.ls.roomName },
+      },
     ]);
-    expect((await prisma.liveSession.findUniqueOrThrow({ where: { id: a.ls.id } })).transcriptStatus).toBe(
-      'PROCESSING',
-    );
+    expect(
+      (await prisma.liveSession.findUniqueOrThrow({ where: { id: a.ls.id } })).transcriptStatus,
+    ).toBe('PROCESSING');
     // Ending twice queues nothing more.
     await b1.svc.endSession(a.ls.id, 'MANUAL');
     expect(b1.queued.filter((q) => q.input.liveSessionId === a.ls.id)).toHaveLength(1);
@@ -184,9 +213,9 @@ describe('Checkpoint C: transcription modes', () => {
       const b = build();
       await b.svc.endSession(w.ls.id, 'MANUAL');
       expect(b.queued).toHaveLength(0);
-      expect((await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).transcriptStatus).toBe(
-        'NOT_STARTED',
-      );
+      expect(
+        (await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).transcriptStatus,
+      ).toBe('NOT_STARTED');
     }
   });
 

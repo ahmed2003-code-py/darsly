@@ -483,7 +483,13 @@ export interface GroupChatInfoDto {
   enabled: boolean;
   mode: GroupChatMode;
   memberCount: number;
-  staff: { id: string; name: string; avatarUrl: string | null; kind: ChatSenderKind; title: string | null }[];
+  staff: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    kind: ChatSenderKind;
+    title: string | null;
+  }[];
   /** Students, for staff only. */
   students: { id: string; name: string; avatarUrl: string | null }[] | null;
   /** What the viewer may do: write now, and manage the chat (on/off, mode). */

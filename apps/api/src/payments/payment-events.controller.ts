@@ -66,7 +66,8 @@ class MatchReasonDto {
 }
 
 class ReturnDto {
-  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER';
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER']) method:
+    'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER';
   @IsString() @MaxLength(80) holderName: string;
   @IsString() @MaxLength(64) handle: string;
   @IsString() @MaxLength(500) reason: string;
@@ -115,7 +116,9 @@ export class PaymentEventsController {
   @Get('admin/payment-events')
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Incoming transfers (masked; status=OPEN for unmatched+ambiguous)' })
+  @ApiOperation({
+    summary: '[admin] Incoming transfers (masked; status=OPEN for unmatched+ambiguous)',
+  })
   list(@Query('status') status?: string) {
     return this.transfers.list(status);
   }
@@ -132,7 +135,9 @@ export class PaymentEventsController {
   @HttpCode(200)
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Tie an unmatched transfer to a pending payment (re-validated) and verify it' })
+  @ApiOperation({
+    summary: '[admin] Tie an unmatched transfer to a pending payment (re-validated) and verify it',
+  })
   manualMatch(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -146,7 +151,10 @@ export class PaymentEventsController {
   @HttpCode(200)
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Tie an unmatched transfer to a pending wallet top-up (re-validated) and credit it once' })
+  @ApiOperation({
+    summary:
+      '[admin] Tie an unmatched transfer to a pending wallet top-up (re-validated) and credit it once',
+  })
   manualMatchTopup(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -160,7 +168,10 @@ export class PaymentEventsController {
   @HttpCode(200)
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Mark a transfer as the money of a payment already confirmed by hand (no money moves)' })
+  @ApiOperation({
+    summary:
+      '[admin] Mark a transfer as the money of a payment already confirmed by hand (no money moves)',
+  })
   linkToVerified(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
@@ -193,7 +204,11 @@ export class PaymentEventsController {
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
   @ApiOperation({ summary: '[admin] Mark a transfer return as sent back' })
-  completeReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReturnReferenceDto) {
+  completeReturn(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: ReturnReferenceDto,
+  ) {
     return this.transfers.completeReturn(id, u.sub, dto.transferReference);
   }
 
@@ -201,7 +216,9 @@ export class PaymentEventsController {
   @HttpCode(200)
   @ApiBearerAuth()
   @Roles(Role.SUPER_ADMIN)
-  @ApiOperation({ summary: '[admin] Cancel an open transfer return (the transfer becomes unmatched again)' })
+  @ApiOperation({
+    summary: '[admin] Cancel an open transfer return (the transfer becomes unmatched again)',
+  })
   cancelReturn(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ReasonDto) {
     return this.transfers.cancelReturn(id, u.sub, dto.reason);
   }

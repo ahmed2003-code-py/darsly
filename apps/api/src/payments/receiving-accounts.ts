@@ -15,7 +15,9 @@ import { PrismaService } from '../prisma/prisma.service';
  * is one list and one rule. Inactive accounts are included on purpose: a
  * number we stopped advertising is still ours, and still in old SMS.
  */
-export async function receivingHandles(prisma: Pick<PrismaService, 'platformPaymentAccount'>): Promise<string[]> {
+export async function receivingHandles(
+  prisma: Pick<PrismaService, 'platformPaymentAccount'>,
+): Promise<string[]> {
   // An enrichment, never a precondition: if the lookup fails, nothing is
   // excluded, and every decision that depends on identity is still made by
   // the rules that follow (which never auto-verify on weak evidence).
@@ -39,7 +41,10 @@ function fold(value: string): string {
 }
 
 /** Is this value one of Darsly's own receiving identifiers? */
-export function isReceivingIdentifier(value: string | null | undefined, handles: string[]): boolean {
+export function isReceivingIdentifier(
+  value: string | null | undefined,
+  handles: string[],
+): boolean {
   if (!value) return false;
   const digits = tenDigits(value);
   return handles.some((h) => {

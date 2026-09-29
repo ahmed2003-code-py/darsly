@@ -193,16 +193,26 @@ export default function LiveSessionForm({
   const [touched, setTouched] = useState<Partial<Record<LiveFormField, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [server, setServer] = useState<LiveFormErrors>({});
-  const [customLen, setCustomLen] = useState(() => !!session && !DURATIONS.includes(session.durationMin));
+  const [customLen, setCustomLen] = useState(
+    () => !!session && !DURATIONS.includes(session.durationMin),
+  );
   const [limited, setLimited] = useState(() => session?.capacity != null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [joinUrl, setJoinUrl] = useState(session?.joinUrl ?? '');
   // FREE by default; PAID is a deliberate choice with its own few settings.
   const [paid, setPaid] = useState(session?.accessMode === 'PAID');
-  const [price, setPrice] = useState(session?.priceCents != null ? String(session.priceCents / 100) : '');
-  const [refundPolicy, setRefundPolicy] = useState<LiveRefundPolicy>(session?.refundPolicy ?? 'STANDARD');
-  const [replayPolicy, setReplayPolicy] = useState<LiveReplayPolicy>(session?.replayPolicy ?? 'INCLUDED_FOREVER');
-  const [replayDays, setReplayDays] = useState(session?.replayDays != null ? String(session.replayDays) : '7');
+  const [price, setPrice] = useState(
+    session?.priceCents != null ? String(session.priceCents / 100) : '',
+  );
+  const [refundPolicy, setRefundPolicy] = useState<LiveRefundPolicy>(
+    session?.refundPolicy ?? 'STANDARD',
+  );
+  const [replayPolicy, setReplayPolicy] = useState<LiveReplayPolicy>(
+    session?.replayPolicy ?? 'INCLUDED_FOREVER',
+  );
+  const [replayDays, setReplayDays] = useState(
+    session?.replayDays != null ? String(session.replayDays) : '7',
+  );
   // One request at a time, whatever the button's state says: a double click
   // lands before React re-renders it disabled.
   const inFlight = useRef(false);
@@ -258,9 +268,14 @@ export default function LiveSessionForm({
   };
   const commerce = () => ({ paid, price, replayPolicy, replayDays });
   const startUnchanged = () =>
-    !!session && whenMode === 'pick' && new Date(combine(d.date, d.time)).getTime() === new Date(session.startsAt).getTime();
+    !!session &&
+    whenMode === 'pick' &&
+    new Date(combine(d.date, d.time)).getTime() === new Date(session.startsAt).getTime();
   const checkErrors = (v: LiveFormValues): LiveFormErrors => {
-    const e = { ...clientErrors(v, nowMs(), { capacityRequired: limited }), ...commerceErrors(commerce()) };
+    const e = {
+      ...clientErrors(v, nowMs(), { capacityRequired: limited }),
+      ...commerceErrors(commerce()),
+    };
     // Renaming a class already under way is not rescheduling it.
     if (startUnchanged()) delete e.startsAt;
     return e;
@@ -363,7 +378,9 @@ export default function LiveSessionForm({
       ...toPayload(v, joinUrl),
       // "Now" is the server's now: the device clock may be off by minutes.
       ...(whenMode === 'now' ? { startsAt: new Date(nowMs()).toISOString() } : {}),
-      ...(!editing && features.data?.transcription && transcriptionMode ? { transcriptionMode } : {}),
+      ...(!editing && features.data?.transcription && transcriptionMode
+        ? { transcriptionMode }
+        : {}),
       // What a seat costs, and the rules a buyer gets — never Darsly's fee or
       // a split: those are the academy's terms, applied by the server.
       ...(paid
@@ -563,7 +580,12 @@ export default function LiveSessionForm({
               </p>
               <div className="flex flex-wrap gap-2">
                 {LIVE_REFUND_POLICIES.map((rp) => (
-                  <Chip key={rp} selected={refundPolicy === rp} onClick={() => setRefundPolicy(rp)} disabled={!can('refundPolicy')}>
+                  <Chip
+                    key={rp}
+                    selected={refundPolicy === rp}
+                    onClick={() => setRefundPolicy(rp)}
+                    disabled={!can('refundPolicy')}
+                  >
                     {t(`liveCommerce.refund.${rp}`)}
                   </Chip>
                 ))}
@@ -590,7 +612,12 @@ export default function LiveSessionForm({
               </p>
               <div className="flex flex-wrap gap-2">
                 {(['INCLUDED_FOREVER', 'INCLUDED_DAYS', 'NONE'] as const).map((rp) => (
-                  <Chip key={rp} selected={replayPolicy === rp} onClick={() => setReplayPolicy(rp)} disabled={!can('replayPolicy')}>
+                  <Chip
+                    key={rp}
+                    selected={replayPolicy === rp}
+                    onClick={() => setReplayPolicy(rp)}
+                    disabled={!can('replayPolicy')}
+                  >
                     {t(`liveCommerce.replay.${rp}`)}
                   </Chip>
                 ))}
@@ -638,7 +665,11 @@ export default function LiveSessionForm({
               {t('live.form.now')}
             </span>
           </Chip>
-          <Chip selected={whenMode === 'pick' && d.date === tomorrow} onClick={chooseTomorrow} disabled={!can('startsAt')}>
+          <Chip
+            selected={whenMode === 'pick' && d.date === tomorrow}
+            onClick={chooseTomorrow}
+            disabled={!can('startsAt')}
+          >
             {t('live.form.tomorrow')}
           </Chip>
         </div>

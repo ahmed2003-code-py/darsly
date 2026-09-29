@@ -87,8 +87,11 @@ export class CouponsService {
     }
     // What it can discount. Unchanged by default: a coupon with no scope is a
     // COURSE coupon, as every coupon was before live seats could be sold.
-    const scope = dto.liveSessionId ? 'LIVE' : dto.courseId ? 'COURSE' : dto.scope ?? 'COURSE';
-    if ((dto.courseId && dto.scope && dto.scope !== 'COURSE') || (dto.liveSessionId && dto.scope && dto.scope !== 'LIVE')) {
+    const scope = dto.liveSessionId ? 'LIVE' : dto.courseId ? 'COURSE' : (dto.scope ?? 'COURSE');
+    if (
+      (dto.courseId && dto.scope && dto.scope !== 'COURSE') ||
+      (dto.liveSessionId && dto.scope && dto.scope !== 'LIVE')
+    ) {
       throw new BadRequestException('The coupon scope does not match what it targets');
     }
 

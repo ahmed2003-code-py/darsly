@@ -15,7 +15,8 @@ import { methodsFor } from './payment-matching.service';
  *
  * Only the existence of such a transfer is said, never whose it is.
  */
-export type PaymentStage = 'NONE' | 'AWAITING_TRANSFER' | 'PROOF_SENT' | 'UNDER_REVIEW' | 'CONFIRMED' | 'REJECTED';
+export type PaymentStage =
+  'NONE' | 'AWAITING_TRANSFER' | 'PROOF_SENT' | 'UNDER_REVIEW' | 'CONFIRMED' | 'REJECTED';
 
 export async function paymentStage(
   prisma: Pick<PrismaService, 'paymentEvent'>,
@@ -72,9 +73,20 @@ export function paymentRow(p: {
 }
 
 /** A WalletTopup row, in the helper's terms. */
-export function topupRow(t: { status: string; claimedAt: Date | null; method: string; amountCents: number; createdAt: Date }) {
+export function topupRow(t: {
+  status: string;
+  claimedAt: Date | null;
+  method: string;
+  amountCents: number;
+  createdAt: Date;
+}) {
   return {
-    decided: t.status === 'APPROVED' ? ('CONFIRMED' as const) : t.status === 'REJECTED' ? ('REJECTED' as const) : null,
+    decided:
+      t.status === 'APPROVED'
+        ? ('CONFIRMED' as const)
+        : t.status === 'REJECTED'
+          ? ('REJECTED' as const)
+          : null,
     claimedAt: t.claimedAt,
     method: t.method,
     dueCents: t.amountCents,

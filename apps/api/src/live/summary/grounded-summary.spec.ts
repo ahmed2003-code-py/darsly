@@ -51,20 +51,41 @@ describe('grounding a model answer', () => {
     quickSummary: 'الامتحان يوم السبت.',
     keyPoints: [
       { text: 'الامتحان يوم السبت', evidence: 'الامتحان يوم السبت مش الخميس' },
-      { text: 'Decision trees مثال على supervised learning', evidence: 'decision trees are a classic example' },
+      {
+        text: 'Decision trees مثال على supervised learning',
+        evidence: 'decision trees are a classic example',
+      },
     ],
     concepts: [],
     examples: [],
-    formulas: [{ formula: 'A = πr²', meaning: 'مساحة الدائرة', evidence: 'المساحة تساوي باي في نق تربيع' }],
+    formulas: [
+      { formula: 'A = πr²', meaning: 'مساحة الدائرة', evidence: 'المساحة تساوي باي في نق تربيع' },
+    ],
     questions: [
-      { question: 'هو الامتحان open book؟', answered: true, answer: '', evidence: 'الامتحان يوم السبت مش الخميس' },
-      { question: 'سؤال', answered: false, answer: 'اخترعت إجابة', evidence: 'الامتحان يوم السبت مش الخميس' },
+      {
+        question: 'هو الامتحان open book؟',
+        answered: true,
+        answer: '',
+        evidence: 'الامتحان يوم السبت مش الخميس',
+      },
+      {
+        question: 'سؤال',
+        answered: false,
+        answer: 'اخترعت إجابة',
+        evidence: 'الامتحان يوم السبت مش الخميس',
+      },
     ],
     homework: [
-      { task: 'تمارين صفحة 45', due: 'أول حصة الأسبوع الجاي', evidence: 'حلوا تمارين صفحة خمسة وأربعين' },
+      {
+        task: 'تمارين صفحة 45',
+        due: 'أول حصة الأسبوع الجاي',
+        evidence: 'حلوا تمارين صفحة خمسة وأربعين',
+      },
       { task: 'مشروع', due: '14 أكتوبر', evidence: 'المشروع تسليمه يوم أربعتاشر أكتوبر' },
     ],
-    corrections: [{ wrong: 'الخميس', corrected: 'السبت', evidence: 'لا لا معلش، أنا غلطت، الامتحان يوم السبت' }],
+    corrections: [
+      { wrong: 'الخميس', corrected: 'السبت', evidence: 'لا لا معلش، أنا غلطت، الامتحان يوم السبت' },
+    ],
     reviewPoints: [],
     studyNotes: '…',
   };
@@ -89,15 +110,31 @@ describe('grounding a model answer', () => {
     const shown = forViewers(groundSummary(answer, TRANSCRIPT).summary) as any;
     expect(JSON.stringify(shown)).not.toMatch(/evidence/);
     expect(shown.keyPoints[0]).toEqual({ text: 'الامتحان يوم السبت' });
-    const v1 = { summary: 's', topics: [], keyPoints: ['a'], questionsAndAnswers: [], actionItems: [] };
+    const v1 = {
+      summary: 's',
+      topics: [],
+      keyPoints: ['a'],
+      questionsAndAnswers: [],
+      actionItems: [],
+    };
     expect(forViewers(v1)).toBe(v1);
   });
 
   it('the schema asks for evidence on every factual item, and none on the prose fields', () => {
-    for (const f of ['keyPoints', 'concepts', 'examples', 'formulas', 'questions', 'homework', 'corrections']) {
+    for (const f of [
+      'keyPoints',
+      'concepts',
+      'examples',
+      'formulas',
+      'questions',
+      'homework',
+      'corrections',
+    ]) {
       expect((FINAL_SCHEMA.properties as any)[f].items.required).toContain('evidence');
     }
-    expect(FINAL_SCHEMA.required).toEqual(expect.arrayContaining(['title', 'quickSummary', 'reviewPoints', 'studyNotes']));
+    expect(FINAL_SCHEMA.required).toEqual(
+      expect.arrayContaining(['title', 'quickSummary', 'reviewPoints', 'studyNotes']),
+    );
   });
 });
 
@@ -107,7 +144,7 @@ describe('sizing: token-aware, never a cut', () => {
     expect(estimateTokens(text)).toBeGreaterThanOrEqual(10_000);
   });
 
-  it('a dense 3-hour class (≈141k chars) is one call; the single-call limit is far inside luna\'s 1.05M context', () => {
+  it("a dense 3-hour class (≈141k chars) is one call; the single-call limit is far inside luna's 1.05M context", () => {
     const lim = summaryLimits({});
     expect(estimateTokens('ا'.repeat(141_000))).toBeLessThan(lim.singleCallMaxTokens);
     expect(lim.singleCallMaxTokens + lim.singleCallOutput * 2 + 10_000).toBeLessThan(1_050_000 / 2);

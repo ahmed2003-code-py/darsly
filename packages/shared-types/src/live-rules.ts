@@ -75,14 +75,19 @@ export function validateLiveSession(
     out.push({ field: 'title', code: 'TITLE_TOO_LONG', params: { max: R.titleMax } });
 
   if ((input.description ?? '').length > R.descriptionMax)
-    out.push({ field: 'description', code: 'DESCRIPTION_TOO_LONG', params: { max: R.descriptionMax } });
+    out.push({
+      field: 'description',
+      code: 'DESCRIPTION_TOO_LONG',
+      params: { max: R.descriptionMax },
+    });
 
   const raw = input.startsAt;
   if (!raw) out.push({ field: 'startsAt', code: 'STARTS_AT_REQUIRED' });
   else {
     const t = new Date(raw).getTime();
     if (!Number.isFinite(t)) out.push({ field: 'startsAt', code: 'STARTS_AT_INVALID' });
-    else if (t < now - R.pastGraceMin * 60_000) out.push({ field: 'startsAt', code: 'STARTS_AT_PAST' });
+    else if (t < now - R.pastGraceMin * 60_000)
+      out.push({ field: 'startsAt', code: 'STARTS_AT_PAST' });
   }
 
   const d = input.durationMin;
@@ -91,7 +96,11 @@ export function validateLiveSession(
   else {
     const n = Number(d);
     if (n < R.durationMin)
-      out.push({ field: 'durationMin', code: 'DURATION_TOO_SHORT', params: { min: R.durationMin } });
+      out.push({
+        field: 'durationMin',
+        code: 'DURATION_TOO_SHORT',
+        params: { min: R.durationMin },
+      });
     else if (n > R.durationMax)
       out.push({ field: 'durationMin', code: 'DURATION_TOO_LONG', params: { max: R.durationMax } });
   }

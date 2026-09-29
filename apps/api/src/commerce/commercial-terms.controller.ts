@@ -1,6 +1,16 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -46,7 +56,8 @@ export class CommercialTermsController {
 
   @Get('academies/:id/commercial-terms')
   @ApiOperation({
-    summary: '[admin] An academy’s commercial terms (history, effective) and its Center/teacher splits',
+    summary:
+      '[admin] An academy’s commercial terms (history, effective) and its Center/teacher splits',
   })
   async forAcademy(@Param('id') id: string) {
     const [history, academy] = await Promise.all([
@@ -84,7 +95,12 @@ export class CommercialTermsController {
     return {
       ...history,
       academy: academy
-        ? { id: academy.id, name: academy.name, kind: academy.kind, teacherSharePercent: academy.teacherSharePercent }
+        ? {
+            id: academy.id,
+            name: academy.name,
+            kind: academy.kind,
+            teacherSharePercent: academy.teacherSharePercent,
+          }
         : null,
       splits,
     };

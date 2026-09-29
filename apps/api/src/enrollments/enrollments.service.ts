@@ -85,7 +85,8 @@ export class EnrollmentsService {
       where: { tenantId: course.tenantId, code: code.trim().toUpperCase(), deletedAt: null },
     });
     // A coupon made for live seats (scope LIVE) is not a course coupon.
-    if (!coupon || !coupon.isActive || coupon.scope === 'LIVE') throw new BadRequestException('Invalid coupon');
+    if (!coupon || !coupon.isActive || coupon.scope === 'LIVE')
+      throw new BadRequestException('Invalid coupon');
     if (coupon.expiresAt && coupon.expiresAt < new Date()) {
       throw new BadRequestException('Coupon expired');
     }

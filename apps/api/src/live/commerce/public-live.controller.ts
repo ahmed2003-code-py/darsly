@@ -38,7 +38,9 @@ export class PublicLiveController {
 
   @Get(':id')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
-  @ApiOperation({ summary: '[public] A paid session’s page: what it is, what a seat costs, seats left' })
+  @ApiOperation({
+    summary: '[public] A paid session’s page: what it is, what a seat costs, seats left',
+  })
   offer(@Param('id') id: string) {
     return this.commerce.publicOffer(id);
   }
@@ -61,7 +63,9 @@ export class PublicLiveController {
   @Post('access/:token/declare')
   @HttpCode(200)
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
-  @ApiOperation({ summary: '[public] Before transferring: a guest says where the money comes from' })
+  @ApiOperation({
+    summary: '[public] Before transferring: a guest says where the money comes from',
+  })
   declare(@Param('token') token: string, @Body() dto: DeclareTransferDto) {
     return this.commerce.guestDeclareTransfer(token, dto);
   }
@@ -77,7 +81,9 @@ export class PublicLiveController {
   @Post('access/:token/classroom')
   @HttpCode(200)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
-  @ApiOperation({ summary: '[public] A short-lived token for this one classroom (confirmed seats only)' })
+  @ApiOperation({
+    summary: '[public] A short-lived token for this one classroom (confirmed seats only)',
+  })
   classroom(@Param('token') token: string) {
     return this.commerce.guestClassroomToken(token);
   }
@@ -85,7 +91,9 @@ export class PublicLiveController {
   @Post('access/:token/cancel')
   @HttpCode(200)
   @Throttle({ default: { limit: 5, ttl: 600_000 } })
-  @ApiOperation({ summary: '[public] A guest gives the seat back (refund to the account named, if one is due)' })
+  @ApiOperation({
+    summary: '[public] A guest gives the seat back (refund to the account named, if one is due)',
+  })
   cancel(@Param('token') token: string, @Body() dto: RefundDestinationDto) {
     return this.commerce.guestCancel(token, dto);
   }

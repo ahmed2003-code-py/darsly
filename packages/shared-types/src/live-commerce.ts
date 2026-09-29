@@ -11,8 +11,17 @@ export type LiveAccessMode = 'FREE' | 'PAID';
 export type LiveRefundPolicy = 'FLEXIBLE' | 'STANDARD' | 'STRICT' | 'NO_REFUND';
 export type LiveReplayPolicy = 'NONE' | 'INCLUDED_FOREVER' | 'INCLUDED_DAYS';
 
-export const LIVE_REFUND_POLICIES: LiveRefundPolicy[] = ['FLEXIBLE', 'STANDARD', 'STRICT', 'NO_REFUND'];
-export const LIVE_REPLAY_POLICIES: LiveReplayPolicy[] = ['NONE', 'INCLUDED_FOREVER', 'INCLUDED_DAYS'];
+export const LIVE_REFUND_POLICIES: LiveRefundPolicy[] = [
+  'FLEXIBLE',
+  'STANDARD',
+  'STRICT',
+  'NO_REFUND',
+];
+export const LIVE_REPLAY_POLICIES: LiveReplayPolicy[] = [
+  'NONE',
+  'INCLUDED_FOREVER',
+  'INCLUDED_DAYS',
+];
 
 /**
  * How long before the start a student's own cancellation is still refunded in

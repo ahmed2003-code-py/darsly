@@ -127,7 +127,9 @@ export default function AdminPaymentsPage() {
                       </span>
                       <span>{paymentMethodLabel(p.method)}</span>
                       {p.reference && <span dir="ltr">#{p.reference}</span>}
-                      {p.livePurchaseId && !p.claimedAt && <Badge tone="neutral">{t('apay.notClaimed')}</Badge>}
+                      {p.livePurchaseId && !p.claimedAt && (
+                        <Badge tone="neutral">{t('apay.notClaimed')}</Badge>
+                      )}
                     </div>
                     <div className="mt-2 flex gap-2">
                       <button
@@ -153,7 +155,10 @@ export default function AdminPaymentsPage() {
             </div>
           )}
           <ErrorNote error={verify.error && !confirming ? verify.error : null} />
-          <Link to="/admin/live-commerce" className="mt-3 inline-block text-sm font-bold text-primary hover:underline">
+          <Link
+            to="/admin/live-commerce"
+            className="mt-3 inline-block text-sm font-bold text-primary hover:underline"
+          >
             {t('apay.transfersLink')}
           </Link>
 
@@ -265,7 +270,8 @@ export default function AdminPaymentsPage() {
               <dt className="text-outline">{t('apay.item')}</dt>
               <dd>
                 {confirming.courseTitle}
-                {confirming.sessionStartsAt && ` · ${new Date(confirming.sessionStartsAt).toLocaleString('ar-EG')}`}
+                {confirming.sessionStartsAt &&
+                  ` · ${new Date(confirming.sessionStartsAt).toLocaleString('ar-EG')}`}
               </dd>
               <dt className="text-outline">{t('apay.expected')}</dt>
               <dd className="font-heading font-bold tabular-nums">
@@ -283,7 +289,9 @@ export default function AdminPaymentsPage() {
                         ? `#${confirming.reference}`
                         : t('apay.noSource')}
                 </span>
-                <span className="block">{confirming.hasProof ? t('apay.proofYes') : t('apay.proofNo')}</span>
+                <span className="block">
+                  {confirming.hasProof ? t('apay.proofYes') : t('apay.proofNo')}
+                </span>
                 {confirming.proofSummary?.amountCents != null && (
                   <span className="block">
                     {t('apay.receiptSays', {
@@ -305,7 +313,10 @@ export default function AdminPaymentsPage() {
                 )}
               </dd>
             </dl>
-            <p className="rounded-xl bg-error-container/50 p-3 text-on-error-container" role="alert">
+            <p
+              className="rounded-xl bg-error-container/50 p-3 text-on-error-container"
+              role="alert"
+            >
               {t('apay.verifyWarning')}
             </p>
             <ErrorNote error={verify.error} />

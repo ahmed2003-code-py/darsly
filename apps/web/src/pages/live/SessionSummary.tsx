@@ -129,7 +129,8 @@ function RecordingSection({
   });
   const stage = recording.stage;
   // Only a finished recording has a length worth stating.
-  const length = stage === 'READY' && recording.durationSeconds ? minutesOf(recording.durationSeconds, t) : null;
+  const length =
+    stage === 'READY' && recording.durationSeconds ? minutesOf(recording.durationSeconds, t) : null;
 
   let body: ReactNode;
   if (!stage) body = <p className="text-sm text-outline">{t('record.rec.none')}</p>;
@@ -138,7 +139,9 @@ function RecordingSection({
       <LiveReplayPlayer sessionId={sessionId} />
     ) : (
       <button className="btn-primary" onClick={() => setWatching(true)}>
-        <span aria-hidden className="material-symbols-outlined text-[20px]">play_arrow</span>
+        <span aria-hidden className="material-symbols-outlined text-[20px]">
+          play_arrow
+        </span>
         {t('record.rec.watch')}
       </button>
     );
@@ -147,7 +150,9 @@ function RecordingSection({
       <video src={url} controls playsInline className="w-full rounded-xl bg-black" />
     ) : (
       <button className="btn-primary" disabled={open.isPending} onClick={() => open.mutate()}>
-        <span aria-hidden className="material-symbols-outlined text-[20px]">play_arrow</span>
+        <span aria-hidden className="material-symbols-outlined text-[20px]">
+          play_arrow
+        </span>
         {open.isPending ? t('common.loading') : t('summary.watch')}
       </button>
     );
@@ -166,7 +171,11 @@ function RecordingSection({
       <Status
         busy
         title={t(`record.rec.${stage}`)}
-        hint={stage === 'PROCESSING' || stage === 'FINALIZING' ? t('record.rec.processingHint') : undefined}
+        hint={
+          stage === 'PROCESSING' || stage === 'FINALIZING'
+            ? t('record.rec.processingHint')
+            : undefined
+        }
       />
     );
 
@@ -179,7 +188,11 @@ function RecordingSection({
         <>
           {length && <span className="text-xs text-outline">{length}</span>}
           {teacher && recording.visibility && stage && stage !== 'FAILED' && (
-            <VisibilityPicker sessionId={sessionId} resource="recording" value={recording.visibility} />
+            <VisibilityPicker
+              sessionId={sessionId}
+              resource="recording"
+              value={recording.visibility}
+            />
           )}
         </>
       }
@@ -218,8 +231,15 @@ function TranscriptSection({
   const retryButton =
     teacher && transcript.canRetry ? (
       <div className="mt-2 space-y-1">
-        <button type="button" className="btn-secondary !py-1.5 text-sm" disabled={retry.isPending} onClick={() => retry.mutate()}>
-          <span aria-hidden className="material-symbols-outlined text-[18px]">refresh</span>
+        <button
+          type="button"
+          className="btn-secondary !py-1.5 text-sm"
+          disabled={retry.isPending}
+          onClick={() => retry.mutate()}
+        >
+          <span aria-hidden className="material-symbols-outlined text-[18px]">
+            refresh
+          </span>
           {t('record.transcript.retry')}
         </button>
         <ErrorNote error={retry.error} />
@@ -229,12 +249,16 @@ function TranscriptSection({
   if ((s === 'READY' || s === 'PARTIAL') && transcript.segments?.length)
     body = (
       <>
-        <TranscriptViewer segments={transcript.segments} partial={s === 'PARTIAL' || !!transcript.partial} />
+        <TranscriptViewer
+          segments={transcript.segments}
+          partial={s === 'PARTIAL' || !!transcript.partial}
+        />
         {retryButton}
       </>
     );
   else if (s === 'READY') body = <Status tone="good" title={t('record.transcript.READY')} />;
-  else if (s === 'PARTIAL') body = <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />;
+  else if (s === 'PARTIAL')
+    body = <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />;
   else if (s === 'UNAVAILABLE' && transcript.reason === 'TRANSCRIPTION_OFF')
     body = <Status title={t('record.transcript.OFF')} />;
   else if (s === 'UNAVAILABLE')
@@ -260,7 +284,8 @@ function TranscriptSection({
       </>
     );
   else if (s === 'AT_PROVIDER') body = <Status title={t('record.transcript.AT_PROVIDER')} />;
-  else if (s === 'WAITING_FOR_CLASS_END') body = <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
+  else if (s === 'WAITING_FOR_CLASS_END')
+    body = <Status title={t('record.transcript.WAITING_FOR_CLASS_END')} />;
   else
     body = (
       <Status
@@ -280,7 +305,11 @@ function TranscriptSection({
       title={t('record.transcript.title')}
       aside={
         teacher && transcript.visibility && (s === 'READY' || s === 'PARTIAL') ? (
-          <VisibilityPicker sessionId={sessionId} resource="transcript" value={transcript.visibility} />
+          <VisibilityPicker
+            sessionId={sessionId}
+            resource="transcript"
+            value={transcript.visibility}
+          />
         ) : null
       }
     >
@@ -315,7 +344,13 @@ function ChatSection({ sessionId }: { sessionId: string }) {
       id="rec-chat"
       icon="forum"
       title={t('record.chat.title')}
-      aside={msgs.length ? <span className="text-xs text-outline">{t('record.chat.count', { count: msgs.length })}</span> : null}
+      aside={
+        msgs.length ? (
+          <span className="text-xs text-outline">
+            {t('record.chat.count', { count: msgs.length })}
+          </span>
+        ) : null
+      }
     >
       {chat.isLoading ? (
         <Skeleton className="h-10 w-full" />
@@ -324,7 +359,10 @@ function ChatSection({ sessionId }: { sessionId: string }) {
       ) : (
         <>
           {!open && msgs.length > 5 && (
-            <button className="mb-2 text-xs font-semibold text-primary-text hover:underline" onClick={() => setOpen(true)}>
+            <button
+              className="mb-2 text-xs font-semibold text-primary-text hover:underline"
+              onClick={() => setOpen(true)}
+            >
               {t('record.chat.showAll', { count: msgs.length })}
             </button>
           )}
@@ -335,10 +373,13 @@ function ChatSection({ sessionId }: { sessionId: string }) {
                   <span className="font-semibold text-on-surface-variant">{m.senderName}</span>
                   {m.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
                   {' · '}
-                  {new Date(m.createdAt).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {new Date(m.createdAt).toLocaleTimeString(
+                    i18n.language === 'ar' ? 'ar-EG' : 'en-GB',
+                    {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  )}
                 </p>
                 <p className="whitespace-pre-wrap break-words text-sm" dir="auto">
                   {m.body}
@@ -429,7 +470,9 @@ export default function SessionSummary({
       <div className="space-y-3 pb-4">
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
-            <span aria-hidden className="material-symbols-outlined text-[18px]">event</span>
+            <span aria-hidden className="material-symbols-outlined text-[18px]">
+              event
+            </span>
             {new Date(d.startsAt).toLocaleString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
               weekday: 'long',
               day: 'numeric',
@@ -439,26 +482,35 @@ export default function SessionSummary({
             })}
           </span>
           <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
-            <span aria-hidden className="material-symbols-outlined text-[18px]">timer</span>
+            <span aria-hidden className="material-symbols-outlined text-[18px]">
+              timer
+            </span>
             {d.actualDurationSec != null
               ? t('record.actualDuration', { duration: minutesOf(d.actualDurationSec, t) })
               : t('live.minutes', { count: d.durationMin })}
           </span>
           {attendance && (
             <span className="inline-flex items-center gap-1.5 text-on-surface-variant">
-              <span aria-hidden className="material-symbols-outlined text-[18px]">group</span>
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                group
+              </span>
               {t('record.attendedCount', { count: students.length })}
             </span>
           )}
         </div>
-        <nav aria-label={t('record.nav.overview')} className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+        <nav
+          aria-label={t('record.nav.overview')}
+          className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5"
+        >
           {nav.map((n) => (
             <a
               key={n.id}
               href={`#${n.id}`}
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById(n.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                document
+                  .getElementById(n.id)
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }}
               className="shrink-0 rounded-full bg-surface-container px-3 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
@@ -476,7 +528,9 @@ export default function SessionSummary({
         <LiveContentSection sessionId={sessionId} sessionTitle={d.title} />
       )}
 
-      {d.transcript && <TranscriptSection sessionId={sessionId} teacher={isTeacher} transcript={d.transcript} />}
+      {d.transcript && (
+        <TranscriptSection sessionId={sessionId} teacher={isTeacher} transcript={d.transcript} />
+      )}
 
       <Block
         id="rec-summary"
@@ -484,14 +538,20 @@ export default function SessionSummary({
         title={t('summary.title')}
         aside={
           isTeacher && sStage === 'READY' && d.summary.visibility ? (
-            <VisibilityPicker sessionId={sessionId} resource="summary" value={d.summary.visibility} />
+            <VisibilityPicker
+              sessionId={sessionId}
+              resource="summary"
+              value={d.summary.visibility}
+            />
           ) : null
         }
       >
         {sStage === 'READY' && data ? (
           <div className="space-y-3">
             <Status tone="good" title={t('summary.ready')} />
-            {d.summary.partial && <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />}
+            {d.summary.partial && (
+              <Status title={t('summary.partialTitle')} hint={t('summary.partial')} />
+            )}
             {d.summary.stale && <Status title={t('summary.stale')} />}
             {isStudyNotes(data) ? <StudyNotesView n={data} /> : <LegacySummaryView data={data} />}
             {isTeacher && d.summary.canRegenerate && (
@@ -506,7 +566,9 @@ export default function SessionSummary({
                     regenerate.mutate();
                   }}
                 >
-                  <span aria-hidden className="material-symbols-outlined text-[18px]">autorenew</span>
+                  <span aria-hidden className="material-symbols-outlined text-[18px]">
+                    autorenew
+                  </span>
                   {regenerate.isPending ? t('common.saving') : t('summary.regenerate')}
                 </button>
                 <ErrorNote error={regenerate.error} />
@@ -525,13 +587,18 @@ export default function SessionSummary({
               tone="bad"
               title={t('record.summary.FAILED')}
               hint={
-                d.summary.error === 'TRANSCRIPT_PENDING' || d.summary.error === 'PROVIDER_UNREACHABLE'
+                d.summary.error === 'TRANSCRIPT_PENDING' ||
+                d.summary.error === 'PROVIDER_UNREACHABLE'
                   ? t('summary.transcriptPending')
                   : undefined
               }
             />
             {isTeacher && d.summary.canGenerate && (
-              <button className="btn-secondary" disabled={generate.isPending} onClick={() => generate.mutate()}>
+              <button
+                className="btn-secondary"
+                disabled={generate.isPending}
+                onClick={() => generate.mutate()}
+              >
                 {t('summary.retry')}
               </button>
             )}
@@ -539,8 +606,14 @@ export default function SessionSummary({
         ) : isTeacher ? (
           <div className="space-y-2">
             <p className="text-sm text-outline">{t('summary.notYetHint')}</p>
-            <button className="btn-primary" disabled={generate.isPending || !d.summary.canGenerate} onClick={() => generate.mutate()}>
-              <span aria-hidden className="material-symbols-outlined text-[18px]">auto_awesome</span>
+            <button
+              className="btn-primary"
+              disabled={generate.isPending || !d.summary.canGenerate}
+              onClick={() => generate.mutate()}
+            >
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                auto_awesome
+              </span>
               {generate.isPending ? t('common.saving') : t('summary.generate')}
             </button>
           </div>

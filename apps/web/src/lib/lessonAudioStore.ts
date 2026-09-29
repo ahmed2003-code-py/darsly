@@ -40,7 +40,8 @@ function open(): Promise<IDBDatabase> {
     const r = indexedDB.open(DB, 1);
     r.onupgradeneeded = () => {
       const db = r.result;
-      if (!db.objectStoreNames.contains('pieces')) db.createObjectStore('pieces', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('pieces'))
+        db.createObjectStore('pieces', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('chunks')) {
         db.createObjectStore('chunks', { autoIncrement: true }).createIndex('piece', 'piece');
       }
@@ -57,7 +58,7 @@ const done = (tx: IDBTransaction) =>
     tx.onabort = () => reject(tx.error);
   });
 
-const all = <T,>(req: IDBRequest<T[]>) =>
+const all = <T>(req: IDBRequest<T[]>) =>
   new Promise<T[]>((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -68,7 +69,7 @@ export function idbPieceStore(): PieceStore | null {
   if (typeof indexedDB === 'undefined') return null;
   let dbp: Promise<IDBDatabase> | null = null;
   const db = () => (dbp ??= open());
-  const safe = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
+  const safe = async <T>(fn: () => Promise<T>, fallback: T): Promise<T> => {
     try {
       return await fn();
     } catch {
@@ -119,7 +120,13 @@ export function idbPieceStore(): PieceStore | null {
           const rows = await all<{ chunk: Blob; at: number }>(
             d.transaction('chunks').objectStore('chunks').index('piece').getAll(m.id),
           );
-          out.push({ meta: m, blob: new Blob(rows.map((r) => r.chunk), { type: m.mime }) });
+          out.push({
+            meta: m,
+            blob: new Blob(
+              rows.map((r) => r.chunk),
+              { type: m.mime },
+            ),
+          });
         }
         return out;
       }, []),

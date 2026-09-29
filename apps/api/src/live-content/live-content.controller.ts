@@ -1,7 +1,25 @@
-import { Body, Controller, Get, HttpCode, Param, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsIn, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { JwtPayload } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy, RequirePermission } from '../academy/academy-context';
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
@@ -31,7 +49,8 @@ class PublishLessonDto {
 }
 
 /** A form field ("true"/"false") or a JSON boolean. */
-const formBool = ({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value);
+const formBool = ({ value }: { value: unknown }) =>
+  value === 'true' ? true : value === 'false' ? false : value;
 
 class CreateExamDto {
   /** The teacher saw that the transcript is incomplete and chose to go on. */
@@ -64,19 +83,32 @@ export class LiveContentController {
     return {
       course: { academyId: ctx.academyId, authorTenantId: user.tenantId, manageAll },
       live: { academyId: ctx.academyId, userId: ctx.userId, manageAll, role: ctx.role },
-      imports: { academyId: ctx.academyId, authorTenantId: user.tenantId, manageAll, userId: user.sub },
+      imports: {
+        academyId: ctx.academyId,
+        authorTenantId: user.tenantId,
+        manageAll,
+        userId: user.sub,
+      },
     };
   }
 
   @Get(':id/content')
-  @ApiOperation({ summary: '[academy] What this class has become (lessons, exam) and can still become' })
-  status(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  @ApiOperation({
+    summary: '[academy] What this class has become (lessons, exam) and can still become',
+  })
+  status(
+    @CurrentUser() u: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.content.status(this.scope(u, ctx), id);
   }
 
   @Post(':id/content/lesson')
   @HttpCode(200)
-  @ApiOperation({ summary: '[academy] The class recording as a course lesson (same video, no re-upload)' })
+  @ApiOperation({
+    summary: '[academy] The class recording as a course lesson (same video, no re-upload)',
+  })
   publish(
     @CurrentUser() u: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,
@@ -106,13 +138,19 @@ export class LiveContentController {
 
   @Get(':id/content/exam-candidates')
   @ApiOperation({ summary: '[academy] Existing exams that can follow this class lesson' })
-  candidates(@CurrentUser() u: JwtPayload, @CurrentAcademy() ctx: AcademyContext, @Param('id') id: string) {
+  candidates(
+    @CurrentUser() u: JwtPayload,
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('id') id: string,
+  ) {
     return this.content.examCandidates(this.scope(u, ctx), id);
   }
 
   @Post(':id/content/link-exam')
   @HttpCode(200)
-  @ApiOperation({ summary: '[academy] Put an existing exam right after this class lesson (moved, not copied)' })
+  @ApiOperation({
+    summary: '[academy] Put an existing exam right after this class lesson (moved, not copied)',
+  })
   link(
     @CurrentUser() u: JwtPayload,
     @CurrentAcademy() ctx: AcademyContext,

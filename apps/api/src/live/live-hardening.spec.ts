@@ -749,7 +749,12 @@ describe('P6: a manual match compares the transfer with what the transfer had to
   const build = (event: number) => {
     const prisma: any = {
       paymentEvent: {
-        findUnique: jest.fn(async () => ({ id: 'e1', status: 'UNMATCHED', provider: 'VODAFONE_CASH', amountCents: event })),
+        findUnique: jest.fn(async () => ({
+          id: 'e1',
+          status: 'UNMATCHED',
+          provider: 'VODAFONE_CASH',
+          amountCents: event,
+        })),
         findFirst: jest.fn(async () => null),
         update: jest.fn(async () => ({})),
         updateMany: jest.fn(async () => ({ count: 1 })),

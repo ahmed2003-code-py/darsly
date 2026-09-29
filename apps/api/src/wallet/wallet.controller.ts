@@ -16,7 +16,8 @@ class SubmitTopupDto {
 }
 class DeclareTopupDto {
   @IsInt() @Min(1_000) @Max(5_000_000) amountCents: number;
-  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method:
+    'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
   @IsIn(['WALLET', 'BANK']) source: 'WALLET' | 'BANK';
   @IsOptional() @IsString() @MaxLength(20) senderWallet?: string;
   @IsOptional() @IsString() @MaxLength(80) payerName?: string;
@@ -68,7 +69,9 @@ export class WalletController {
    */
   @Post('wallet/topups/declare')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Declare a top-up transfer (creates the PENDING top-up before the transfer)' })
+  @ApiOperation({
+    summary: '[student] Declare a top-up transfer (creates the PENDING top-up before the transfer)',
+  })
   async declareTopup(@CurrentUser() u: JwtPayload, @Body() dto: DeclareTopupDto) {
     const t = await this.wallet.declareTopup(u.sub, dto);
     await this.matching.reconcileTopup(t.id).catch(() => undefined);
@@ -91,15 +94,23 @@ export class WalletController {
 
   @Get('wallet/topups/:id')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Where my top-up stands, and my balance (the wallet screen polls this)' })
+  @ApiOperation({
+    summary: '[student] Where my top-up stands, and my balance (the wallet screen polls this)',
+  })
   topupStatus(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
     return this.wallet.topupStatus(u.sub, id);
   }
 
   @Post('wallet/topups/:id/proof')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Attach the transfer receipt (supporting evidence) to my declared top-up' })
-  async topupProof(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: TopupProofDto) {
+  @ApiOperation({
+    summary: '[student] Attach the transfer receipt (supporting evidence) to my declared top-up',
+  })
+  async topupProof(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: TopupProofDto,
+  ) {
     await this.wallet.attachTopupProof(u.sub, id, dto.proofImageUrl);
     await this.matching.reconcileTopup(id).catch(() => undefined);
     return this.wallet.topupStatus(u.sub, id);

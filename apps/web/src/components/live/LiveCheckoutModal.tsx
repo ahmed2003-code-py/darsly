@@ -81,7 +81,10 @@ export default function LiveCheckoutModal({
     // within moments of the SMS — nothing for the buyer to press meanwhile.
     refetchInterval: (q) => {
       const p = q.state.data?.purchase;
-      const waiting = p && (p.status === 'PAYMENT_PENDING' || (p.status === 'HELD' && p.payment?.status === 'PENDING'));
+      const waiting =
+        p &&
+        (p.status === 'PAYMENT_PENDING' ||
+          (p.status === 'HELD' && p.payment?.status === 'PENDING'));
       return waiting ? backoffInterval(since.current) : false;
     },
   });
@@ -187,10 +190,14 @@ export default function LiveCheckoutModal({
           {active.paymentStage === 'UNDER_REVIEW' ? 'fact_check' : 'hourglass_top'}
         </span>
         <p className="font-heading text-lg font-bold">
-          {active.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewTitle') : t('liveBuy.pendingTitle')}
+          {active.paymentStage === 'UNDER_REVIEW'
+            ? t('livePay.reviewTitle')
+            : t('liveBuy.pendingTitle')}
         </p>
         <p className="mt-1 text-sm text-on-surface-variant">
-          {active.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewBody') : t('livePay.checkingBody')}
+          {active.paymentStage === 'UNDER_REVIEW'
+            ? t('livePay.reviewBody')
+            : t('livePay.checkingBody')}
         </p>
         <button className="btn-ghost mt-5" onClick={onClose}>
           {t('common.back')}

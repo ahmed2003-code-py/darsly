@@ -45,9 +45,13 @@ const LESSON = `طيب قبل ما نبدأ، الامتحان يوم الخمي
 
 async function lesson(transcript = LESSON, over: Record<string, unknown> = {}) {
   const k = randomUUID().slice(0, 8);
-  const teacher = await prisma.user.create({ data: { role: 'TEACHER', fullName: `T ${k}`, email: `sm-${k}@it.test` } });
+  const teacher = await prisma.user.create({
+    data: { role: 'TEACHER', fullName: `T ${k}`, email: `sm-${k}@it.test` },
+  });
   const tp = await prisma.teacherProfile.create({ data: { userId: teacher.id, slug: `sm-${k}` } });
-  await prisma.academy.create({ data: { id: tp.id, slug: `sma-${k}`, name: `A ${k}`, ownerUserId: teacher.id } });
+  await prisma.academy.create({
+    data: { id: tp.id, slug: `sma-${k}`, name: `A ${k}`, ownerUserId: teacher.id },
+  });
   const ls = await prisma.liveSession.create({
     data: {
       tenantId: tp.id,
@@ -77,15 +81,42 @@ async function lesson(transcript = LESSON, over: Record<string, unknown> = {}) {
 const ANSWER = {
   title: 'مراجعة قبل الامتحان',
   quickSummary: 'الامتحان يوم السبت الساعة عشرة، ومساحة الدائرة باي نق تربيع.',
-  keyPoints: [{ text: 'الامتحان يوم السبت الساعة عشرة', evidence: 'الامتحان يوم السبت مش الخميس، السبت الساعة عشرة' }],
+  keyPoints: [
+    {
+      text: 'الامتحان يوم السبت الساعة عشرة',
+      evidence: 'الامتحان يوم السبت مش الخميس، السبت الساعة عشرة',
+    },
+  ],
   concepts: [],
-  examples: [{ text: 'Decision trees مثال على supervised learning', evidence: 'decision trees are a classic example' }],
-  formulas: [{ formula: 'A = πr²', meaning: 'مساحة الدائرة', evidence: 'باي في نق تربيع، نق تربيع' }],
-  questions: [{ question: 'هل الامتحان open book؟', answered: true, answer: 'نعم', evidence: 'هو الامتحان هيبقى open book' }],
+  examples: [
+    {
+      text: 'Decision trees مثال على supervised learning',
+      evidence: 'decision trees are a classic example',
+    },
+  ],
+  formulas: [
+    { formula: 'A = πr²', meaning: 'مساحة الدائرة', evidence: 'باي في نق تربيع، نق تربيع' },
+  ],
+  questions: [
+    {
+      question: 'هل الامتحان open book؟',
+      answered: true,
+      answer: 'نعم',
+      evidence: 'هو الامتحان هيبقى open book',
+    },
+  ],
   homework: [{ task: 'مشروع', due: '14 أكتوبر', evidence: 'المشروع تسليمه يوم أربعتاشر أكتوبر' }],
   corrections: [
-    { wrong: 'الامتحان يوم الخميس', corrected: 'الامتحان يوم السبت', evidence: 'لا لا معلش، أنا غلطت، الامتحان يوم السبت' },
-    { wrong: 'المساحة = باي في نق', corrected: 'المساحة = باي في نق تربيع', evidence: 'لأ استنوا، باي في نق تربيع' },
+    {
+      wrong: 'الامتحان يوم الخميس',
+      corrected: 'الامتحان يوم السبت',
+      evidence: 'لا لا معلش، أنا غلطت، الامتحان يوم السبت',
+    },
+    {
+      wrong: 'المساحة = باي في نق',
+      corrected: 'المساحة = باي في نق تربيع',
+      evidence: 'لأ استنوا، باي في نق تربيع',
+    },
   ],
   reviewPoints: [],
   studyNotes: '### الامتحان\nالسبت الساعة عشرة.',
@@ -97,7 +128,12 @@ function fakeAi(answer: (call: any) => any = () => ANSWER) {
     completeStructured: jest.fn(async (opts: any) => {
       calls.push(opts);
       const data = await answer(opts);
-      return { data, inputTokens: Math.ceil(opts.messages[0].content.length / 3), outputTokens: 1500, reasoningTokens: 100 };
+      return {
+        data,
+        inputTokens: Math.ceil(opts.messages[0].content.length / 3),
+        outputTokens: 1500,
+        reasoningTokens: 100,
+      };
     }),
     // cents per million tokens → millicents
     costMillicents: (i: number, o: number, p: { inPerMToken: number; outPerMToken: number }) =>
@@ -105,11 +141,25 @@ function fakeAi(answer: (call: any) => any = () => ANSWER) {
   };
   return { ai, calls };
 }
-const cfClient = () => ({ configured: true, turnConfigured: false, iceServers: jest.fn(async () => [CF_STUN]), closeTracks: jest.fn(async () => ({})), getSession: jest.fn(async () => ({ tracks: [] })) });
-const providers = () => new LiveProviders([new CloudflareLiveProvider(prisma, cfClient() as any)], 'CLOUDFLARE');
-const handlerWith = (ai: any) => new LiveSummaryHandler(prisma, ai, providers(), { create: jest.fn(async () => ({})) } as any);
+const cfClient = () => ({
+  configured: true,
+  turnConfigured: false,
+  iceServers: jest.fn(async () => [CF_STUN]),
+  closeTracks: jest.fn(async () => ({})),
+  getSession: jest.fn(async () => ({ tracks: [] })),
+});
+const providers = () =>
+  new LiveProviders([new CloudflareLiveProvider(prisma, cfClient() as any)], 'CLOUDFLARE');
+const handlerWith = (ai: any) =>
+  new LiveSummaryHandler(prisma, ai, providers(), { create: jest.fn(async () => ({})) } as any);
 const job = (id: string, extra: Record<string, unknown> = {}, attempts = 1) =>
-  ({ id: `job-${randomUUID().slice(0, 8)}`, type: 'LIVE_SUMMARY', attempts, costCents: 0, input: { liveSessionId: id, ...extra } }) as any;
+  ({
+    id: `job-${randomUUID().slice(0, 8)}`,
+    type: 'LIVE_SUMMARY',
+    attempts,
+    costCents: 0,
+    input: { liveSessionId: id, ...extra },
+  }) as any;
 const reload = (id: string) => prisma.liveSession.findUniqueOrThrow({ where: { id } });
 
 describe('one grounded luna call over the whole transcript', () => {
@@ -119,14 +169,28 @@ describe('one grounded luna call over the whole transcript', () => {
     const big = `${'كلام الحصة عن الـ regression والـ gradient descent. '.repeat(2_800)}\n\n${tail}`;
     expect(big.length).toBeGreaterThan(141_000);
     const w = await lesson(big);
-    const { ai, calls } = fakeAi(() => ({ ...ANSWER, keyPoints: [{ text: 'quiz', evidence: tail }] }));
+    const { ai, calls } = fakeAi(() => ({
+      ...ANSWER,
+      keyPoints: [{ text: 'quiz', evidence: tail }],
+    }));
     await handlerWith(ai).handle(job(w.ls.id));
     expect(calls).toHaveLength(1);
     expect(calls[0].messages[0].content).toContain(big);
-    expect(calls[0]).toMatchObject({ model: 'gpt-6-luna', store: false, reasoningEffort: 'low', maxTokens: 12_000 });
+    expect(calls[0]).toMatchObject({
+      model: 'gpt-6-luna',
+      store: false,
+      reasoningEffort: 'low',
+      maxTokens: 12_000,
+    });
     const s = await reload(w.ls.id);
     expect(s.summaryStatus).toBe('READY');
-    expect((s.summaryMeta as any)).toMatchObject({ model: 'gpt-6-luna', path: 'single', calls: 1, transcriptRevision: 1, partial: false });
+    expect(s.summaryMeta as any).toMatchObject({
+      model: 'gpt-6-luna',
+      path: 'single',
+      calls: 1,
+      transcriptRevision: 1,
+      partial: false,
+    });
   });
 
   it('corrections kept, inventions dropped, an unanswered question keeps no answer, no homework invented', async () => {
@@ -136,7 +200,10 @@ describe('one grounded luna call over the whole transcript', () => {
     await handlerWith(ai).handle(job(w.ls.id));
     const s = await reload(w.ls.id);
     const sum = s.summary as any;
-    expect(sum.corrections.map((c: any) => c.corrected)).toEqual(['الامتحان يوم السبت', 'المساحة = باي في نق تربيع']);
+    expect(sum.corrections.map((c: any) => c.corrected)).toEqual([
+      'الامتحان يوم السبت',
+      'المساحة = باي في نق تربيع',
+    ]);
     expect(sum.examples).toHaveLength(0); // decision trees: not in the class
     expect(sum.homework).toHaveLength(0); // the project deadline: never said
     expect(sum.questions[0]).toMatchObject({ question: 'هل الامتحان open book؟' });
@@ -159,10 +226,15 @@ describe('one grounded luna call over the whole transcript', () => {
     const w = await lesson();
     const { ai } = fakeAi(async () => {
       // A recovered piece lands while the model is writing.
-      await prisma.liveSession.update({ where: { id: w.ls.id }, data: { transcriptRevision: 2, transcriptText: `${LESSON}\n\nكلام زيادة` } });
+      await prisma.liveSession.update({
+        where: { id: w.ls.id },
+        data: { transcriptRevision: 2, transcriptText: `${LESSON}\n\nكلام زيادة` },
+      });
       return ANSWER;
     });
-    const err = await handlerWith(ai).handle(job(w.ls.id)).catch((e) => e);
+    const err = await handlerWith(ai)
+      .handle(job(w.ls.id))
+      .catch((e) => e);
     expect(err).toBeInstanceOf(AiJobError);
     expect(err.errorClass).toBe('RETRYABLE');
     const s = await reload(w.ls.id);
@@ -175,7 +247,12 @@ describe('one grounded luna call over the whole transcript', () => {
     const w = await lesson();
     let n = 0;
     const { ai, calls } = fakeAi(() => {
-      if (++n === 1) throw new AiJobError('AI response was cut off before it finished (max_output_tokens)', 'RETRYABLE', { inputTokens: 100, outputTokens: 12_000 });
+      if (++n === 1)
+        throw new AiJobError(
+          'AI response was cut off before it finished (max_output_tokens)',
+          'RETRYABLE',
+          { inputTokens: 100, outputTokens: 12_000 },
+        );
       return ANSWER;
     });
     await handlerWith(ai).handle(job(w.ls.id));
@@ -191,7 +268,16 @@ describe('one grounded luna call over the whole transcript', () => {
     const w = await lesson(paras.join('\n\n'));
     const { ai, calls } = fakeAi((c) =>
       c.schemaName === 'class_section_notes'
-        ? { sectionSummary: 'x', keyPoints: [], concepts: [], examples: [], formulas: [], questions: [], homework: [], corrections: [] }
+        ? {
+            sectionSummary: 'x',
+            keyPoints: [],
+            concepts: [],
+            examples: [],
+            formulas: [],
+            questions: [],
+            homework: [],
+            corrections: [],
+          }
         : { ...ANSWER, keyPoints: [], formulas: [], corrections: [], questions: [] },
     );
     await handlerWith(ai).handle(job(w.ls.id));
@@ -211,7 +297,9 @@ describe('failures stay in their own stage', () => {
     if (!guard()) return;
     const w = await lesson('قصير جدا');
     const { ai } = fakeAi();
-    const err = await handlerWith(ai).handle(job(w.ls.id)).catch((e) => e);
+    const err = await handlerWith(ai)
+      .handle(job(w.ls.id))
+      .catch((e) => e);
     expect(err.errorClass).toBe('TERMINAL');
     const s = await reload(w.ls.id);
     expect(s.summaryStatus).toBe('FAILED');
@@ -225,21 +313,47 @@ describe('failures stay in their own stage', () => {
     const { ai } = fakeAi(() => {
       throw new AiJobError('OpenAI request failed (503)', 'RETRYABLE');
     });
-    const e1 = await handlerWith(ai).handle(job(w.ls.id, {}, 1)).catch((e) => e);
+    const e1 = await handlerWith(ai)
+      .handle(job(w.ls.id, {}, 1))
+      .catch((e) => e);
     expect(e1.retryAfterMs).toBe(60_000);
     expect((await reload(w.ls.id)).summaryStatus).toBe('PROCESSING');
-    await handlerWith(ai).handle(job(w.ls.id, {}, 3)).catch(() => undefined);
+    await handlerWith(ai)
+      .handle(job(w.ls.id, {}, 3))
+      .catch(() => undefined);
     const s = await reload(w.ls.id);
-    expect(s).toMatchObject({ summaryStatus: 'FAILED', summaryError: 'AI_FAILED', transcriptStatus: 'READY', transcriptText: LESSON });
+    expect(s).toMatchObject({
+      summaryStatus: 'FAILED',
+      summaryError: 'AI_FAILED',
+      transcriptStatus: 'READY',
+      transcriptText: LESSON,
+    });
   });
 });
 
 describe('regenerate', () => {
   function service() {
-    const client = { configured: true, turnConfigured: false, iceServers: jest.fn(async () => [CF_STUN]), closeTracks: jest.fn(async () => ({})), getSession: jest.fn(async () => ({ tracks: [] })) };
-    const providers = new LiveProviders([new CloudflareLiveProvider(prisma, client as any)], 'CLOUDFLARE');
+    const client = {
+      configured: true,
+      turnConfigured: false,
+      iceServers: jest.fn(async () => [CF_STUN]),
+      closeTracks: jest.fn(async () => ({})),
+      getSession: jest.fn(async () => ({ tracks: [] })),
+    };
+    const providers = new LiveProviders(
+      [new CloudflareLiveProvider(prisma, client as any)],
+      'CLOUDFLARE',
+    );
     const jobs = new AiJobService(prisma, { enabled: true, monthlyBudgetCents: 0 } as any);
-    return new LiveService(prisma, { create: jest.fn(async () => ({})) } as any, {} as any, providers, { emitToLive: jest.fn(), emitToUser: jest.fn() } as any, jobs, {} as any);
+    return new LiveService(
+      prisma,
+      { create: jest.fn(async () => ({})) } as any,
+      {} as any,
+      providers,
+      { emitToLive: jest.fn(), emitToUser: jest.fn() } as any,
+      jobs,
+      {} as any,
+    );
   }
   const jobsFor = (id: string, type: 'LIVE_SUMMARY' | 'LIVE_TRANSCRIBE') =>
     prisma.aiJob.findMany({ where: { type, input: { path: ['liveSessionId'], equals: id } } });
@@ -251,7 +365,9 @@ describe('regenerate', () => {
     await handlerWith(ai).handle(job(w.ls.id));
     expect((await reload(w.ls.id)).summaryStatus).toBe('READY');
     const svc = service();
-    const presses = await Promise.all([1, 2, 3].map(() => svc.requestSummary(w.scope as any, w.ls.id, { regenerate: true })));
+    const presses = await Promise.all(
+      [1, 2, 3].map(() => svc.requestSummary(w.scope as any, w.ls.id, { regenerate: true })),
+    );
     expect(presses.every((p) => p.status === 'PROCESSING')).toBe(true);
     const queued = await jobsFor(w.ls.id, 'LIVE_SUMMARY');
     expect(queued).toHaveLength(1);

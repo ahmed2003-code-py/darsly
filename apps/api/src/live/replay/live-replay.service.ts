@@ -1,10 +1,4 @@
-import {
-  ConflictException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { ConflictException, ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DRM_PROVIDER, IDrmProvider } from '../../video/drm/drm.provider';
@@ -57,14 +51,26 @@ export class LiveReplayService {
     const { role } = await this.live.assertInSession(user.sub, liveSessionId);
     const s = await this.prisma.liveSession.findUniqueOrThrow({
       where: { id: liveSessionId },
-      select: { id: true, provider: true, recordingVisibility: true, tenantId: true, academyId: true },
+      select: {
+        id: true,
+        provider: true,
+        recordingVisibility: true,
+        tenantId: true,
+        academyId: true,
+      },
     });
     if (s.provider !== 'CLOUDFLARE') {
       // Daily's recordings are Daily's own (a short-lived provider link).
-      throw new ConflictException({ message: 'Not a Darsly recording', code: 'RECORDING_USE_LINK' });
+      throw new ConflictException({
+        message: 'Not a Darsly recording',
+        code: 'RECORDING_USE_LINK',
+      });
     }
     if (role === 'STUDENT' && s.recordingVisibility !== 'STUDENTS') {
-      throw new ForbiddenException({ message: 'Recording not shared', code: 'RECORDING_NOT_SHARED' });
+      throw new ForbiddenException({
+        message: 'Recording not shared',
+        code: 'RECORDING_NOT_SHARED',
+      });
     }
     if (role === 'STUDENT') {
       // A paid seat carries its own replay rights, frozen at purchase.
@@ -111,7 +117,10 @@ export class LiveReplayService {
       throw new ConflictException({ message: 'Recording not ready', code: 'RECORDING_NOT_READY' });
     }
     const base = Number(process.env.SIGNED_URL_TTL_SECONDS ?? 300);
-    const ttlSec = Math.min(REPLAY_MAX_TTL_SEC, Math.max(base, asset.durationSec + REPLAY_SLACK_SEC));
+    const ttlSec = Math.min(
+      REPLAY_MAX_TTL_SEC,
+      Math.max(base, asset.durationSec + REPLAY_SLACK_SEC),
+    );
     const watermarkId = `DRS-L-${randomBytes(4).toString('hex').toUpperCase()}`;
     const viewer = await this.prisma.user.findUnique({
       where: { id: user.sub },

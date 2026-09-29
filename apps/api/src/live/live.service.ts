@@ -30,7 +30,11 @@ import {
   LIVE_REPLAY_DAYS_MAX,
   validateLiveSession,
 } from '@darsly/shared-types';
-import { CommercialTermsService, pricingRefusal, toSnapshot } from '../commerce/commercial-terms.service';
+import {
+  CommercialTermsService,
+  pricingRefusal,
+  toSnapshot,
+} from '../commerce/commercial-terms.service';
 import { priceLiveSeat, PricingError } from '../commerce/pricing';
 import { LiveCommerceService, lockSession, seatsTaken } from './commerce/live-commerce.service';
 import { pipelineStages } from './live-pipeline';
@@ -207,25 +211,44 @@ export class LiveService {
   ): CommerceFieldError[] {
     const out: CommerceFieldError[] = [];
     const mode = dto.accessMode ?? existing?.accessMode ?? 'FREE';
-    if (mode !== 'FREE' && mode !== 'PAID') out.push({ field: 'accessMode', code: 'ACCESS_MODE_INVALID' });
-    const price = dto.priceCents !== undefined ? dto.priceCents : existing?.priceCents ?? null;
+    if (mode !== 'FREE' && mode !== 'PAID')
+      out.push({ field: 'accessMode', code: 'ACCESS_MODE_INVALID' });
+    const price = dto.priceCents !== undefined ? dto.priceCents : (existing?.priceCents ?? null);
     if (mode === 'PAID') {
       if (price == null) out.push({ field: 'priceCents', code: 'PRICE_REQUIRED' });
-      else if (!Number.isSafeInteger(price)) out.push({ field: 'priceCents', code: 'PRICE_INVALID' });
+      else if (!Number.isSafeInteger(price))
+        out.push({ field: 'priceCents', code: 'PRICE_INVALID' });
       else if (price < LIVE_PRICE_MIN_CENTS)
-        out.push({ field: 'priceCents', code: 'PRICE_TOO_LOW', params: { min: LIVE_PRICE_MIN_CENTS } });
+        out.push({
+          field: 'priceCents',
+          code: 'PRICE_TOO_LOW',
+          params: { min: LIVE_PRICE_MIN_CENTS },
+        });
       else if (price > LIVE_PRICE_MAX_CENTS)
-        out.push({ field: 'priceCents', code: 'PRICE_TOO_HIGH', params: { max: LIVE_PRICE_MAX_CENTS } });
-      const joinUrl = dto.joinUrl !== undefined ? dto.joinUrl : existing?.joinUrl ?? null;
+        out.push({
+          field: 'priceCents',
+          code: 'PRICE_TOO_HIGH',
+          params: { max: LIVE_PRICE_MAX_CENTS },
+        });
+      const joinUrl = dto.joinUrl !== undefined ? dto.joinUrl : (existing?.joinUrl ?? null);
       if (joinUrl) out.push({ field: 'joinUrl', code: 'PAID_NEEDS_DARSLY_CLASSROOM' });
     } else if (dto.priceCents != null) {
       out.push({ field: 'priceCents', code: 'PRICE_ON_FREE_SESSION' });
     }
     const replay = dto.replayPolicy ?? existing?.replayPolicy ?? 'INCLUDED_FOREVER';
-    const days = dto.replayDays !== undefined ? dto.replayDays : dto.replayPolicy ? null : existing?.replayDays ?? null;
+    const days =
+      dto.replayDays !== undefined
+        ? dto.replayDays
+        : dto.replayPolicy
+          ? null
+          : (existing?.replayDays ?? null);
     if (replay === 'INCLUDED_DAYS') {
       if (days == null || !Number.isSafeInteger(days) || days < 1 || days > LIVE_REPLAY_DAYS_MAX)
-        out.push({ field: 'replayDays', code: 'REPLAY_DAYS_INVALID', params: { max: LIVE_REPLAY_DAYS_MAX } });
+        out.push({
+          field: 'replayDays',
+          code: 'REPLAY_DAYS_INVALID',
+          params: { max: LIVE_REPLAY_DAYS_MAX },
+        });
     } else if (dto.replayDays != null) {
       out.push({ field: 'replayDays', code: 'REPLAY_DAYS_UNUSED' });
     }
@@ -237,10 +260,17 @@ export class LiveService {
     const mode = dto.accessMode ?? existing?.accessMode;
     return {
       ...(dto.accessMode !== undefined ? { accessMode: dto.accessMode } : {}),
-      ...(mode === 'FREE' ? { priceCents: null } : dto.priceCents !== undefined ? { priceCents: dto.priceCents } : {}),
+      ...(mode === 'FREE'
+        ? { priceCents: null }
+        : dto.priceCents !== undefined
+          ? { priceCents: dto.priceCents }
+          : {}),
       ...(dto.refundPolicy !== undefined ? { refundPolicy: dto.refundPolicy } : {}),
       ...(dto.replayPolicy !== undefined
-        ? { replayPolicy: dto.replayPolicy, replayDays: dto.replayPolicy === 'INCLUDED_DAYS' ? dto.replayDays ?? null : null }
+        ? {
+            replayPolicy: dto.replayPolicy,
+            replayDays: dto.replayPolicy === 'INCLUDED_DAYS' ? (dto.replayDays ?? null) : null,
+          }
         : dto.replayDays !== undefined
           ? { replayDays: dto.replayDays }
           : {}),
@@ -258,7 +288,12 @@ export class LiveService {
     const terms = await this.terms.effectiveFor(academyId);
     const split = await this.terms.splitFor(academyId, tenantId);
     try {
-      return priceLiveSeat({ basePriceCents: priceCents, discountCents, terms: toSnapshot(terms), split });
+      return priceLiveSeat({
+        basePriceCents: priceCents,
+        discountCents,
+        terms: toSnapshot(terms),
+        split,
+      });
     } catch (e) {
       if (e instanceof PricingError) pricingRefusal(e);
       throw e;
@@ -352,8 +387,15 @@ export class LiveService {
   async pricePreview(scope: LiveScope, priceCents: number, teacherUserId: string | null) {
     const errors = this.commerceFieldErrors({ accessMode: 'PAID', priceCents });
     if (errors.length)
-      throw new BadRequestException({ message: 'Invalid price', code: 'LIVE_SESSION_INVALID', fields: errors });
-    const teacher = await this.academy.assertAssignableTeacher(scope.academyId, teacherUserId ?? scope.userId);
+      throw new BadRequestException({
+        message: 'Invalid price',
+        code: 'LIVE_SESSION_INVALID',
+        fields: errors,
+      });
+    const teacher = await this.academy.assertAssignableTeacher(
+      scope.academyId,
+      teacherUserId ?? scope.userId,
+    );
     const p = await this.priceSession(scope.academyId, teacher.teacherProfileId, priceCents);
     const academy = await this.prisma.academy.findUnique({
       where: { id: scope.academyId },
@@ -521,18 +563,25 @@ export class LiveService {
     const same = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
     if (dto.title != null && dto.title.trim() !== existing.title) out.add('title');
     if (dto.description != null && dto.description !== existing.description) out.add('description');
-    if (dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime()) out.add('startsAt');
+    if (dto.startsAt != null && new Date(dto.startsAt).getTime() !== existing.startsAt.getTime())
+      out.add('startsAt');
     if (dto.durationMin != null && dto.durationMin !== existing.durationMin) out.add('durationMin');
     if (dto.capacity !== undefined && !same(dto.capacity, existing.capacity)) out.add('capacity');
     if (dto.courseId !== undefined && !same(dto.courseId, existing.courseId)) out.add('courseId');
     if (dto.joinUrl !== undefined && !same(dto.joinUrl, existing.joinUrl)) out.add('joinUrl');
-    if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId) out.add('teacherUserId');
+    if (dto.teacherUserId != null && dto.teacherUserId !== existing.teacherUserId)
+      out.add('teacherUserId');
     if (dto.groupId !== undefined && !same(dto.groupId, existing.groupId)) out.add('groupId');
-    if (dto.accessMode !== undefined && dto.accessMode !== existing.accessMode) out.add('accessMode');
-    if (dto.priceCents !== undefined && !same(dto.priceCents, existing.priceCents)) out.add('priceCents');
-    if (dto.refundPolicy !== undefined && dto.refundPolicy !== existing.refundPolicy) out.add('refundPolicy');
-    if (dto.replayPolicy !== undefined && dto.replayPolicy !== existing.replayPolicy) out.add('replayPolicy');
-    if (dto.replayDays !== undefined && !same(dto.replayDays, existing.replayDays)) out.add('replayDays');
+    if (dto.accessMode !== undefined && dto.accessMode !== existing.accessMode)
+      out.add('accessMode');
+    if (dto.priceCents !== undefined && !same(dto.priceCents, existing.priceCents))
+      out.add('priceCents');
+    if (dto.refundPolicy !== undefined && dto.refundPolicy !== existing.refundPolicy)
+      out.add('refundPolicy');
+    if (dto.replayPolicy !== undefined && dto.replayPolicy !== existing.replayPolicy)
+      out.add('replayPolicy');
+    if (dto.replayDays !== undefined && !same(dto.replayDays, existing.replayDays))
+      out.add('replayDays');
     return out;
   }
 
@@ -550,7 +599,11 @@ export class LiveService {
         where: {
           sessionId,
           OR: [
-            { status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW', 'REFUND_PENDING', 'PAYMENT_PENDING'] } },
+            {
+              status: {
+                in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW', 'REFUND_PENDING', 'PAYMENT_PENDING'],
+              },
+            },
             { status: 'HELD', holdExpiresAt: { gt: now } },
             { payment: { status: { in: ['PENDING', 'PAID'] } } },
           ],
@@ -575,17 +628,37 @@ export class LiveService {
    *   ENDED or CANCELLED → read-only.
    */
   editPolicy(
-    s: { status: LiveSessionStatus; startsAt: Date; durationMin: number; cancelledAt: Date | null; deletedAt: Date | null },
+    s: {
+      status: LiveSessionStatus;
+      startsAt: Date;
+      durationMin: number;
+      cancelledAt: Date | null;
+      deletedAt: Date | null;
+    },
     committed: boolean,
   ) {
     const all: (keyof UpsertLiveDto)[] = [
-      'title', 'description', 'startsAt', 'durationMin', 'capacity', 'courseId', 'joinUrl',
-      'teacherUserId', 'groupId', 'accessMode', 'priceCents', 'refundPolicy', 'replayPolicy', 'replayDays',
+      'title',
+      'description',
+      'startsAt',
+      'durationMin',
+      'capacity',
+      'courseId',
+      'joinUrl',
+      'teacherUserId',
+      'groupId',
+      'accessMode',
+      'priceCents',
+      'refundPolicy',
+      'replayPolicy',
+      'replayDays',
     ];
-    if (s.cancelledAt || s.deletedAt) return { state: 'CANCELLED' as const, editable: [] as string[], committed };
+    if (s.cancelledAt || s.deletedAt)
+      return { state: 'CANCELLED' as const, editable: [] as string[], committed };
     const status = this.effectiveStatus(s);
     if (status === 'ENDED') return { state: 'ENDED' as const, editable: [] as string[], committed };
-    if (status === 'LIVE') return { state: 'LIVE' as const, editable: ['title', 'description'], committed };
+    if (status === 'LIVE')
+      return { state: 'LIVE' as const, editable: ['title', 'description'], committed };
     const editable = committed
       ? all.filter((f) => !['accessMode', 'teacherUserId', 'groupId'].includes(f))
       : all;
@@ -616,7 +689,12 @@ export class LiveService {
         fields: refused.map((field) => ({ field, code })),
       });
     }
-    if (c.committed && changed.has('startsAt') && dto.startsAt && new Date(dto.startsAt) < existing.startsAt) {
+    if (
+      c.committed &&
+      changed.has('startsAt') &&
+      dto.startsAt &&
+      new Date(dto.startsAt) < existing.startsAt
+    ) {
       // Earlier would shrink the refund window people bought under, and may
       // start the class before a buyer can make it: only later is allowed.
       throw new ConflictException({
@@ -630,14 +708,23 @@ export class LiveService {
         message: `${c.seatsTaken} seats are already taken`,
         code: 'CAPACITY_BELOW_TAKEN',
         taken: c.seatsTaken,
-        fields: [{ field: 'capacity', code: 'CAPACITY_BELOW_TAKEN', params: { min: c.seatsTaken } }],
+        fields: [
+          { field: 'capacity', code: 'CAPACITY_BELOW_TAKEN', params: { min: c.seatsTaken } },
+        ],
       });
     }
   }
 
   /** Everyone holding a seat hears that the class moved (guests see it on their page). */
   private async announceReschedule(
-    s: { id: string; title: string; startsAt: Date; durationMin: number; academyId: string | null; tenantId: string },
+    s: {
+      id: string;
+      title: string;
+      startsAt: Date;
+      durationMin: number;
+      academyId: string | null;
+      tenantId: string;
+    },
     oldStartsAt: Date,
     actorUserId: string,
   ) {
@@ -646,10 +733,18 @@ export class LiveService {
       select: { student: { select: { userId: true } } },
     });
     const buyers = await this.prisma.livePurchase.findMany({
-      where: { sessionId: s.id, studentId: { not: null }, status: { in: ['HELD', 'PAYMENT_PENDING'] } },
+      where: {
+        sessionId: s.id,
+        studentId: { not: null },
+        status: { in: ['HELD', 'PAYMENT_PENDING'] },
+      },
       select: { student: { select: { userId: true } } },
     });
-    const users = [...new Set([...holders, ...buyers].map((h) => h.student?.userId).filter((u): u is string => !!u))];
+    const users = [
+      ...new Set(
+        [...holders, ...buyers].map((h) => h.student?.userId).filter((u): u is string => !!u),
+      ),
+    ];
     const when = s.startsAt.toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
     await Promise.all(
       users.map((userId) =>
@@ -670,7 +765,11 @@ export class LiveService {
           entity: 'LiveSession',
           entityId: s.id,
           academyId: s.academyId ?? s.tenantId,
-          meta: { from: oldStartsAt.toISOString(), to: s.startsAt.toISOString(), notified: users.length } as never,
+          meta: {
+            from: oldStartsAt.toISOString(),
+            to: s.startsAt.toISOString(),
+            notified: users.length,
+          } as never,
         },
       })
       .catch(() => undefined);
@@ -734,9 +833,17 @@ export class LiveService {
         s.accessMode === 'PAID' || sold.length
           ? {
               confirmed: sold.filter((p) => seated.includes(p.status)).length,
-              awaitingPayment: sold.filter((p) => p.status === 'PAYMENT_PENDING' || (p.status === 'HELD' && p.payment?.status === 'PENDING')).length,
+              awaitingPayment: sold.filter(
+                (p) =>
+                  p.status === 'PAYMENT_PENDING' ||
+                  (p.status === 'HELD' && p.payment?.status === 'PENDING'),
+              ).length,
               held: sold.filter((p) => p.status === 'HELD' && !p.payment).length,
-              refunded: sold.filter((p) => ['REFUNDED', 'REFUND_PENDING', 'OVERSOLD', 'CANCELLED_BY_TEACHER'].includes(p.status)).length,
+              refunded: sold.filter((p) =>
+                ['REFUNDED', 'REFUND_PENDING', 'OVERSOLD', 'CANCELLED_BY_TEACHER'].includes(
+                  p.status,
+                ),
+              ).length,
               // The teacher's own share of seats sold (held until the class is delivered).
               teacherCents: sold
                 .filter((p) => seated.includes(p.status) && p.payment?.status === 'PAID')
@@ -797,7 +904,8 @@ export class LiveService {
       const committed = await this.prisma.liveBooking.count({ where: { sessionId: existing.id } });
       if (committed > 0)
         throw new ConflictException({
-          message: 'Students have already booked — a session cannot switch between free and paid now',
+          message:
+            'Students have already booked — a session cannot switch between free and paid now',
           code: 'ACCESS_MODE_LOCKED',
         });
     }
@@ -861,7 +969,9 @@ export class LiveService {
         .onSessionCancelled(id, actorUserId ?? scope.userId)
         .then((r) => r.refunded)
         .catch((e) => {
-          this.logger.error(`live.cancel refunds liveSession=${id} failed, sweep will retry: ${(e as Error).message}`);
+          this.logger.error(
+            `live.cancel refunds liveSession=${id} failed, sweep will retry: ${(e as Error).message}`,
+          );
           return 0;
         });
     }
@@ -932,7 +1042,10 @@ export class LiveService {
         })
       : [];
     const guestsBy = new Map(guestSeats.map((g) => [g.sessionId, g._count._all]));
-    return sessions.map((s) => ({ ...s, bookedCount: s._count.bookings + (guestsBy.get(s.id) ?? 0) }));
+    return sessions.map((s) => ({
+      ...s,
+      bookedCount: s._count.bookings + (guestsBy.get(s.id) ?? 0),
+    }));
   }
 
   async bookingsFor(scope: LiveScope, id: string) {
@@ -944,9 +1057,18 @@ export class LiveService {
         include: { student: { select: { user: { select: { fullName: true, phone: true } } } } },
       }),
       this.prisma.livePurchase.findMany({
-        where: { sessionId: id, guestBuyerId: { not: null }, status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] } },
+        where: {
+          sessionId: id,
+          guestBuyerId: { not: null },
+          status: { in: ['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'] },
+        },
         orderBy: { createdAt: 'asc' },
-        select: { id: true, confirmedAt: true, createdAt: true, guestBuyer: { select: { displayName: true } } },
+        select: {
+          id: true,
+          confirmedAt: true,
+          createdAt: true,
+          guestBuyer: { select: { displayName: true } },
+        },
       }),
     ]);
     return [
@@ -1052,7 +1174,12 @@ export class LiveService {
       replayPolicy: LiveReplayPolicy;
       replayDays: number | null;
     },
-    purchase: { id: string; status: string; holdExpiresAt: Date | null; studentPaysCents: number } | null,
+    purchase: {
+      id: string;
+      status: string;
+      holdExpiresAt: Date | null;
+      studentPaysCents: number;
+    } | null,
   ) {
     const base = {
       accessMode: s.accessMode,
@@ -1062,9 +1189,11 @@ export class LiveService {
       replayDays: s.replayDays,
       purchase,
     };
-    if (s.accessMode !== 'PAID' || s.priceCents == null) return { ...base, studentPaysCents: 0, purchasable: false };
+    if (s.accessMode !== 'PAID' || s.priceCents == null)
+      return { ...base, studentPaysCents: 0, purchasable: false };
     // A buyer's own frozen price wins over today's: it is what they pay.
-    if (purchase) return { ...base, studentPaysCents: purchase.studentPaysCents, purchasable: true };
+    if (purchase)
+      return { ...base, studentPaysCents: purchase.studentPaysCents, purchasable: true };
     try {
       const p = await this.priceSession(s.academyId ?? s.tenantId, s.tenantId, s.priceCents);
       return { ...base, studentPaysCents: p.studentPaysCents, purchasable: true };
@@ -1201,7 +1330,10 @@ export class LiveService {
    * delivered (or reviewed) purchase.
    */
   async guestSeat(userId: string, sessionId: string, forJoin = false) {
-    const guest = await this.prisma.guestBuyer.findUnique({ where: { userId }, select: { id: true, displayName: true } });
+    const guest = await this.prisma.guestBuyer.findUnique({
+      where: { userId },
+      select: { id: true, displayName: true },
+    });
     if (!guest) return null;
     const purchase = await this.prisma.livePurchase.findFirst({
       where: {
@@ -1221,7 +1353,8 @@ export class LiveService {
     let displayName: string;
     if (guest) {
       const found = await this.prisma.liveSession.findUnique({ where: { id: sessionId } });
-      if (!found || found.deletedAt) throw new ForbiddenException('You have not booked this session');
+      if (!found || found.deletedAt)
+        throw new ForbiddenException('You have not booked this session');
       s = found;
       displayName = guest.guest.displayName;
     } else {
@@ -1472,7 +1605,9 @@ export class LiveService {
     );
     if (r.session.provider === 'CLOUDFLARE' && r.session.roomName && reason !== 'CANCELLED') {
       await this.queueTranscript(r.session, r.session.roomName).catch((e) =>
-        this.logger.warn(`live.transcribe.enqueue liveSession=${id} failed: ${(e as Error).message}`),
+        this.logger.warn(
+          `live.transcribe.enqueue liveSession=${id} failed: ${(e as Error).message}`,
+        ),
       );
     }
 
@@ -1578,7 +1713,8 @@ export class LiveService {
       throw new ConflictException({ message: 'The class is not running', code: 'NOT_LIVE' });
     }
     const capture = await transcriptCaptureState(this.prisma, id, session.roomName);
-    const recentlyOff = !!capture.lastOffAt && now - capture.lastOffAt.getTime() <= CAPTURE_OFF_GRACE_MS;
+    const recentlyOff =
+      !!capture.lastOffAt && now - capture.lastOffAt.getTime() <= CAPTURE_OFF_GRACE_MS;
     if (!capture.available || !(capture.active || recentlyOff || (justEnded && capture.everOn))) {
       throw new ConflictException({ message: 'Transcript capture is off', code: 'CAPTURE_OFF' });
     }
@@ -1629,14 +1765,22 @@ export class LiveService {
       create: { sessionId: id, roomName, seq, key, sizeBytes: file.size, durationMs: ms },
       // Only an untranscribed piece is ever replaced (see above) — and a new
       // copy of a piece that failed is a fresh chance for it.
-      update: { key, sizeBytes: file.size, durationMs: ms, error: null, attempts: 0, skipReason: null },
+      update: {
+        key,
+        sizeBytes: file.size,
+        durationMs: ms,
+        error: null,
+        attempts: 0,
+        skipReason: null,
+      },
     });
     this.logger.log(
       `live.transcript.segment-uploaded liveSession=${id} seq=${seq} bytes=${file.size} kind=${kind}${existing ? ' replaced' : ''}`,
     );
     // The last flush of an ended class may land after its transcript job has
     // already begun: make sure a job will see it (never silently dropped).
-    if (session.status === 'ENDED') await this.reopenTranscript(session, roomName, 'late-piece').catch(() => undefined);
+    if (session.status === 'ENDED')
+      await this.reopenTranscript(session, roomName, 'late-piece').catch(() => undefined);
     return { ok: true as const, seq };
   }
 
@@ -2415,7 +2559,9 @@ export class LiveService {
         where: { id: s.id, transcriptStatus: 'PROCESSING' },
         data: { transcriptStatus: 'FAILED' },
       });
-      this.logger.warn(`live.transcript.reopen-refused liveSession=${s.id}: ${(e as Error).message}`);
+      this.logger.warn(
+        `live.transcript.reopen-refused liveSession=${s.id}: ${(e as Error).message}`,
+      );
       return false;
     }
   }
@@ -2463,11 +2609,19 @@ export class LiveService {
       throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
     }
     const retryable = await this.prisma.liveAudioSegment.count({ where: this.retryableWhere(id) });
-    const pending = await this.prisma.liveAudioSegment.count({ where: { sessionId: id, text: null, error: null } });
+    const pending = await this.prisma.liveAudioSegment.count({
+      where: { sessionId: id, text: null, error: null },
+    });
     if (!retryable && !pending) {
-      throw new ConflictException({ message: 'Nothing left that can be retried', code: 'NOTHING_TO_RETRY' });
+      throw new ConflictException({
+        message: 'Nothing left that can be retried',
+        code: 'NOTHING_TO_RETRY',
+      });
     }
-    await this.prisma.liveAudioSegment.updateMany({ where: this.retryableWhere(id), data: { error: null, attempts: 0 } });
+    await this.prisma.liveAudioSegment.updateMany({
+      where: this.retryableWhere(id),
+      data: { error: null, attempts: 0 },
+    });
     await this.reopenTranscript(s, s.roomName, 'teacher-retry');
     return { status: 'PROCESSING' as const };
   }
@@ -2494,7 +2648,14 @@ export class LiveService {
           { audioSegments: { some: { text: null, error: null, createdAt: { lt: cutoff } } } },
         ],
       },
-      select: { id: true, tenantId: true, academyId: true, roomName: true, transcriptStatus: true, transcriptMeta: true },
+      select: {
+        id: true,
+        tenantId: true,
+        academyId: true,
+        roomName: true,
+        transcriptStatus: true,
+        transcriptMeta: true,
+      },
       // Oldest first: a backlog drains, 20 classes a pass.
       orderBy: { updatedAt: 'asc' },
       take: 20,
@@ -2529,7 +2690,9 @@ export class LiveService {
         model: transcriptionConfig().model,
         giveUpPending: true,
         onChanged: ({ sessionId }) =>
-          queueLiveSummary(this.prisma, this.jobs as unknown as SummaryJobs, sessionId, { reason: 'recovery' }).then(() => undefined),
+          queueLiveSummary(this.prisma, this.jobs as unknown as SummaryJobs, sessionId, {
+            reason: 'recovery',
+          }).then(() => undefined),
       });
       if (r.status !== 'LOST') out.decided++;
       this.logger.warn(`live.transcript.recovered liveSession=${s.id} status=${r.status}`);
@@ -2560,7 +2723,11 @@ export class LiveService {
       session: s,
       recording:
         rec && asset && asset.status === 'READY' && asset.hlsMasterKey
-          ? { id: rec.id, videoAssetId: asset.id, durationSec: asset.durationSec || rec.durationSec }
+          ? {
+              id: rec.id,
+              videoAssetId: asset.id,
+              durationSec: asset.durationSec || rec.durationSec,
+            }
           : null,
     };
   }
@@ -2612,7 +2779,11 @@ export class LiveService {
       });
       const guest = booking ? null : await this.guestSeat(userId, sessionId);
       const purchase = booking ? booking.purchase : (guest?.purchase ?? null);
-      entitled = paidReplayVerdict(purchase, { startsAt: s.startsAt, durationMin: s.durationMin, endedAt: s.endedAt }).ok;
+      entitled = paidReplayVerdict(purchase, {
+        startsAt: s.startsAt,
+        durationMin: s.durationMin,
+        endedAt: s.endedAt,
+      }).ok;
     }
     const recordingStatus = await this.refreshRecording(s);
     // Darsly's own recording (Cloudflare): its stage, not a bare status.
@@ -2654,8 +2825,10 @@ export class LiveService {
       recordingStage: recStage?.stage ?? null,
       transcriptionOn: cfg.enabled && s.transcriptionMode !== 'OFF',
       classRunning: effective === 'LIVE' || effective === 'SCHEDULED',
-      transcriptStalled: s.transcriptStatus === 'PROCESSING' && (await this.transcriptStalled(s.id)),
-      transcriptFailReason: ((s.transcriptMeta ?? null) as { reason?: string } | null)?.reason ?? null,
+      transcriptStalled:
+        s.transcriptStatus === 'PROCESSING' && (await this.transcriptStalled(s.id)),
+      transcriptFailReason:
+        ((s.transcriptMeta ?? null) as { reason?: string } | null)?.reason ?? null,
     });
     const recStageShown =
       recStage?.stage ??
@@ -2668,19 +2841,29 @@ export class LiveService {
             : null);
     const meta = (s.transcriptMeta ?? null) as { partial?: boolean } | null;
     // PARTIAL is readable too — it is what could be transcribed, marked as such.
-    const transcriptReady = stages.transcript.stage === 'READY' || stages.transcript.stage === 'PARTIAL';
-    const sMeta = (s.summaryMeta ?? null) as { transcriptRevision?: number; partial?: boolean } | null;
+    const transcriptReady =
+      stages.transcript.stage === 'READY' || stages.transcript.stage === 'PARTIAL';
+    const sMeta = (s.summaryMeta ?? null) as {
+      transcriptRevision?: number;
+      partial?: boolean;
+    } | null;
     const retryable =
-      teacher && s.provider === 'CLOUDFLARE' && (stages.transcript.stage === 'PARTIAL' || stages.transcript.stage === 'FAILED')
+      teacher &&
+      s.provider === 'CLOUDFLARE' &&
+      (stages.transcript.stage === 'PARTIAL' || stages.transcript.stage === 'FAILED')
         ? (await this.prisma.liveAudioSegment.count({ where: this.retryableWhere(s.id) })) +
-          (await this.prisma.liveAudioSegment.count({ where: { sessionId: s.id, text: null, error: null } }))
+          (await this.prisma.liveAudioSegment.count({
+            where: { sessionId: s.id, text: null, error: null },
+          }))
         : 0;
     // Teacher only, while it is being made: how many pieces are done so far.
     let progress: { done: number; total: number } | undefined;
     if (teacher && stages.transcript.stage === 'TRANSCRIBING' && s.provider === 'CLOUDFLARE') {
       const [total, done] = await Promise.all([
         this.prisma.liveAudioSegment.count({ where: { sessionId: s.id } }),
-        this.prisma.liveAudioSegment.count({ where: { sessionId: s.id, OR: [{ text: { not: null } }, { error: { not: null } }] } }),
+        this.prisma.liveAudioSegment.count({
+          where: { sessionId: s.id, OR: [{ text: { not: null } }, { error: { not: null } }] },
+        }),
       ]);
       if (total > 0) progress = { done, total };
     }
@@ -2705,15 +2888,20 @@ export class LiveService {
         // What the page shows: REQUESTED → CAPTURING → FINALIZING →
         // PROCESSING → READY / FAILED (with a reason a teacher can read).
         // A student is told nothing until it is ready and theirs to watch.
-        stage: teacher ? recStageShown : canSeeRecording && recStageShown === 'READY' ? 'READY' : null,
+        stage: teacher
+          ? recStageShown
+          : canSeeRecording && recStageShown === 'READY'
+            ? 'READY'
+            : null,
         failure: teacher
           ? (recStage?.failure ?? (recordingStatus === 'FAILED' ? 'PROCESSING_FAILED' : null))
           : null,
-        durationSeconds: canSeeRecording ? (s.recordingDuration ?? (rec?.durationSec || null)) : null,
+        durationSeconds: canSeeRecording
+          ? (s.recordingDuration ?? (rec?.durationSec || null))
+          : null,
         visibility: teacher ? s.recordingVisibility : undefined,
         // Daily: a provider link, fetched fresh (GET /live/:id/recording).
-        available:
-          recordingStatus === 'READY' && s.provider !== 'CLOUDFLARE' && canSeeRecording,
+        available: recordingStatus === 'READY' && s.provider !== 'CLOUDFLARE' && canSeeRecording,
         // Darsly's own: encrypted HLS in the Darsly player (POST /live/:id/replay).
         playable:
           s.provider === 'CLOUDFLARE' &&
@@ -2750,7 +2938,9 @@ export class LiveService {
               segments:
                 transcriptReady && canSeeTranscript
                   ? ((s.transcriptSegments as unknown[] | null) ??
-                    (s.transcriptText ? [{ startSec: null, durationSec: null, text: s.transcriptText }] : []))
+                    (s.transcriptText
+                      ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
+                      : []))
                   : undefined,
             }
           : null,
@@ -2764,11 +2954,11 @@ export class LiveService {
         partial: canSeeSummary && summaryStatus === 'READY' ? !!sMeta?.partial : false,
         // Made from older words than the transcript now has (a recovered piece).
         stale:
-          summaryStatus === 'READY' && sMeta?.transcriptRevision != null && sMeta.transcriptRevision !== s.transcriptRevision,
-        canRegenerate:
-          teacher &&
           summaryStatus === 'READY' &&
-          (s.provider !== 'CLOUDFLARE' || transcriptReady),
+          sMeta?.transcriptRevision != null &&
+          sMeta.transcriptRevision !== s.transcriptRevision,
+        canRegenerate:
+          teacher && summaryStatus === 'READY' && (s.provider !== 'CLOUDFLARE' || transcriptReady),
         sharedWithStudents: s.summaryVisibility === 'STUDENTS',
         visibility: teacher ? s.summaryVisibility : undefined,
         // Only the teacher is told why, and only they can act on it.
@@ -2845,12 +3035,20 @@ export class LiveService {
   }
 
   private assertWindowOpen(
-    s: { id?: string; title?: string; startsAt: Date; durationMin: number; status: LiveSessionStatus; startedAt?: Date | null },
+    s: {
+      id?: string;
+      title?: string;
+      startsAt: Date;
+      durationMin: number;
+      status: LiveSessionStatus;
+      startedAt?: Date | null;
+    },
     withSession = false,
   ) {
     // The waiting answers carry the session (title, times, the server's clock)
     // so the classroom page can be a lobby with a countdown, not a dead end.
-    const session = withSession && s.id && s.title ? { session: this.meetingSession(s as never) } : {};
+    const session =
+      withSession && s.id && s.title ? { session: this.meetingSession(s as never) } : {};
     if (Date.now() < this.opensAt(s)) {
       throw new BadRequestException({
         message: `يفتح الفصل قبل الموعد بـ${JOIN_OPENS_MIN} دقيقة`,

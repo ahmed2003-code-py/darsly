@@ -99,14 +99,22 @@ const SessionClock = memo(function SessionClock({ anchor }: { anchor: ClockAncho
   if (!c) return null;
   const late = c.remainingMs <= 5 * 60_000;
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-semibold tabular-nums" dir="ltr">
+    <span
+      className="inline-flex items-center gap-2 rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-semibold tabular-nums"
+      dir="ltr"
+    >
       {c.elapsedMs != null && (
         <span className="hidden text-on-surface-variant sm:inline" title={t('meeting.elapsed')}>
           {formatClock(c.elapsedMs)}
         </span>
       )}
-      <span className={late ? 'text-amber-500' : 'text-on-surface-variant'} title={t('meeting.remaining')}>
-        {c.remainingMs > 0 ? `${formatClock(c.remainingMs)} ${t('meeting.left')}` : t('meeting.overtime')}
+      <span
+        className={late ? 'text-amber-500' : 'text-on-surface-variant'}
+        title={t('meeting.remaining')}
+      >
+        {c.remainingMs > 0
+          ? `${formatClock(c.remainingMs)} ${t('meeting.left')}`
+          : t('meeting.overtime')}
       </span>
     </span>
   );
@@ -116,11 +124,23 @@ const SessionClock = memo(function SessionClock({ anchor }: { anchor: ClockAncho
 
 function StageFrame({ children, className = '' }: { children?: ReactNode; className?: string }) {
   return (
-    <div className={`relative min-h-0 overflow-hidden rounded-xl bg-zinc-900 text-zinc-100 ${className}`}>{children}</div>
+    <div
+      className={`relative min-h-0 overflow-hidden rounded-xl bg-zinc-900 text-zinc-100 ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 
-function MainTile({ p, isTeacher, pinned }: { p: Participant; isTeacher: boolean; pinned: boolean }) {
+function MainTile({
+  p,
+  isTeacher,
+  pinned,
+}: {
+  p: Participant;
+  isTeacher: boolean;
+  pinned: boolean;
+}) {
   return (
     <StageFrame className="h-full w-full">
       {p.video && p.track ? (
@@ -162,9 +182,13 @@ export default function Classroom(props: ClassroomProps) {
   const chat = useLiveChat(sessionId, panel === 'chat');
   const [reactMenu, setReactMenu] = useState(false);
   const [muted, setMuted] = useState(soundsMuted);
-  const [floating, setFloating] = useState<{ id: number; emoji: string; name: string; x: number }[]>([]);
+  const [floating, setFloating] = useState<
+    { id: number; emoji: string; name: string; x: number }[]
+  >([]);
   const namesRef = useRef(new Map<string, string>());
-  namesRef.current = new Map(meeting.participants.map((p) => [p.userId ?? p.sessionId, p.local ? t('meeting.you') : p.name]));
+  namesRef.current = new Map(
+    meeting.participants.map((p) => [p.userId ?? p.sessionId, p.local ? t('meeting.you') : p.name]),
+  );
 
   // Reactions: sent to the room; everyone (the sender too) sees them float up.
   const sendReaction = useCallback(
@@ -178,7 +202,12 @@ export default function Classroom(props: ClassroomProps) {
     const onReaction = (p: { sessionId: string; userId: string; emoji: string }) => {
       if (p?.sessionId !== sessionId) return;
       const id = ++n + Date.now();
-      const item = { id, emoji: p.emoji, name: namesRef.current.get(p.userId) ?? '', x: Math.random() * 60 };
+      const item = {
+        id,
+        emoji: p.emoji,
+        name: namesRef.current.get(p.userId) ?? '',
+        x: Math.random() * 60,
+      };
       // Never more than a dozen on screen: a burst stays readable.
       setFloating((cur) => [...cur.slice(-11), item]);
       setTimeout(() => setFloating((cur) => cur.filter((f) => f.id !== id)), 2800);
@@ -219,7 +248,9 @@ export default function Classroom(props: ClassroomProps) {
   const students = participants.filter((p) => !p.owner);
   const hands = cf?.hands ?? [];
   const raised = hands.filter((h) => h.hand === 'HAND_RAISED');
-  const speaking = hands.filter((h) => h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER');
+  const speaking = hands.filter(
+    (h) => h.hand === 'APPROVED_TO_SPEAK' || h.hand === 'ACTIVE_SPEAKER',
+  );
   const myHand = cf?.rtc?.me.hand ?? 'IDLE';
   const canSend = !cf || amOwner || !!cf.rtc?.me.canPublish;
   const isTeacherP = useCallback((p: Participant) => p.owner, []);
@@ -232,17 +263,24 @@ export default function Classroom(props: ClassroomProps) {
 
   const presenting = !!remoteScreen || sharingMine;
   const effective: 'presentation' | 'focus' | 'gallery' =
-    layout === 'gallery' ? 'gallery' : layout === 'focus' ? 'focus' : presenting ? 'presentation' : 'focus';
+    layout === 'gallery'
+      ? 'gallery'
+      : layout === 'focus'
+        ? 'focus'
+        : presenting
+          ? 'presentation'
+          : 'focus';
 
   // Who is on screen besides the content: people with a camera or a voice.
   const withMedia = useMemo(
     () => participants.filter((p) => p.video || (p.audio && !p.local) || p.owner || p.local),
     [participants],
   );
-  const pinnedP = pinned ? participants.find((p) => p.sessionId === pinned) ?? null : null;
+  const pinnedP = pinned ? (participants.find((p) => p.sessionId === pinned) ?? null) : null;
   const activeStudent = students.find((p) => !p.local && (p.video || p.audio)) ?? null;
   const focusMain: Participant | null =
-    pinnedP ?? (amOwner ? activeStudent?.video ? activeStudent : me : teacher ?? activeStudent ?? me);
+    pinnedP ??
+    (amOwner ? (activeStudent?.video ? activeStudent : me) : (teacher ?? activeStudent ?? me));
   const strip = withMedia.filter((p) => p.sessionId !== focusMain?.sessionId);
   const listeners = students.filter((p) => !p.local && !p.video && !p.audio);
 
@@ -250,7 +288,7 @@ export default function Classroom(props: ClassroomProps) {
   const announce =
     cf?.connection === 'reconnecting'
       ? t('meeting.reconnecting')
-      : extend.note ?? (meeting.notice ? t(`meeting.notice.${meeting.notice}`) : null);
+      : (extend.note ?? (meeting.notice ? t(`meeting.notice.${meeting.notice}`) : null));
 
   const endClass = async () => {
     const ok = await askConfirm(t('meeting.endConfirmBody'), {
@@ -282,14 +320,18 @@ export default function Classroom(props: ClassroomProps) {
                   <span aria-hidden className="material-symbols-outlined text-5xl text-primary">
                     present_to_all
                   </span>
-                  <p className="mt-3 font-heading text-lg font-bold">{t('meeting.youAreSharing')}</p>
+                  <p className="mt-3 font-heading text-lg font-bold">
+                    {t('meeting.youAreSharing')}
+                  </p>
                   <p className="mt-1 text-sm text-zinc-400">{t('meeting.youAreSharingHint')}</p>
                   <button
                     type="button"
                     className="mt-4 inline-flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                     onClick={meeting.toggleShare}
                   >
-                    <span aria-hidden className="material-symbols-outlined text-[18px]">cancel_presentation</span>
+                    <span aria-hidden className="material-symbols-outlined text-[18px]">
+                      cancel_presentation
+                    </span>
                     {t('meeting.stopSharing')}
                   </button>
                 </div>
@@ -316,13 +358,29 @@ export default function Classroom(props: ClassroomProps) {
       );
     }
     if (effective === 'gallery') {
-      const all = [...withMedia, ...participants.filter((p) => !withMedia.includes(p))].slice(0, 16);
+      const all = [...withMedia, ...participants.filter((p) => !withMedia.includes(p))].slice(
+        0,
+        16,
+      );
       const n = all.length;
-      const cols = n <= 1 ? 'grid-cols-1' : n <= 4 ? 'grid-cols-2' : n <= 9 ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-3 md:grid-cols-4';
+      const cols =
+        n <= 1
+          ? 'grid-cols-1'
+          : n <= 4
+            ? 'grid-cols-2'
+            : n <= 9
+              ? 'grid-cols-2 md:grid-cols-3'
+              : 'grid-cols-3 md:grid-cols-4';
       return (
         <div className={`grid h-full w-full content-center gap-2 overflow-y-auto ${cols}`}>
           {all.map((p) => (
-            <Tile key={p.sessionId} p={p} isTeacher={isTeacherP(p)} pinned={pinned === p.sessionId} onPin={onPin} />
+            <Tile
+              key={p.sessionId}
+              p={p}
+              isTeacher={isTeacherP(p)}
+              pinned={pinned === p.sessionId}
+              onPin={onPin}
+            />
           ))}
         </div>
       );
@@ -331,7 +389,11 @@ export default function Classroom(props: ClassroomProps) {
       <div className="flex h-full w-full flex-col gap-2">
         <div className="min-h-0 flex-1">
           {focusMain ? (
-            <MainTile p={focusMain} isTeacher={isTeacherP(focusMain)} pinned={pinned === focusMain.sessionId} />
+            <MainTile
+              p={focusMain}
+              isTeacher={isTeacherP(focusMain)}
+              pinned={pinned === focusMain.sessionId}
+            />
           ) : (
             <StageFrame className="h-full w-full" />
           )}
@@ -340,7 +402,13 @@ export default function Classroom(props: ClassroomProps) {
           <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5">
             {strip.map((p) => (
               <div key={p.sessionId} className="w-28 shrink-0 sm:w-36">
-                <Tile p={p} isTeacher={isTeacherP(p)} pinned={pinned === p.sessionId} onPin={onPin} compact />
+                <Tile
+                  p={p}
+                  isTeacher={isTeacherP(p)}
+                  pinned={pinned === p.sessionId}
+                  onPin={onPin}
+                  compact
+                />
               </div>
             ))}
           </div>
@@ -381,10 +449,16 @@ export default function Classroom(props: ClassroomProps) {
         {/* ── Top bar ── */}
         <header className="flex h-14 shrink-0 items-center gap-3 px-3 sm:px-4">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600/90 px-2.5 py-1 text-[11px] font-bold text-white">
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse" />
+            <span
+              aria-hidden
+              className="h-1.5 w-1.5 rounded-full bg-white motion-safe:animate-pulse"
+            />
             {t('meeting.live')}
           </span>
-          <h1 className="min-w-0 flex-1 truncate font-heading text-sm font-semibold sm:text-base" dir="auto">
+          <h1
+            className="min-w-0 flex-1 truncate font-heading text-sm font-semibold sm:text-base"
+            dir="auto"
+          >
             {title}
           </h1>
           <div className="flex shrink-0 items-center gap-2">
@@ -396,15 +470,23 @@ export default function Classroom(props: ClassroomProps) {
                 disabled={extend.pending}
                 className="hidden items-center gap-1 rounded-full bg-on-surface/[0.06] px-3 py-1 text-xs font-semibold text-on-surface hover:bg-on-surface/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:inline-flex"
               >
-                <span aria-hidden className="material-symbols-outlined text-[16px]">more_time</span>
+                <span aria-hidden className="material-symbols-outlined text-[16px]">
+                  more_time
+                </span>
                 {extend.pending ? t('meeting.extending') : t('meeting.extend')}
               </button>
             )}
             {recording.active && (
               // Everyone is told, not only the teacher: being recorded is
               // something a class is entitled to know at a glance.
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-600/15 px-2.5 py-1 text-[11px] font-bold text-red-300" role="status">
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-red-400 motion-safe:animate-pulse" />
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full bg-red-600/15 px-2.5 py-1 text-[11px] font-bold text-red-300"
+                role="status"
+              >
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 rounded-full bg-red-400 motion-safe:animate-pulse"
+                />
                 {t('meeting.recordingBadge')}
               </span>
             )}
@@ -414,7 +496,9 @@ export default function Classroom(props: ClassroomProps) {
                 role="status"
                 title={t('meeting.transcriptOnHint')}
               >
-                <span aria-hidden className="material-symbols-outlined text-[14px]">subtitles</span>
+                <span aria-hidden className="material-symbols-outlined text-[14px]">
+                  subtitles
+                </span>
                 {t('meeting.transcriptOn')}
               </span>
             )}
@@ -424,7 +508,9 @@ export default function Classroom(props: ClassroomProps) {
               className="inline-flex items-center gap-1 rounded-full bg-on-surface/[0.06] px-2.5 py-1 text-xs font-semibold text-on-surface hover:bg-on-surface/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               aria-label={t('meeting.peopleCount', { count: participants.length })}
             >
-              <span aria-hidden className="material-symbols-outlined text-[16px]">group</span>
+              <span aria-hidden className="material-symbols-outlined text-[16px]">
+                group
+              </span>
               <span className="tabular-nums">{participants.length}</span>
             </button>
           </div>
@@ -440,8 +526,12 @@ export default function Classroom(props: ClassroomProps) {
               <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center px-4">
                 <div className="flex items-center gap-2 rounded-full bg-zinc-900/90 px-4 py-2 text-sm text-zinc-100 shadow-lg ring-1 ring-white/10">
                   <span aria-hidden className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="font-semibold">{alone ? t('meeting.readyTitle') : t('meeting.waitingTeacherTitle')}</span>
-                  <span className="text-zinc-400">· {alone ? t('meeting.waitingStudents') : t('meeting.waitingTeacherInRoom')}</span>
+                  <span className="font-semibold">
+                    {alone ? t('meeting.readyTitle') : t('meeting.waitingTeacherTitle')}
+                  </span>
+                  <span className="text-zinc-400">
+                    · {alone ? t('meeting.waitingStudents') : t('meeting.waitingTeacherInRoom')}
+                  </span>
                 </div>
               </div>
             )}
@@ -455,10 +545,14 @@ export default function Classroom(props: ClassroomProps) {
                 className="absolute top-3 end-4 flex items-center gap-3 rounded-xl bg-zinc-900/95 py-2 ps-3 pe-2 text-zinc-100 shadow-lg ring-1 ring-amber-400/40"
                 role="status"
               >
-                <span aria-hidden className="material-symbols-outlined text-[20px] text-amber-300">back_hand</span>
+                <span aria-hidden className="material-symbols-outlined text-[20px] text-amber-300">
+                  back_hand
+                </span>
                 <span className="text-sm">
                   <b>{raised[0].name}</b>
-                  {raised.length > 1 ? ` ${t('meeting.andOthers', { count: raised.length - 1 })}` : ''}
+                  {raised.length > 1
+                    ? ` ${t('meeting.andOthers', { count: raised.length - 1 })}`
+                    : ''}
                 </span>
                 <button
                   type="button"
@@ -484,14 +578,19 @@ export default function Classroom(props: ClassroomProps) {
                 onClick={cf.resumeAudio}
                 className="absolute inset-x-0 top-16 mx-auto flex w-fit items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-lg"
               >
-                <span aria-hidden className="material-symbols-outlined text-[18px]">volume_up</span>
+                <span aria-hidden className="material-symbols-outlined text-[18px]">
+                  volume_up
+                </span>
                 {t('meeting.enableSound')}
               </button>
             )}
 
             {/* Reactions rise from the bottom corner and fade. Decorative for
                 screen readers: the room would be read a stream of emoji. */}
-            <div aria-hidden className="pointer-events-none absolute bottom-6 end-6 h-2/3 w-40 overflow-hidden">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute bottom-6 end-6 h-2/3 w-40 overflow-hidden"
+            >
               {floating.map((f) => (
                 <m.div
                   key={f.id}
@@ -511,7 +610,10 @@ export default function Classroom(props: ClassroomProps) {
               ))}
             </div>
 
-            <div aria-live="polite" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
+            <div
+              aria-live="polite"
+              className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4"
+            >
               <AnimatePresence>
                 {announce && (
                   <m.p
@@ -521,7 +623,9 @@ export default function Classroom(props: ClassroomProps) {
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.18 }}
                     className={`rounded-full px-4 py-2 text-sm font-semibold shadow-lg ${
-                      cf?.connection === 'reconnecting' ? 'bg-amber-400 text-zinc-950' : 'bg-inverse-surface text-inverse-on-surface'
+                      cf?.connection === 'reconnecting'
+                        ? 'bg-amber-400 text-zinc-950'
+                        : 'bg-inverse-surface text-inverse-on-surface'
                     }`}
                   >
                     {announce}
@@ -550,7 +654,9 @@ export default function Classroom(props: ClassroomProps) {
           <div className="hidden min-w-0 items-center gap-2 text-xs text-on-surface-variant md:flex">
             {cf && !amOwner && myHand === 'HAND_RAISED' && (
               <span className="inline-flex items-center gap-1.5 text-amber-300">
-                <span aria-hidden className="material-symbols-outlined text-[16px]">back_hand</span>
+                <span aria-hidden className="material-symbols-outlined text-[16px]">
+                  back_hand
+                </span>
                 {t('meeting.handRaisedYou')}
               </span>
             )}
@@ -589,7 +695,11 @@ export default function Classroom(props: ClassroomProps) {
                         ? t('meeting.lowerHand')
                         : t('meeting.stopSpeaking')
                   }
-                  onClick={() => void (myHand === 'IDLE' || myHand === 'RELEASED' ? cf.raiseHand() : cf.lowerHand())}
+                  onClick={() =>
+                    void (myHand === 'IDLE' || myHand === 'RELEASED'
+                      ? cf.raiseHand()
+                      : cf.lowerHand())
+                  }
                 />
               )}
             </div>
@@ -624,7 +734,11 @@ export default function Classroom(props: ClassroomProps) {
                   <Ctl
                     icon={meeting.transcribing ? 'subtitles_off' : 'subtitles'}
                     active={meeting.transcribing}
-                    label={meeting.transcribing ? t('meeting.transcriptStop') : t('meeting.transcriptStart')}
+                    label={
+                      meeting.transcribing
+                        ? t('meeting.transcriptStop')
+                        : t('meeting.transcriptStart')
+                    }
                     onClick={() => void cf.setTranscriptCapture(!meeting.transcribing)}
                   />
                 )}
@@ -696,7 +810,12 @@ export default function Classroom(props: ClassroomProps) {
 
             {/* Leaving and ending are different acts and look different. */}
             <div className="flex items-center gap-2 md:hidden">
-              <Ctl icon="call_end" tone="danger" label={t('meeting.leave')} onClick={props.onLeave} />
+              <Ctl
+                icon="call_end"
+                tone="danger"
+                label={t('meeting.leave')}
+                onClick={props.onLeave}
+              />
             </div>
           </div>
 
@@ -709,7 +828,9 @@ export default function Classroom(props: ClassroomProps) {
                 disabled={props.ending}
                 className="inline-flex h-11 items-center gap-2 rounded-full bg-red-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-red-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50"
               >
-                <span aria-hidden className="material-symbols-outlined text-[20px]">stop_circle</span>
+                <span aria-hidden className="material-symbols-outlined text-[20px]">
+                  stop_circle
+                </span>
                 {t('meeting.endForAll')}
               </button>
             )}
@@ -820,12 +941,23 @@ function LayoutMenu({
             value === it.v ? 'bg-on-surface/10' : 'hover:bg-on-surface/5'
           }`}
         >
-          <span aria-hidden className="material-symbols-outlined mt-0.5 text-[20px]">{it.icon}</span>
+          <span aria-hidden className="material-symbols-outlined mt-0.5 text-[20px]">
+            {it.icon}
+          </span>
           <span>
             <span className="block text-sm font-semibold">{t(`meeting.layout.${it.v}`)}</span>
-            <span className="block text-xs text-on-surface-variant">{t(`meeting.layout.${it.v}Hint`)}</span>
+            <span className="block text-xs text-on-surface-variant">
+              {t(`meeting.layout.${it.v}Hint`)}
+            </span>
           </span>
-          {value === it.v && <span aria-hidden className="material-symbols-outlined ms-auto text-[18px] text-primary">check</span>}
+          {value === it.v && (
+            <span
+              aria-hidden
+              className="material-symbols-outlined ms-auto text-[18px] text-primary"
+            >
+              check
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -870,7 +1002,11 @@ function SidePanel({
   return (
     <>
       {/* Below the widest screens the panel floats over the stage. */}
-      <div aria-hidden className="fixed inset-0 z-30 bg-black/40 xl:hidden" onClick={() => setPanel(null)} />
+      <div
+        aria-hidden
+        className="fixed inset-0 z-30 bg-black/40 xl:hidden"
+        onClick={() => setPanel(null)}
+      />
       <aside
         aria-label={panel === 'chat' ? t('meeting.chat') : t('meeting.people')}
         onKeyDown={(e) => e.key === 'Escape' && setPanel(null)}
@@ -886,7 +1022,9 @@ function SidePanel({
                 aria-selected={panel === tab}
                 onClick={() => setPanel(tab)}
                 className={`rounded-full px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                  panel === tab ? 'bg-on-surface/10 text-on-surface' : 'text-on-surface-variant hover:text-on-surface'
+                  panel === tab
+                    ? 'bg-on-surface/10 text-on-surface'
+                    : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
                 {tab === 'people' ? t('meeting.people') : t('meeting.chat')}
@@ -921,7 +1059,10 @@ function SidePanel({
 function Person({ name, sub, children }: { name: string; sub?: ReactNode; children?: ReactNode }) {
   return (
     <li className="flex items-center gap-3 py-2">
-      <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-container-highest text-sm font-bold">
+      <span
+        aria-hidden
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-container-highest text-sm font-bold"
+      >
         {name.trim().charAt(0) || '؟'}
       </span>
       <span className="min-w-0 flex-1">
@@ -936,7 +1077,9 @@ function Person({ name, sub, children }: { name: string; sub?: ReactNode; childr
 }
 
 function GroupTitle({ children }: { children: ReactNode }) {
-  return <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>;
+  return (
+    <h3 className="mb-1 mt-4 text-xs font-bold text-on-surface-variant first:mt-0">{children}</h3>
+  );
 }
 
 function People({
@@ -956,7 +1099,12 @@ function People({
   const handIds = new Set([...raised, ...speaking].map((h) => h.userId));
   const rest = meeting.participants.filter((p) => !p.userId || !handIds.has(p.userId));
   const remove = async (p: Participant) => {
-    if (await askConfirm(t('meeting.removeConfirm', { name: p.name }), { danger: true, confirmLabel: t('meeting.removeOne') }))
+    if (
+      await askConfirm(t('meeting.removeConfirm', { name: p.name }), {
+        danger: true,
+        confirmLabel: t('meeting.removeOne'),
+      })
+    )
       meeting.removeParticipant(p.sessionId);
   };
   return (
@@ -994,7 +1142,9 @@ function People({
               <Person
                 key={h.userId}
                 name={h.name}
-                sub={h.hand === 'ACTIVE_SPEAKER' ? t('meeting.speaking') : t('meeting.allowedToSpeak')}
+                sub={
+                  h.hand === 'ACTIVE_SPEAKER' ? t('meeting.speaking') : t('meeting.allowedToSpeak')
+                }
               >
                 {amOwner && (
                   <button
@@ -1022,7 +1172,10 @@ function People({
               sub={p.owner ? t('meeting.teacherBadge') : undefined}
             >
               {!p.audio && (
-                <span aria-label={t('meeting.micOff')} className="material-symbols-outlined text-[18px] text-outline">
+                <span
+                  aria-label={t('meeting.micOff')}
+                  className="material-symbols-outlined text-[18px] text-outline"
+                >
                   mic_off
                 </span>
               )}
@@ -1067,7 +1220,11 @@ function Chat({ chat, userId }: { chat: ReturnType<typeof useLiveChat>; userId: 
   }, [chat.messages.length]);
   return (
     <>
-      <div ref={feed} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-2" aria-live="polite">
+      <div
+        ref={feed}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-2"
+        aria-live="polite"
+      >
         {chat.messages.length === 0 ? (
           <p className="py-10 text-center text-sm text-outline">{t('meeting.chatEmpty')}</p>
         ) : (
@@ -1081,16 +1238,21 @@ function Chat({ chat, userId }: { chat: ReturnType<typeof useLiveChat>; userId: 
                     {msg.senderRole === 'TEACHER' && ` · ${t('meeting.teacherBadge')}`}
                   </span>
                 )}
-                <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${mine ? 'bg-primary text-on-primary' : 'bg-on-surface/[0.08]'}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3 py-2 ${mine ? 'bg-primary text-on-primary' : 'bg-on-surface/[0.08]'}`}
+                >
                   <p className="whitespace-pre-wrap break-words text-sm" dir="auto">
                     {msg.body}
                   </p>
                 </div>
                 <span className="mt-0.5 text-[10px] text-outline">
-                  {new Date(msg.createdAt).toLocaleTimeString(i18n.language === 'ar' ? 'ar-EG' : 'en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {new Date(msg.createdAt).toLocaleTimeString(
+                    i18n.language === 'ar' ? 'ar-EG' : 'en-GB',
+                    {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    },
+                  )}
                 </span>
               </div>
             );

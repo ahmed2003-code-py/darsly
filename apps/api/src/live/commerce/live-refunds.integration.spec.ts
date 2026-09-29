@@ -43,12 +43,23 @@ describe('Commerce D on Postgres: a student cancels', () => {
     const { w, purchases } = await bought({ refundPolicy: 'STANDARD', startsInMs: 3 * 86_400_000 });
     const s = w.students[0];
     const p = purchases[0];
-    await expect(S.live.assertInSession(s.user.id, w.session.id)).resolves.toMatchObject({ role: 'STUDENT' });
+    await expect(S.live.assertInSession(s.user.id, w.session.id)).resolves.toMatchObject({
+      role: 'STUDENT',
+    });
 
-    await Promise.allSettled([S.commerce.cancelByStudent(s.user.id, p.id), S.commerce.cancelByStudent(s.user.id, p.id)]);
+    await Promise.allSettled([
+      S.commerce.cancelByStudent(s.user.id, p.id),
+      S.commerce.cancelByStudent(s.user.id, p.id),
+    ]);
     const after = await S.commerce.byId(p.id);
     expect(after.status).toBe('CANCELLED_BY_STUDENT');
-    expect(after.refunds).toEqual([expect.objectContaining({ reason: 'STUDENT_CANCEL', amountCents: 10_000, status: 'COMPLETED' })]);
+    expect(after.refunds).toEqual([
+      expect.objectContaining({
+        reason: 'STUDENT_CANCEL',
+        amountCents: 10_000,
+        status: 'COMPLETED',
+      }),
+    ]);
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(50_000 - 12_000 + 10_000);
     expect(await prisma.liveBooking.count({ where: { purchaseId: p.id } })).toBe(0);
     await expect(S.live.assertInSession(s.user.id, w.session.id)).rejects.toThrow();
@@ -84,12 +95,17 @@ describe('Commerce D on Postgres: a student cancels', () => {
     expect(after.refunds).toEqual([]);
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(38_000);
     expect(await accountBalance(prisma, `purchase:${purchases[0].id}:held`)).toBe(12_000);
-    expect((await S.commerce.pendingEarnings({ academyId: w.academyId }, 'teacher')).pendingCents).toBe(10_000);
+    expect(
+      (await S.commerce.pendingEarnings({ academyId: w.academyId }, 'teacher')).pendingCents,
+    ).toBe(10_000);
   });
 
   it('NO_REFUND gives nothing back on the student’s own cancellation', async () => {
     if (!guard()) return;
-    const { w, purchases } = await bought({ refundPolicy: 'NO_REFUND', startsInMs: 30 * 86_400_000 });
+    const { w, purchases } = await bought({
+      refundPolicy: 'NO_REFUND',
+      startsInMs: 30 * 86_400_000,
+    });
     await S.commerce.cancelByStudent(w.students[0].user.id, purchases[0].id);
     expect(await S.ledger.walletBalance(w.students[0].sp.id)).toBe(38_000);
   });
@@ -97,16 +113,26 @@ describe('Commerce D on Postgres: a student cancels', () => {
   it('refuses after the class started, and while a payment is being verified', async () => {
     if (!guard()) return;
     const { w, purchases } = await bought({ startsInMs: -10 * 60_000 });
-    await expect(S.commerce.cancelByStudent(w.students[0].user.id, purchases[0].id)).rejects.toMatchObject({
+    await expect(
+      S.commerce.cancelByStudent(w.students[0].user.id, purchases[0].id),
+    ).rejects.toMatchObject({
       response: { code: 'CANCEL_WINDOW_CLOSED' },
     });
     const w2 = await commerceWorld(prisma);
     const u = w2.students[0].user.id;
     const h = await S.commerce.hold(u, w2.session.id);
-    await S.commerce.submitTransfer(u, h.id, { method: 'VODAFONE_CASH', reference: '01099990000', proofImageUrl: 'data:x' });
-    await expect(S.commerce.cancelByStudent(u, h.id)).rejects.toMatchObject({ response: { code: 'PAYMENT_UNDER_REVIEW' } });
+    await S.commerce.submitTransfer(u, h.id, {
+      method: 'VODAFONE_CASH',
+      reference: '01099990000',
+      proofImageUrl: 'data:x',
+    });
+    await expect(S.commerce.cancelByStudent(u, h.id)).rejects.toMatchObject({
+      response: { code: 'PAYMENT_UNDER_REVIEW' },
+    });
     // Another student's purchase is not theirs to cancel.
-    await expect(S.commerce.cancelByStudent(w.students[0].user.id, h.id)).rejects.toThrow('Purchase not found');
+    await expect(S.commerce.cancelByStudent(w.students[0].user.id, h.id)).rejects.toThrow(
+      'Purchase not found',
+    );
   });
 
   it('the free-booking cancel cannot take a paid seat without its refund', async () => {
@@ -121,7 +147,11 @@ describe('Commerce D on Postgres: a student cancels', () => {
 describe('Commerce D on Postgres: the teacher cancels', () => {
   it('every buyer gets everything back, access goes, nobody is paid — and a retry changes nothing', async () => {
     if (!guard()) return;
-    const { w, purchases } = await bought({ students: 3, refundPolicy: 'STRICT', startsInMs: 2 * 86_400_000 });
+    const { w, purchases } = await bought({
+      students: 3,
+      refundPolicy: 'STRICT',
+      startsInMs: 2 * 86_400_000,
+    });
     // One of them had already cancelled late (no refund then).
     await S.commerce.cancelByStudent(w.students[2].user.id, purchases[2].id);
     // A fourth only holds a seat.
@@ -140,7 +170,9 @@ describe('Commerce D on Postgres: the teacher cancels', () => {
     // Retries: the cancellation again, and the sweep, twice at once.
     await S.commerce.onSessionCancelled(w.session.id, null);
     await Promise.all([S.commerce.sweepCancelled(), S.commerce.sweepCancelled()]);
-    const refunds = await prisma.refund.findMany({ where: { livePurchase: { sessionId: w.session.id } } });
+    const refunds = await prisma.refund.findMany({
+      where: { livePurchase: { sessionId: w.session.id } },
+    });
     expect(refunds).toHaveLength(3);
     expect(refunds.reduce((a, r) => a + r.amountCents, 0)).toBe(36_000);
     // And nothing is released for a cancelled class.
@@ -154,7 +186,9 @@ describe('Commerce D on Postgres: the teacher cancels', () => {
     const h = await S.commerce.hold(w.students[0].user.id, w.session.id);
     const scope = { academyId: w.academyId, userId: w.teacher.id, manageAll: true, role: 'OWNER' };
     await S.live.remove(scope, w.session.id, w.teacher.id);
-    expect((await prisma.livePurchase.findUniqueOrThrow({ where: { id: h.id } })).status).toBe('CANCELLED_BY_TEACHER');
+    expect((await prisma.livePurchase.findUniqueOrThrow({ where: { id: h.id } })).status).toBe(
+      'CANCELLED_BY_TEACHER',
+    );
     expect(await prisma.refund.count({ where: { livePurchaseId: h.id } })).toBe(0);
   });
 });

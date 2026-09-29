@@ -26,9 +26,19 @@ beforeAll(async () => {
     S = commerceStack(prisma);
     T = new UnmatchedTransfersService(prisma);
     coupons = new CouponsService(prisma);
-    adminId = (await prisma.user.create({ data: { role: 'SUPER_ADMIN', fullName: 'Finance', email: `dt-${randomUUID().slice(0, 8)}@it.test` } })).id;
+    adminId = (
+      await prisma.user.create({
+        data: {
+          role: 'SUPER_ADMIN',
+          fullName: 'Finance',
+          email: `dt-${randomUUID().slice(0, 8)}@it.test`,
+        },
+      })
+    ).id;
     if (!(await prisma.platformPaymentAccount.findFirst({ where: { handle: OURS } }))) {
-      await prisma.platformPaymentAccount.create({ data: { method: 'VODAFONE_CASH', label: 'فودافون كاش درسلي', handle: OURS } });
+      await prisma.platformPaymentAccount.create({
+        data: { method: 'VODAFONE_CASH', label: 'فودافون كاش درسلي', handle: OURS },
+      });
     }
   } catch {
     available = false;
@@ -60,18 +70,36 @@ const bankToWalletSms = (amountCents: number, payer: string) =>
     provider: 'VODAFONE_CASH',
     amountCents,
     externalId: randomUUID(),
-    rawMessage: [`تم استلام مبلغ ${(amountCents / 100).toFixed(2)} جنيه`, `من ${payer} على`, `رقم محفظتك ${OURS} عن طريق انستاباي.`, `رقم العملية: 02${++seq}`].join('\n'),
+    rawMessage: [
+      `تم استلام مبلغ ${(amountCents / 100).toFixed(2)} جنيه`,
+      `من ${payer} على`,
+      `رقم محفظتك ${OURS} عن طريق انستاباي.`,
+      `رقم العملية: 02${++seq}`,
+    ].join('\n'),
   });
 
 async function courseWorld(priceCents = price()) {
   const w = await commerceWorld(prisma, { students: 2 });
   const course = await prisma.course.create({
-    data: { tenantId: w.tp.id, academyId: w.tp.id, title: `كورس ${w.k}`, status: 'PUBLISHED', priceCents },
+    data: {
+      tenantId: w.tp.id,
+      academyId: w.tp.id,
+      title: `كورس ${w.k}`,
+      status: 'PUBLISHED',
+      priceCents,
+    },
   });
   return { ...w, course };
 }
 const declareCourse = (userId: string, courseId: string, extra: Record<string, unknown> = {}) =>
-  S.manual.submit(userId, { courseId, method: 'VODAFONE_CASH', declare: true, source: 'WALLET', senderWallet: phone(), ...extra } as never);
+  S.manual.submit(userId, {
+    courseId,
+    method: 'VODAFONE_CASH',
+    declare: true,
+    source: 'WALLET',
+    senderWallet: phone(),
+    ...extra,
+  } as never);
 
 describe('Course: declare, then the listener confirms it — once', () => {
   it('the PENDING payment exists before any instructions; nothing claimed, no proof', async () => {
@@ -81,7 +109,14 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const sender = phone();
     const p = await declareCourse(s.user.id, w.course.id, { senderWallet: sender });
     const st = await S.manual.statusFor(s.user.id, p.id);
-    expect(st).toMatchObject({ status: 'PENDING', stage: 'AWAITING_TRANSFER', transferSource: 'WALLET', senderWallet: sender, claimedAt: null, enrollmentStatus: 'PENDING_PAYMENT' });
+    expect(st).toMatchObject({
+      status: 'PENDING',
+      stage: 'AWAITING_TRANSFER',
+      transferSource: 'WALLET',
+      senderWallet: sender,
+      claimedAt: null,
+      enrollmentStatus: 'PENDING_PAYMENT',
+    });
     const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.proofImageUrl ?? '').toBe('');
   });
@@ -98,7 +133,9 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const st = await S.manual.statusFor(s.user.id, p.id);
     expect(st).toMatchObject({ status: 'PAID', stage: 'CONFIRMED', enrollmentStatus: 'ACTIVE' });
     expect(await prisma.ledgerTransaction.count({ where: { paymentId: p.id } })).toBe(1);
-    expect(await prisma.enrollment.count({ where: { studentId: s.sp.id, courseId: w.course.id } })).toBe(1);
+    expect(
+      await prisma.enrollment.count({ where: { studentId: s.sp.id, courseId: w.course.id } }),
+    ).toBe(1);
   });
 
   it('bank / InstaPay → wallet: no wallet number, the full name confirms it', async () => {
@@ -106,9 +143,15 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const w = await courseWorld();
     const s = w.students[0];
     const p = await S.manual.submit(s.user.id, {
-      courseId: w.course.id, method: 'VODAFONE_CASH', declare: true, source: 'BANK', payerName: 'أحمد عبد العزيز هريدي',
+      courseId: w.course.id,
+      method: 'VODAFONE_CASH',
+      declare: true,
+      source: 'BANK',
+      payerName: 'أحمد عبد العزيز هريدي',
     } as never);
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).reference ?? '').toBe('');
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).reference ?? '').toBe(
+      '',
+    );
     expect((await bankToWalletSms(p.amountCents, 'احمد عبدالعزيز هريدى')).status).toBe('MATCHED');
     expect((await S.manual.statusFor(s.user.id, p.id)).enrollmentStatus).toBe('ACTIVE');
   });
@@ -119,10 +162,17 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const s = w.students[0];
     const sender = phone();
     const p = await declareCourse(s.user.id, w.course.id, { senderWallet: sender });
-    await Promise.allSettled([walletSms(p.amountCents, sender), S.manual.verifyByAdmin(adminId, p.id)]);
+    await Promise.allSettled([
+      walletSms(p.amountCents, sender),
+      S.manual.verifyByAdmin(adminId, p.id),
+    ]);
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe('PAID');
     expect(await prisma.ledgerTransaction.count({ where: { paymentId: p.id } })).toBe(1);
-    expect(await prisma.enrollment.count({ where: { studentId: s.sp.id, courseId: w.course.id, status: 'ACTIVE' } })).toBe(1);
+    expect(
+      await prisma.enrollment.count({
+        where: { studentId: s.sp.id, courseId: w.course.id, status: 'ACTIVE' },
+      }),
+    ).toBe(1);
   });
 
   it('declaring twice returns the same payment; once the proof is sent it is closed to re-declaring', async () => {
@@ -136,10 +186,14 @@ describe('Course: declare, then the listener confirms it — once', () => {
       declareCourse(s.user.id, w.course.id, { senderWallet: fixed }),
     ]);
     expect(new Set([a.id, b.id, c.id]).size).toBe(1);
-    expect(await prisma.payment.count({ where: { studentId: s.sp.id, courseId: w.course.id } })).toBe(1);
+    expect(
+      await prisma.payment.count({ where: { studentId: s.sp.id, courseId: w.course.id } }),
+    ).toBe(1);
     await S.manual.attachProof(s.user.id, a.id, 'data:image/png;base64,iVBORw0KGgo=');
     expect((await S.manual.statusFor(s.user.id, a.id)).stage).toBe('PROOF_SENT');
-    await expect(declareCourse(s.user.id, w.course.id)).rejects.toMatchObject({ response: { code: 'PAYMENT_PENDING' } });
+    await expect(declareCourse(s.user.id, w.course.id)).rejects.toMatchObject({
+      response: { code: 'PAYMENT_PENDING' },
+    });
   });
 
   it('already enrolled: a new declaration is refused', async () => {
@@ -149,24 +203,38 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const sender = phone();
     const p = await declareCourse(s.user.id, w.course.id, { senderWallet: sender });
     await walletSms(p.amountCents, sender);
-    await expect(declareCourse(s.user.id, w.course.id)).rejects.toMatchObject({ response: { code: 'ALREADY_ENROLLED' } });
+    await expect(declareCourse(s.user.id, w.course.id)).rejects.toMatchObject({
+      response: { code: 'ALREADY_ENROLLED' },
+    });
   });
 
   it('a coupon: its use is taken at declaration, kept on confirmation, given back if the declaration expires', async () => {
     if (!guard()) return;
     const w = await courseWorld();
-    const c = await coupons.create(w.tp.id, { code: `CD${randomUUID().slice(0, 6).toUpperCase()}`, percentOff: 50, maxUses: 1 });
+    const c = await coupons.create(w.tp.id, {
+      code: `CD${randomUUID().slice(0, 6).toUpperCase()}`,
+      percentOff: 50,
+      maxUses: 1,
+    });
     const [s1, s2] = w.students;
     const p1 = await declareCourse(s1.user.id, w.course.id, { couponCode: c.code });
     expect((await prisma.coupon.findUniqueOrThrow({ where: { id: c.id } })).usedCount).toBe(1);
     // Abandoned: nobody transferred within the window.
-    await prisma.payment.update({ where: { id: p1.id }, data: { createdAt: new Date(Date.now() - 80 * 3600_000) } });
+    await prisma.payment.update({
+      where: { id: p1.id },
+      data: { createdAt: new Date(Date.now() - 80 * 3600_000) },
+    });
     expect(await S.manual.expireDeclared(72 * 3600_000)).toBeGreaterThanOrEqual(1);
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe('REJECTED');
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p1.id } })).status).toBe(
+      'REJECTED',
+    );
     expect((await prisma.coupon.findUniqueOrThrow({ where: { id: c.id } })).usedCount).toBe(0);
     // The released use is available again, and a confirmed purchase keeps it.
     const sender = phone();
-    const p2 = await declareCourse(s2.user.id, w.course.id, { couponCode: c.code, senderWallet: sender });
+    const p2 = await declareCourse(s2.user.id, w.course.id, {
+      couponCode: c.code,
+      senderWallet: sender,
+    });
     await walletSms(p2.amountCents, sender);
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: p2.id } })).status).toBe('PAID');
     expect((await prisma.coupon.findUniqueOrThrow({ where: { id: c.id } })).usedCount).toBe(1);
@@ -178,34 +246,66 @@ describe('Course: declare, then the listener confirms it — once', () => {
     const s = w.students[0];
     const p = await declareCourse(s.user.id, w.course.id);
     await S.manual.attachProof(s.user.id, p.id, 'data:image/png;base64,iVBORw0KGgo=');
-    await prisma.payment.update({ where: { id: p.id }, data: { createdAt: new Date(Date.now() - 80 * 3600_000) } });
+    await prisma.payment.update({
+      where: { id: p.id },
+      data: { createdAt: new Date(Date.now() - 80 * 3600_000) },
+    });
     await S.manual.expireDeclared(72 * 3600_000);
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe('PENDING');
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe(
+      'PENDING',
+    );
   });
 
   it('two students, same course price, both declared by bank in names that both fit → nobody is guessed', async () => {
     if (!guard()) return;
     const w = await courseWorld();
     const [s1, s2] = w.students;
-    const a = await S.manual.submit(s1.user.id, { courseId: w.course.id, method: 'VODAFONE_CASH', declare: true, source: 'BANK', payerName: 'أحمد عبد العزيز هريدي' } as never);
-    const b = await S.manual.submit(s2.user.id, { courseId: w.course.id, method: 'VODAFONE_CASH', declare: true, source: 'BANK', payerName: 'أحمد عبد العزيز هريدي' } as never);
+    const a = await S.manual.submit(s1.user.id, {
+      courseId: w.course.id,
+      method: 'VODAFONE_CASH',
+      declare: true,
+      source: 'BANK',
+      payerName: 'أحمد عبد العزيز هريدي',
+    } as never);
+    const b = await S.manual.submit(s2.user.id, {
+      courseId: w.course.id,
+      method: 'VODAFONE_CASH',
+      declare: true,
+      source: 'BANK',
+      payerName: 'أحمد عبد العزيز هريدي',
+    } as never);
     expect((await bankToWalletSms(a.amountCents, 'احمد عبدالعزيز هريدى')).status).toBe('AMBIGUOUS');
-    for (const p of [a, b]) expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe('PENDING');
+    for (const p of [a, b])
+      expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe(
+        'PENDING',
+      );
     expect((await S.manual.statusFor(s1.user.id, a.id)).stage).toBe('UNDER_REVIEW');
   });
 });
 
 describe('Wallet top-up: declare, then the listener credits it — exactly once', () => {
   const declareTopup = (userId: string, amountCents: number, extra: Record<string, unknown> = {}) =>
-    S.wallet.declareTopup(userId, { amountCents, method: 'VODAFONE_CASH', source: 'WALLET', senderWallet: phone(), ...extra } as never);
+    S.wallet.declareTopup(userId, {
+      amountCents,
+      method: 'VODAFONE_CASH',
+      source: 'WALLET',
+      senderWallet: phone(),
+      ...extra,
+    } as never);
 
   it('the PENDING top-up exists before any instructions, with no proof', async () => {
     if (!guard()) return;
     const w = await commerceWorld(prisma, { students: 1 });
     const s = w.students[0];
     const t = await declareTopup(s.user.id, price());
-    expect(await S.wallet.topupStatus(s.user.id, t.id)).toMatchObject({ status: 'PENDING', stage: 'AWAITING_TRANSFER', claimedAt: null });
-    expect((await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).proofImageUrl).toBeNull();
+    expect(await S.wallet.topupStatus(s.user.id, t.id)).toMatchObject({
+      status: 'PENDING',
+      stage: 'AWAITING_TRANSFER',
+      claimedAt: null,
+    });
+    expect(
+      (await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).proofImageUrl,
+    ).toBeNull();
   });
 
   it('the SMS credits it by itself; the same SMS again changes nothing', async () => {
@@ -220,7 +320,11 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     expect((await walletSms(amount, sender, ext)).status).toBe('MATCHED');
     expect((await walletSms(amount, sender, ext)).status).toBe('DUPLICATE');
     const st = await S.wallet.topupStatus(s.user.id, t.id);
-    expect(st).toMatchObject({ status: 'APPROVED', stage: 'CONFIRMED', balanceCents: before + amount });
+    expect(st).toMatchObject({
+      status: 'APPROVED',
+      stage: 'CONFIRMED',
+      balanceCents: before + amount,
+    });
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(before + amount);
   });
 
@@ -232,9 +336,15 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     const sender = phone();
     const before = await S.ledger.walletBalance(s.sp.id);
     const t = await declareTopup(s.user.id, amount, { senderWallet: sender });
-    await Promise.allSettled([walletSms(amount, sender), S.wallet.approveTopup(adminId, t.id), S.wallet.approveTopup(adminId, t.id)]);
+    await Promise.allSettled([
+      walletSms(amount, sender),
+      S.wallet.approveTopup(adminId, t.id),
+      S.wallet.approveTopup(adminId, t.id),
+    ]);
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(before + amount);
-    expect(await prisma.walletTransaction.count({ where: { studentId: s.sp.id, kind: 'TOPUP' } })).toBe(1);
+    expect(
+      await prisma.walletTransaction.count({ where: { studentId: s.sp.id, kind: 'TOPUP' } }),
+    ).toBe(1);
   });
 
   it('a double declare request makes one top-up', async () => {
@@ -242,9 +352,14 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     const w = await commerceWorld(prisma, { students: 1 });
     const s = w.students[0];
     const amount = price();
-    const [a, b] = await Promise.all([declareTopup(s.user.id, amount), declareTopup(s.user.id, amount)]);
+    const [a, b] = await Promise.all([
+      declareTopup(s.user.id, amount),
+      declareTopup(s.user.id, amount),
+    ]);
     expect(a.id).toBe(b.id);
-    expect(await prisma.walletTopup.count({ where: { studentId: s.sp.id, status: 'PENDING' } })).toBe(1);
+    expect(
+      await prisma.walletTopup.count({ where: { studentId: s.sp.id, status: 'PENDING' } }),
+    ).toBe(1);
   });
 
   it('bank / InstaPay → wallet: the full name credits it', async () => {
@@ -252,7 +367,12 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     const w = await commerceWorld(prisma, { students: 1 });
     const s = w.students[0];
     const amount = price();
-    const t = await S.wallet.declareTopup(s.user.id, { amountCents: amount, method: 'VODAFONE_CASH', source: 'BANK', payerName: 'منى محمد عبد الله' } as never);
+    const t = await S.wallet.declareTopup(s.user.id, {
+      amountCents: amount,
+      method: 'VODAFONE_CASH',
+      source: 'BANK',
+      payerName: 'منى محمد عبد الله',
+    } as never);
     expect((await bankToWalletSms(amount, 'منى محمد عبدالله')).status).toBe('MATCHED');
     expect((await S.wallet.topupStatus(s.user.id, t.id)).status).toBe('APPROVED');
   });
@@ -263,9 +383,14 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     const s = w.students[0];
     const before = await S.ledger.walletBalance(s.sp.id);
     const t = await declareTopup(s.user.id, price());
-    await prisma.walletTopup.update({ where: { id: t.id }, data: { createdAt: new Date(Date.now() - 80 * 3600_000) } });
+    await prisma.walletTopup.update({
+      where: { id: t.id },
+      data: { createdAt: new Date(Date.now() - 80 * 3600_000) },
+    });
     expect(await S.wallet.expireDeclaredTopups(72 * 3600_000)).toBeGreaterThanOrEqual(1);
-    expect((await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).status).toBe('REJECTED');
+    expect((await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).status).toBe(
+      'REJECTED',
+    );
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(before);
   });
 
@@ -282,7 +407,9 @@ describe('Wallet top-up: declare, then the listener credits it — exactly once'
     const cands = await T.topupCandidates(ev.eventId!);
     expect(cands.map((c) => c.topupId)).toContain(t.id);
     await S.matching.manualMatchTopup(ev.eventId!, t.id, adminId, 'parent paid');
-    await expect(S.matching.manualMatchTopup(ev.eventId!, t.id, adminId, 'again')).rejects.toMatchObject({ response: { code: 'EVENT_ALREADY_CLAIMED' } });
+    await expect(
+      S.matching.manualMatchTopup(ev.eventId!, t.id, adminId, 'again'),
+    ).rejects.toMatchObject({ response: { code: 'EVENT_ALREADY_CLAIMED' } });
     expect(await S.ledger.walletBalance(s.sp.id)).toBe(before + amount);
   });
 });
@@ -294,11 +421,18 @@ describe('Two targets of the same amount are never told apart by guessing', () =
     const [s1, s2] = w.students;
     const courseSender = phone();
     const p = await declareCourse(s1.user.id, w.course.id, { senderWallet: courseSender });
-    const t = await S.wallet.declareTopup(s2.user.id, { amountCents: p.amountCents, method: 'VODAFONE_CASH', source: 'WALLET', senderWallet: phone() } as never);
+    const t = await S.wallet.declareTopup(s2.user.id, {
+      amountCents: p.amountCents,
+      method: 'VODAFONE_CASH',
+      source: 'WALLET',
+      senderWallet: phone(),
+    } as never);
     // The SMS names the course buyer's wallet: only the course is paid.
     expect((await walletSms(p.amountCents, courseSender)).status).toBe('MATCHED');
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: p.id } })).status).toBe('PAID');
-    expect((await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).status).toBe('PENDING');
+    expect((await prisma.walletTopup.findUniqueOrThrow({ where: { id: t.id } })).status).toBe(
+      'PENDING',
+    );
     // Now a transfer with no sender number at all, of the same amount: the top-up
     // is the only candidate left, but its student declared a wallet — the
     // name path needs a declared or account name that fits, and there is none.
@@ -311,18 +445,34 @@ describe('Two targets of the same amount are never told apart by guessing', () =
     const live = await commerceWorld(prisma, { students: 0, priceCents: price() });
     const { accessToken, purchase } = await S.commerce.guestHold(live.session.id, 'زائر');
     const w = await courseWorld(purchase.studentPaysCents);
-    let lo = 1, hi = purchase.studentPaysCents;
+    let lo = 1,
+      hi = purchase.studentPaysCents;
     while (lo < hi) {
       const mid = Math.floor((lo + hi) / 2);
       const q = await S.manual.quote({ ...w.course, priceCents: mid }, undefined);
-      if (q.totalCents < purchase.studentPaysCents) lo = mid + 1; else hi = mid;
+      if (q.totalCents < purchase.studentPaysCents) lo = mid + 1;
+      else hi = mid;
     }
     await prisma.course.update({ where: { id: w.course.id }, data: { priceCents: lo } });
-    const c = await S.manual.submit(w.students[0].user.id, { courseId: w.course.id, method: 'VODAFONE_CASH', declare: true, source: 'BANK', payerName: 'أحمد عبد العزيز هريدي' } as never);
+    const c = await S.manual.submit(w.students[0].user.id, {
+      courseId: w.course.id,
+      method: 'VODAFONE_CASH',
+      declare: true,
+      source: 'BANK',
+      payerName: 'أحمد عبد العزيز هريدي',
+    } as never);
     expect(c.amountCents).toBe(purchase.studentPaysCents);
-    await S.commerce.guestDeclareTransfer(accessToken, { method: 'VODAFONE_CASH', source: 'BANK', payerName: 'أحمد عبد العزيز هريدي' });
-    expect((await bankToWalletSms(purchase.studentPaysCents, 'احمد عبدالعزيز هريدى')).status).toBe('AMBIGUOUS');
-    expect((await prisma.payment.findUniqueOrThrow({ where: { id: c.id } })).status).toBe('PENDING');
+    await S.commerce.guestDeclareTransfer(accessToken, {
+      method: 'VODAFONE_CASH',
+      source: 'BANK',
+      payerName: 'أحمد عبد العزيز هريدي',
+    });
+    expect((await bankToWalletSms(purchase.studentPaysCents, 'احمد عبدالعزيز هريدى')).status).toBe(
+      'AMBIGUOUS',
+    );
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: c.id } })).status).toBe(
+      'PENDING',
+    );
     expect((await S.commerce.guestStatus(accessToken)).status).toBe('HELD');
   });
 });

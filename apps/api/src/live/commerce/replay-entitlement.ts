@@ -20,10 +20,12 @@ export function paidReplayVerdict(
   now = Date.now(),
 ): ReplayVerdict {
   if (!purchase) return { ok: true };
-  if (!REPLAY_PURCHASE_STATES.has(purchase.status)) return { ok: false, reason: 'purchase not active' };
+  if (!REPLAY_PURCHASE_STATES.has(purchase.status))
+    return { ok: false, reason: 'purchase not active' };
   if (purchase.replayPolicy === 'NONE') return { ok: false, reason: 'replay not included' };
   if (purchase.replayPolicy === 'INCLUDED_DAYS') {
-    const end = session.endedAt?.getTime() ?? session.startsAt.getTime() + session.durationMin * 60_000;
+    const end =
+      session.endedAt?.getTime() ?? session.startsAt.getTime() + session.durationMin * 60_000;
     const until = end + (purchase.replayDays ?? 0) * 86_400_000;
     if (now > until) return { ok: false, reason: 'replay window over' };
   }

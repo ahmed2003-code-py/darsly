@@ -12,7 +12,10 @@ import { confirmDelete } from '../../lib/confirm';
 import { useAuthStore } from '../../stores/auth';
 import { ErrorNote, Field, Spinner } from '../../components/ui';
 import PaymentStageNote from '../../components/payments/PaymentStageNote';
-import LiveTransferForm, { type DeclareInput, type ProofInput } from '../../components/live/LiveTransferForm';
+import LiveTransferForm, {
+  type DeclareInput,
+  type ProofInput,
+} from '../../components/live/LiveTransferForm';
 
 const REFUND_METHODS = ['VODAFONE_CASH', 'INSTAPAY', 'BANK_TRANSFER'] as const;
 
@@ -217,9 +220,13 @@ export default function GuestAccessPage() {
   }
 
   const chip = !s ? null : s.session.cancelled ? (
-    <span className="rounded-full bg-error-container px-3 py-1 text-xs font-bold text-on-error-container">{t('livePublic.cancelled')}</span>
+    <span className="rounded-full bg-error-container px-3 py-1 text-xs font-bold text-on-error-container">
+      {t('livePublic.cancelled')}
+    </span>
   ) : s.session.over ? (
-    <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-bold text-on-surface-variant">{t('livePublic.ended')}</span>
+    <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-bold text-on-surface-variant">
+      {t('livePublic.ended')}
+    </span>
   ) : s.session.live ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-error-container px-3 py-1 text-xs font-bold text-on-error-container">
       <span className="h-2 w-2 animate-pulse rounded-full bg-error motion-reduce:animate-none" />
@@ -230,7 +237,9 @@ export default function GuestAccessPage() {
       {t('livePublic.startsIn', { time: countdown(start, now) })}
     </span>
   ) : (
-    <span className="rounded-full bg-secondary-container px-3 py-1 text-xs font-bold text-on-secondary-container">{t('livePublic.waitingTeacher')}</span>
+    <span className="rounded-full bg-secondary-container px-3 py-1 text-xs font-bold text-on-secondary-container">
+      {t('livePublic.waitingTeacher')}
+    </span>
   );
 
   return (
@@ -248,7 +257,9 @@ export default function GuestAccessPage() {
         <>
           <div className="card">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-on-surface-variant">{t('guest.hello', { name: s.guestName })}</p>
+              <p className="text-sm text-on-surface-variant">
+                {t('guest.hello', { name: s.guestName })}
+              </p>
               {chip}
             </div>
             <h1 className="mt-1 font-heading text-xl font-bold" dir="auto">
@@ -274,7 +285,13 @@ export default function GuestAccessPage() {
               <div className="mt-4 rounded-xl border border-secondary/40 bg-secondary-container/30 p-3 text-sm">
                 <p className="font-bold">{t('guest.keepLink')}</p>
                 <div className="mt-2 flex gap-2">
-                  <input className="input flex-1 text-xs" dir="ltr" readOnly value={link} aria-label={t('guest.yourLink')} />
+                  <input
+                    className="input flex-1 text-xs"
+                    dir="ltr"
+                    readOnly
+                    value={link}
+                    aria-label={t('guest.yourLink')}
+                  />
                   <button
                     type="button"
                     className="btn-ghost"
@@ -290,7 +307,9 @@ export default function GuestAccessPage() {
           </div>
 
           {s.session.cancelled && s.status !== 'HELD' && (
-            <div className="card border-error/30 bg-error-container/40 text-sm">{t('guest.sessionCancelled')}</div>
+            <div className="card border-error/30 bg-error-container/40 text-sm">
+              {t('guest.sessionCancelled')}
+            </div>
           )}
 
           {/* Paying: the transfer, then the stage it is at — never "pay again". */}
@@ -298,9 +317,13 @@ export default function GuestAccessPage() {
             <div className="card">
               <p className="mb-1 font-heading font-bold">{t('guest.payNow')}</p>
               {s.status === 'HELD' && holdLeft && (
-                <p className="mb-3 text-xs text-on-surface-variant tabular-nums">{t('liveBuy.heldFor', { time: holdLeft })}</p>
+                <p className="mb-3 text-xs text-on-surface-variant tabular-nums">
+                  {t('liveBuy.heldFor', { time: holdLeft })}
+                </p>
               )}
-              {s.status === 'EXPIRED' && <p className="mb-3 text-sm text-on-surface-variant">{t('guest.holdExpired')}</p>}
+              {s.status === 'EXPIRED' && (
+                <p className="mb-3 text-sm text-on-surface-variant">{t('guest.holdExpired')}</p>
+              )}
               <PaymentStageNote stage={s.paymentStage} target="live" />
               <LiveTransferForm
                 purchase={s}
@@ -321,10 +344,14 @@ export default function GuestAccessPage() {
                 {s.paymentStage === 'UNDER_REVIEW' ? 'fact_check' : 'hourglass_top'}
               </span>
               <p className="font-heading text-lg font-bold">
-                {s.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewTitle') : t('liveBuy.pendingTitle')}
+                {s.paymentStage === 'UNDER_REVIEW'
+                  ? t('livePay.reviewTitle')
+                  : t('liveBuy.pendingTitle')}
               </p>
               <p className="mt-1 text-sm text-on-surface-variant">
-                {s.paymentStage === 'UNDER_REVIEW' ? t('livePay.reviewBody') : t('livePay.checkingBody')}
+                {s.paymentStage === 'UNDER_REVIEW'
+                  ? t('livePay.reviewBody')
+                  : t('livePay.checkingBody')}
               </p>
             </div>
           )}
@@ -341,7 +368,11 @@ export default function GuestAccessPage() {
               ) : s.canEnter ? (
                 <>
                   <p className="text-sm text-on-surface-variant">{t('guest.canEnter')}</p>
-                  <button className="btn-primary w-full py-3 text-base" disabled={enter.isPending} onClick={goIn}>
+                  <button
+                    className="btn-primary w-full py-3 text-base"
+                    disabled={enter.isPending}
+                    onClick={goIn}
+                  >
                     <span className="material-symbols-outlined">videocam</span>
                     {enter.isPending ? t('common.saving') : t('live.join')}
                   </button>
@@ -349,7 +380,9 @@ export default function GuestAccessPage() {
               ) : (
                 <>
                   <p className="text-sm text-on-surface-variant tabular-nums">
-                    {opensIn ? t('livePublic.opensIn', { time: opensIn }) : t('livePublic.waitingTeacherHint')}
+                    {opensIn
+                      ? t('livePublic.opensIn', { time: opensIn })
+                      : t('livePublic.waitingTeacherHint')}
                   </p>
                   <button className="btn-ghost w-full" disabled={enter.isPending} onClick={goIn}>
                     <span className="material-symbols-outlined text-base">settings_voice</span>
@@ -362,13 +395,24 @@ export default function GuestAccessPage() {
           )}
 
           {['DELIVERED', 'NEEDS_REVIEW'].includes(s.status) && (
-            <div className="card text-center text-sm text-on-surface-variant">{t('guest.classOver')}</div>
+            <div className="card text-center text-sm text-on-surface-variant">
+              {t('guest.classOver')}
+            </div>
           )}
 
-          {['PAYMENT_REJECTED', 'OVERSOLD', 'REFUNDED', 'REFUND_PENDING', 'CANCELLED_BY_TEACHER', 'CANCELLED_BY_STUDENT'].includes(s.status) && (
+          {[
+            'PAYMENT_REJECTED',
+            'OVERSOLD',
+            'REFUNDED',
+            'REFUND_PENDING',
+            'CANCELLED_BY_TEACHER',
+            'CANCELLED_BY_STUDENT',
+          ].includes(s.status) && (
             <div className="card text-sm">
               <p className="font-bold">{t(`liveBuy.statusNote.${s.status}`)}</p>
-              {s.payment?.rejectedReason && <p className="mt-1 text-on-surface-variant">{s.payment.rejectedReason}</p>}
+              {s.payment?.rejectedReason && (
+                <p className="mt-1 text-on-surface-variant">{s.payment.rejectedReason}</p>
+              )}
             </div>
           )}
 
@@ -377,9 +421,13 @@ export default function GuestAccessPage() {
             <div key={r.id} className="card space-y-3">
               <div className="flex items-center justify-between">
                 <p className="font-heading font-bold">{t('guest.refundTitle')}</p>
-                <span className="font-heading text-xl font-bold text-primary-text tabular-nums">{egp(r.amountCents)}</span>
+                <span className="font-heading text-xl font-bold text-primary-text tabular-nums">
+                  {egp(r.amountCents)}
+                </span>
               </div>
-              <p className="text-sm text-on-surface-variant">{t(`guest.refundStatus.${r.status}`)}</p>
+              <p className="text-sm text-on-surface-variant">
+                {t(`guest.refundStatus.${r.status}`)}
+              </p>
               {r.needsDestination && (
                 <RefundDestinationForm
                   submitLabel={t('guest.sendRefundHere')}
@@ -393,20 +441,34 @@ export default function GuestAccessPage() {
 
           {/* Managing the booking is a separate, quieter place — never beside "enter". */}
           {canManage && (
-            <details className="card group" onToggle={(e) => !(e.target as HTMLDetailsElement).open && setCancelling(false)}>
+            <details
+              className="card group"
+              onToggle={(e) => !(e.target as HTMLDetailsElement).open && setCancelling(false)}
+            >
               <summary className="flex cursor-pointer list-none items-center justify-between text-sm font-semibold text-on-surface-variant">
                 {t('livePublic.manage')}
-                <span className="material-symbols-outlined text-base transition group-open:rotate-180">expand_more</span>
+                <span className="material-symbols-outlined text-base transition group-open:rotate-180">
+                  expand_more
+                </span>
               </summary>
               <div className="mt-3">
                 {!cancelling ? (
-                  <button className="btn-ghost w-full text-error" onClick={() => setCancelling(true)}>
+                  <button
+                    className="btn-ghost w-full text-error"
+                    onClick={() => setCancelling(true)}
+                  >
                     {t('guest.cancelSeat')}
                   </button>
                 ) : s.status === 'HELD' || s.free ? (
                   <div className="space-y-3">
-                    <p className="text-sm">{s.free ? t('livePublic.cancelFree') : t('guest.cancelHeld')}</p>
-                    <button className="btn-primary w-full" disabled={cancel.isPending} onClick={() => cancel.mutate({})}>
+                    <p className="text-sm">
+                      {s.free ? t('livePublic.cancelFree') : t('guest.cancelHeld')}
+                    </p>
+                    <button
+                      className="btn-primary w-full"
+                      disabled={cancel.isPending}
+                      onClick={() => cancel.mutate({})}
+                    >
                       {t('guest.confirmCancel')}
                     </button>
                   </div>

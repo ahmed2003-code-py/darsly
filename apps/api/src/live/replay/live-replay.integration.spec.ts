@@ -21,7 +21,8 @@ import { LiveReplayService } from './live-replay.service';
 const prisma = new PrismaService();
 let available = true;
 const MIN = 60_000;
-process.env.VIDEO_SIGNING_SECRET = process.env.VIDEO_SIGNING_SECRET ?? 'test-signing-secret-for-replay-spec';
+process.env.VIDEO_SIGNING_SECRET =
+  process.env.VIDEO_SIGNING_SECRET ?? 'test-signing-secret-for-replay-spec';
 
 beforeAll(async () => {
   available = await databaseReady(prisma, ['liveSession', 'liveReplaySession', 'videoAsset']);
@@ -78,13 +79,17 @@ function res() {
 }
 
 /** An ended Cloudflare class with a READY recording, its teacher, 2 booked students and 1 outsider. */
-async function world(opts: { recording?: 'READY' | 'PROCESSING' | 'NONE'; provider?: 'CLOUDFLARE' | 'DAILY' } = {}) {
+async function world(
+  opts: { recording?: 'READY' | 'PROCESSING' | 'NONE'; provider?: 'CLOUDFLARE' | 'DAILY' } = {},
+) {
   const k = randomUUID().slice(0, 8);
   const teacher = await prisma.user.create({
     data: { role: 'TEACHER', fullName: `T ${k}`, email: `rpt-${k}@it.test` },
   });
   const tp = await prisma.teacherProfile.create({ data: { userId: teacher.id, slug: `rpt-${k}` } });
-  await prisma.academy.create({ data: { id: tp.id, slug: `rpa-${k}`, name: `A ${k}`, ownerUserId: teacher.id } });
+  await prisma.academy.create({
+    data: { id: tp.id, slug: `rpa-${k}`, name: `A ${k}`, ownerUserId: teacher.id },
+  });
   const ls = await prisma.liveSession.create({
     data: {
       tenantId: tp.id,
@@ -112,7 +117,9 @@ async function world(opts: { recording?: 'READY' | 'PROCESSING' | 'NONE'; provid
   let assetId: string | null = null;
   if ((opts.recording ?? 'READY') !== 'NONE') {
     const ready = (opts.recording ?? 'READY') === 'READY';
-    const key = await prisma.hlsEncryptionKey.create({ data: { keyHex: KEY.toString('hex') } as any }).catch(() => null);
+    const key = await prisma.hlsEncryptionKey
+      .create({ data: { keyHex: KEY.toString('hex') } as any })
+      .catch(() => null);
     const asset = await prisma.videoAsset.create({
       data: {
         tenantId: tp.id,
@@ -125,7 +132,10 @@ async function world(opts: { recording?: 'READY' | 'PROCESSING' | 'NONE'; provid
     });
     assetId = asset.id;
     if (ready) {
-      await prisma.videoAsset.update({ where: { id: asset.id }, data: { hlsMasterKey: `hls/${asset.id}/master.m3u8` } });
+      await prisma.videoAsset.update({
+        where: { id: asset.id },
+        data: { hlsMasterKey: `hls/${asset.id}/master.m3u8` },
+      });
       files.set(`hls/${asset.id}/master.m3u8`, Buffer.from('#EXTM3U\n720p/index.m3u8\n'));
       files.set(
         `hls/${asset.id}/720p/index.m3u8`,
@@ -145,7 +155,16 @@ async function world(opts: { recording?: 'READY' | 'PROCESSING' | 'NONE'; provid
     });
   }
   const scope: LiveScope = { academyId: tp.id, userId: teacher.id, manageAll: true, role: 'OWNER' };
-  return { k, teacher, tp, ls, booked: students.slice(0, 2), outsider: students[2], scope, assetId };
+  return {
+    k,
+    teacher,
+    tp,
+    ls,
+    booked: students.slice(0, 2),
+    outsider: students[2],
+    scope,
+    assetId,
+  };
 }
 
 const code = (p: Promise<unknown>) =>
@@ -176,7 +195,9 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     await playback.key(t, undefined as any, k);
     expect(Buffer.compare(k.body, KEY)).toBe(0);
     // The token lives as long as the recording (20 min + slack), not 5 minutes.
-    const row = await prisma.liveReplaySession.findUniqueOrThrow({ where: { id: r.replaySessionId } });
+    const row = await prisma.liveReplaySession.findUniqueOrThrow({
+      where: { id: r.replaySessionId },
+    });
     expect(row.expiresAt.getTime() - row.startedAt.getTime()).toBeGreaterThan(40 * MIN);
     expect(row.role).toBe('TEACHER');
   });
@@ -203,10 +224,16 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     const other = await world();
     const { replays, live } = build();
     await live.setVisibility(w.scope, w.ls.id, { recording: 'STUDENTS' });
-    expect(await code(replays.start(who(w.outsider.u), w.ls.id, {}))).toBe('You are not in this session');
-    expect(await code(replays.start(who(other.teacher), w.ls.id, {}))).toBe('You are not in this session');
+    expect(await code(replays.start(who(w.outsider.u), w.ls.id, {}))).toBe(
+      'You are not in this session',
+    );
+    expect(await code(replays.start(who(other.teacher), w.ls.id, {}))).toBe(
+      'You are not in this session',
+    );
     // Student of class B asking for class A.
-    expect(await code(replays.start(who(other.booked[0].u), w.ls.id, {}))).toBe('You are not in this session');
+    expect(await code(replays.start(who(other.booked[0].u), w.ls.id, {}))).toBe(
+      'You are not in this session',
+    );
   });
 
   it('the key is refused once sharing is withdrawn, the booking removed, or the replay ended', async () => {
@@ -214,7 +241,8 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     const w = await world();
     const { replays, live, playback } = build();
     await live.setVisibility(w.scope, w.ls.id, { recording: 'STUDENTS' });
-    const key = async (masterUrl: string) => code(playback.key(tokenOf(masterUrl), undefined as any, res()));
+    const key = async (masterUrl: string) =>
+      code(playback.key(tokenOf(masterUrl), undefined as any, res()));
 
     const a = await replays.start(who(w.booked[0].u), w.ls.id, {});
     await live.setVisibility(w.scope, w.ls.id, { recording: 'PRIVATE' });
@@ -223,14 +251,18 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     expect(await key(a.masterUrl)).toBe('ok');
 
     const b = await replays.start(who(w.booked[1].u), w.ls.id, {});
-    await prisma.liveBooking.deleteMany({ where: { sessionId: w.ls.id, studentId: w.booked[1].sp.id } });
+    await prisma.liveBooking.deleteMany({
+      where: { sessionId: w.ls.id, studentId: w.booked[1].sp.id },
+    });
     expect(await key(b.masterUrl)).toBe('Not in this session');
 
     await replays.end(w.booked[0].u.id, w.ls.id, a.replaySessionId);
     expect(await key(a.masterUrl)).toBe('Replay not active');
     // Ending someone else's replay does nothing.
     const c = await replays.start(who(w.teacher), w.ls.id, {});
-    expect(await replays.end(w.booked[0].u.id, w.ls.id, c.replaySessionId)).toEqual({ ended: false });
+    expect(await replays.end(w.booked[0].u.id, w.ls.id, c.replaySessionId)).toEqual({
+      ended: false,
+    });
     expect(await key(c.masterUrl)).toBe('ok');
   });
 
@@ -245,13 +277,18 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
 
     // Expired.
     const expired = signer.sign({ ...claims, exp: undefined } as any, -5);
-    expect(await code(playback.master(expired, undefined as any, res()))).toBe('Playback URL expired');
+    expect(await code(playback.master(expired, undefined as any, res()))).toBe(
+      'Playback URL expired',
+    );
     expect(await code(playback.key(expired, undefined as any, res()))).toBe('Playback URL expired');
 
     // Forged: the asset changed in the body, the signature kept.
     const [body, sig] = t.split('.');
     const forgedBody = Buffer.from(
-      JSON.stringify({ ...JSON.parse(Buffer.from(body, 'base64url').toString()), aid: other.assetId }),
+      JSON.stringify({
+        ...JSON.parse(Buffer.from(body, 'base64url').toString()),
+        aid: other.assetId,
+      }),
     ).toString('base64url');
     expect(await code(playback.master(`${forgedBody}.${sig}`, undefined as any, res()))).toBe(
       'Invalid playback signature',
@@ -259,7 +296,16 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
 
     // A valid token for asset A cannot reach asset B's files by path.
     expect(
-      await code(playback.media(t, `../${other.assetId}/720p`, 'seg0.ts', undefined as any, { headers: {} } as any, res())),
+      await code(
+        playback.media(
+          t,
+          `../${other.assetId}/720p`,
+          'seg0.ts',
+          undefined as any,
+          { headers: {} } as any,
+          res(),
+        ),
+      ),
     ).toBe('Token does not authorize this object');
 
     // A correctly signed token whose replay row belongs to another asset: no key.
@@ -278,9 +324,15 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     const none = await world({ recording: 'NONE' });
     const daily = await world({ recording: 'NONE', provider: 'DAILY' });
     const { replays } = build();
-    expect(await code(replays.start(who(processing.teacher), processing.ls.id, {}))).toBe('RECORDING_NOT_READY');
-    expect(await code(replays.start(who(none.teacher), none.ls.id, {}))).toBe('RECORDING_NOT_READY');
-    expect(await code(replays.start(who(daily.teacher), daily.ls.id, {}))).toBe('RECORDING_USE_LINK');
+    expect(await code(replays.start(who(processing.teacher), processing.ls.id, {}))).toBe(
+      'RECORDING_NOT_READY',
+    );
+    expect(await code(replays.start(who(none.teacher), none.ls.id, {}))).toBe(
+      'RECORDING_NOT_READY',
+    );
+    expect(await code(replays.start(who(daily.teacher), daily.ls.id, {}))).toBe(
+      'RECORDING_USE_LINK',
+    );
     expect(
       await prisma.liveReplaySession.count({
         where: { liveSessionId: { in: [processing.ls.id, none.ls.id, daily.ls.id] } },
@@ -299,7 +351,13 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
         transcriptText: 'كلام الحصة',
         transcriptSegments: [{ startSec: 0, durationSec: 180, text: 'كلام الحصة' }],
         summaryStatus: 'READY',
-        summary: { summary: 'ملخص', topics: [], keyPoints: [], questionsAndAnswers: [], actionItems: [] },
+        summary: {
+          summary: 'ملخص',
+          topics: [],
+          keyPoints: [],
+          questionsAndAnswers: [],
+          actionItems: [],
+        },
       },
     });
     const s = w.booked[0].u.id;

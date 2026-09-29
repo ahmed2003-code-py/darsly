@@ -40,7 +40,9 @@ export default function LiveReplayPlayer({ sessionId }: { sessionId: string }) {
       .post<ReplayTicket>(`/live/${sessionId}/replay`)
       .then(({ data }) => {
         if (cancelled) {
-          void api.post(`/live/${sessionId}/replay/${data.replaySessionId}/end`).catch(() => undefined);
+          void api
+            .post(`/live/${sessionId}/replay/${data.replaySessionId}/end`)
+            .catch(() => undefined);
           return;
         }
         replayId.current = data.replaySessionId;
@@ -94,7 +96,10 @@ export default function LiveReplayPlayer({ sessionId }: { sessionId: string }) {
 
   if (error) {
     return (
-      <p className="rounded-xl bg-error-container/40 px-3 py-2 text-sm text-on-error-container" role="alert">
+      <p
+        className="rounded-xl bg-error-container/40 px-3 py-2 text-sm text-on-error-container"
+        role="alert"
+      >
         {t('record.rec.playerError')}
       </p>
     );
@@ -112,7 +117,10 @@ export default function LiveReplayPlayer({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="relative overflow-hidden rounded-xl bg-black" onContextMenu={(e) => e.preventDefault()}>
+      <div
+        className="relative overflow-hidden rounded-xl bg-black"
+        onContextMenu={(e) => e.preventDefault()}
+      >
         <video
           ref={video}
           controls
@@ -123,7 +131,10 @@ export default function LiveReplayPlayer({ sessionId }: { sessionId: string }) {
           aria-label={t('summary.recording')}
         />
         {!ticket && (
-          <div className="absolute inset-0 grid place-items-center text-sm text-zinc-300" role="status">
+          <div
+            className="absolute inset-0 grid place-items-center text-sm text-zinc-300"
+            role="status"
+          >
             {t('record.rec.loadingPlayer')}
           </div>
         )}

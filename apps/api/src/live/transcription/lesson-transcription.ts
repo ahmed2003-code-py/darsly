@@ -112,9 +112,15 @@ export type SpeechToText = (
  *              refused again — this piece fails, the rest go on.
  *  REQUEST     any other refusal of the request: this piece fails.
  */
-export type SttFailureKind = 'ACCOUNT' | 'RATE_LIMIT' | 'SERVER' | 'TIMEOUT' | 'NETWORK' | 'BAD_AUDIO' | 'REQUEST';
+export type SttFailureKind =
+  'ACCOUNT' | 'RATE_LIMIT' | 'SERVER' | 'TIMEOUT' | 'NETWORK' | 'BAD_AUDIO' | 'REQUEST';
 
-export const TRANSIENT_STT_FAILURES: readonly SttFailureKind[] = ['RATE_LIMIT', 'SERVER', 'TIMEOUT', 'NETWORK'];
+export const TRANSIENT_STT_FAILURES: readonly SttFailureKind[] = [
+  'RATE_LIMIT',
+  'SERVER',
+  'TIMEOUT',
+  'NETWORK',
+];
 
 export class SttError extends AiJobError {
   constructor(
@@ -145,7 +151,11 @@ const ACCOUNT_CODES = new Set([
 ]);
 
 /** An HTTP refusal from the transcription endpoint → what kind of failure it is. */
-export function classifySttRefusal(status: number, body: string, retryAfter?: string | null): SttError {
+export function classifySttRefusal(
+  status: number,
+  body: string,
+  retryAfter?: string | null,
+): SttError {
   let code = '';
   try {
     const e = (JSON.parse(body) as { error?: { code?: string; type?: string } }).error;
@@ -155,10 +165,15 @@ export function classifySttRefusal(status: number, body: string, retryAfter?: st
     code = /insufficient_quota/.test(body) ? 'insufficient_quota' : '';
   }
   const detail = `${status}${code ? ` ${code.slice(0, 60)}` : ''}`;
-  if (status === 401 || status === 403 || ACCOUNT_CODES.has(code)) return new SttError('ACCOUNT', detail);
+  if (status === 401 || status === 403 || ACCOUNT_CODES.has(code))
+    return new SttError('ACCOUNT', detail);
   if (status === 429) {
     const secs = Number(retryAfter);
-    return new SttError('RATE_LIMIT', detail, Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined);
+    return new SttError(
+      'RATE_LIMIT',
+      detail,
+      Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined,
+    );
   }
   if (status >= 500) return new SttError('SERVER', detail);
   if (status === 400 || status === 413 || status === 415) return new SttError('BAD_AUDIO', detail);
@@ -199,7 +214,10 @@ export function openAiSpeechToText(cfg = transcriptionConfig()): SpeechToText {
       });
     } catch (e) {
       const name = (e as Error).name;
-      throw new SttError(name === 'TimeoutError' || name === 'AbortError' ? 'TIMEOUT' : 'NETWORK', name);
+      throw new SttError(
+        name === 'TimeoutError' || name === 'AbortError' ? 'TIMEOUT' : 'NETWORK',
+        name,
+      );
     }
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).slice(0, 2000);

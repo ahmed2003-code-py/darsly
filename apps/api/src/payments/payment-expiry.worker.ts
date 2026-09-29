@@ -54,7 +54,9 @@ export class PaymentExpiryWorker implements OnModuleInit, OnModuleDestroy {
       out.payments = await this.payments.expireDeclared(ttl);
       out.topups = await this.wallet.expireDeclaredTopups(ttl);
       if (out.payments || out.topups) {
-        this.logger.log(`declared transfers expired: ${out.payments} course payments, ${out.topups} top-ups`);
+        this.logger.log(
+          `declared transfers expired: ${out.payments} course payments, ${out.topups} top-ups`,
+        );
       }
     } catch (e) {
       this.logger.error(`payment expiry sweep error: ${(e as Error).message}`);

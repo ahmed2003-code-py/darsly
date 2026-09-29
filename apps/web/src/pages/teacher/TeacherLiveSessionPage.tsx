@@ -95,8 +95,13 @@ export default function TeacherLiveSessionPage() {
 
   return (
     <div className="page max-w-4xl">
-      <Link to="/teacher/live" className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
-        <span aria-hidden className="material-symbols-outlined text-base rtl:rotate-180">arrow_back</span>
+      <Link
+        to="/teacher/live"
+        className="mb-4 inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+      >
+        <span aria-hidden className="material-symbols-outlined text-base rtl:rotate-180">
+          arrow_back
+        </span>
         {t('liveManage.back')}
       </Link>
 
@@ -113,15 +118,21 @@ export default function TeacherLiveSessionPage() {
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full px-3 py-1 text-sm font-bold tabular-nums ${
-                s.accessMode === 'PAID' ? 'bg-primary-fixed text-on-primary-fixed' : 'bg-secondary-container text-on-secondary-container'
+                s.accessMode === 'PAID'
+                  ? 'bg-primary-fixed text-on-primary-fixed'
+                  : 'bg-secondary-container text-on-secondary-container'
               }`}
             >
               {s.accessMode === 'PAID' ? egp(s.priceCents) : t('liveBuy.free')}
             </span>
-            <Badge tone={live ? 'error' : ended ? 'neutral' : 'teal'}>{t(`liveManage.state.${edit.state}`)}</Badge>
+            <Badge tone={live ? 'error' : ended ? 'neutral' : 'teal'}>
+              {t(`liveManage.state.${edit.state}`)}
+            </Badge>
           </div>
         </div>
-        {s.description && <p className="whitespace-pre-line text-sm text-on-surface-variant">{s.description}</p>}
+        {s.description && (
+          <p className="whitespace-pre-line text-sm text-on-surface-variant">{s.description}</p>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {!ended && (
@@ -131,7 +142,11 @@ export default function TeacherLiveSessionPage() {
               onClick={() => (live ? navigate(`/live/${id}/meeting`) : start.mutate())}
             >
               <span className="material-symbols-outlined text-base">videocam</span>
-              {live ? t('live.continueMeeting') : canStart ? t('live.startMeeting') : t('live.startOpensSoon')}
+              {live
+                ? t('live.continueMeeting')
+                : canStart
+                  ? t('live.startMeeting')
+                  : t('live.startOpensSoon')}
             </button>
           )}
           {!readOnly && (
@@ -156,10 +171,18 @@ export default function TeacherLiveSessionPage() {
         {url ? (
           <>
             <p className="mt-1 text-sm text-on-surface-variant">
-              {s.accessMode === 'PAID' ? t('liveManage.linkHintPaid') : t('liveManage.linkHintFree')}
+              {s.accessMode === 'PAID'
+                ? t('liveManage.linkHintPaid')
+                : t('liveManage.linkHintFree')}
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input className="input flex-1 text-xs" dir="ltr" readOnly value={url} aria-label={t('liveManage.link')} />
+              <input
+                className="input flex-1 text-xs"
+                dir="ltr"
+                readOnly
+                value={url}
+                aria-label={t('liveManage.link')}
+              />
               <button
                 type="button"
                 className="btn-primary"
@@ -167,7 +190,9 @@ export default function TeacherLiveSessionPage() {
                   void navigator.clipboard?.writeText(url).then(() => setCopied(true));
                 }}
               >
-                <span className="material-symbols-outlined text-base">{copied ? 'check' : 'content_copy'}</span>
+                <span className="material-symbols-outlined text-base">
+                  {copied ? 'check' : 'content_copy'}
+                </span>
                 {copied ? t('liveCommerce.linkCopied') : t('liveManage.copy')}
               </button>
             </div>
@@ -182,12 +207,20 @@ export default function TeacherLiveSessionPage() {
           <p className="font-heading font-bold">{t('liveManage.seats')}</p>
           <p className="mt-2 font-heading text-3xl font-bold tabular-nums">
             {seats.taken}
-            {seats.capacity != null && <span className="text-lg text-outline"> / {seats.capacity}</span>}
+            {seats.capacity != null && (
+              <span className="text-lg text-outline"> / {seats.capacity}</span>
+            )}
           </p>
           <p className="mt-1 text-xs text-outline">
-            {t('liveManage.seatsBreakdown', { students: seats.studentBookings, guests: seats.guestSeats })}
+            {t('liveManage.seatsBreakdown', {
+              students: seats.studentBookings,
+              guests: seats.guestSeats,
+            })}
           </p>
-          <button className="mt-3 text-sm font-bold text-primary hover:underline" onClick={() => setPeople(true)}>
+          <button
+            className="mt-3 text-sm font-bold text-primary hover:underline"
+            onClick={() => setPeople(true)}
+          >
             {t('liveManage.viewPeople')}
           </button>
         </div>
@@ -202,7 +235,9 @@ export default function TeacherLiveSessionPage() {
               <dt className="text-on-surface-variant">{t('liveManage.salesRefunded')}</dt>
               <dd className="text-end tabular-nums">{sales.refunded}</dd>
               <dt className="font-semibold text-primary-text">{t('liveManage.salesEarnings')}</dt>
-              <dd className="text-end font-semibold text-primary-text tabular-nums">{egp(sales.teacherCents)}</dd>
+              <dd className="text-end font-semibold text-primary-text tabular-nums">
+                {egp(sales.teacherCents)}
+              </dd>
             </dl>
             <p className="mt-2 text-xs text-outline">{t('liveManage.earningsHeld')}</p>
           </div>
@@ -211,7 +246,11 @@ export default function TeacherLiveSessionPage() {
 
       <div className="card mt-4">
         <p className="font-heading font-bold">{t('liveManage.editRules')}</p>
-        <p className="mt-1 text-sm text-on-surface-variant">{t(`liveManage.rules.${edit.state}${edit.state === 'SCHEDULED' && edit.committed ? '_COMMITTED' : ''}`)}</p>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          {t(
+            `liveManage.rules.${edit.state}${edit.state === 'SCHEDULED' && edit.committed ? '_COMMITTED' : ''}`,
+          )}
+        </p>
         {!readOnly && !live && (
           <button
             className="mt-3 text-sm font-bold text-error hover:underline"
@@ -220,7 +259,10 @@ export default function TeacherLiveSessionPage() {
               if (
                 await confirmDelete({
                   kind: 'cancel',
-                  message: s.accessMode === 'PAID' ? t('liveManage.cancelPaidConfirm') : t('live.cancelConfirm'),
+                  message:
+                    s.accessMode === 'PAID'
+                      ? t('liveManage.cancelPaidConfirm')
+                      : t('live.cancelConfirm'),
                 })
               )
                 cancel.mutate();
@@ -256,7 +298,11 @@ export default function TeacherLiveSessionPage() {
               <li key={b.id} className="flex items-center justify-between py-2.5">
                 <span className="font-bold">
                   {b.fullName}
-                  {b.guest && <span className="ms-2 text-xs font-normal text-outline">({t('liveManage.guest')})</span>}
+                  {b.guest && (
+                    <span className="ms-2 text-xs font-normal text-outline">
+                      ({t('liveManage.guest')})
+                    </span>
+                  )}
                 </span>
                 <span className="text-sm text-outline" dir="ltr">
                   {b.phone ?? '—'}

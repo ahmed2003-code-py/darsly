@@ -30,7 +30,12 @@ describe('the SMS itself', () => {
   });
 });
 
-const topupOf = (method: string, reference: string, owner = 'أحمد عبد العزيز هريدي', over: any = {}) => ({
+const topupOf = (
+  method: string,
+  reference: string,
+  owner = 'أحمد عبد العزيز هريدي',
+  over: any = {},
+) => ({
   id: 'top1',
   amountCents: 500,
   method,
@@ -53,7 +58,9 @@ describe('a bank SMS against a top-up the student filed as InstaPay', () => {
   it('credits it on an exact provider reference — the two are the same rail', async () => {
     const f = matchingFake({ topups: [topupOf('INSTAPAY', '3979e788')] });
     const r = await f.svc.ingest(event);
-    expect(f.prisma.walletTopup.findMany.mock.calls[0][0].where.method).toEqual({ in: ['INSTAPAY', 'BANK_TRANSFER'] });
+    expect(f.prisma.walletTopup.findMany.mock.calls[0][0].where.method).toEqual({
+      in: ['INSTAPAY', 'BANK_TRANSFER'],
+    });
     expect(r.status).toBe('MATCHED');
     expect(f.wallet.approveTopup).toHaveBeenCalled();
   });
@@ -76,7 +83,15 @@ describe('a bank SMS against a top-up the student filed as InstaPay', () => {
     const f = matchingFake({
       topups: [topupOf('INSTAPAY', 'ffffffff')],
       events: [
-        { id: 'other', provider: 'BANK_TRANSFER', amountCents: 500, status: 'UNMATCHED', occurredAt: new Date(), matchedPaymentId: null, matchedTopupId: null },
+        {
+          id: 'other',
+          provider: 'BANK_TRANSFER',
+          amountCents: 500,
+          status: 'UNMATCHED',
+          occurredAt: new Date(),
+          matchedPaymentId: null,
+          matchedTopupId: null,
+        },
       ],
     });
     const r = await f.svc.ingest(event);
@@ -144,7 +159,9 @@ describe('the receipt is supporting evidence only', () => {
   });
 
   it('(3) a fitting receipt from a buyer in another name is never enough', async () => {
-    const f = matchingFake({ topups: [topup({ student: { user: { fullName: 'سارة علي حسن' } } })] });
+    const f = matchingFake({
+      topups: [topup({ student: { user: { fullName: 'سارة علي حسن' } } })],
+    });
     const r = await f.svc.ingest(bankSms);
     expect(r.status).toBe('AMBIGUOUS');
     expect(f.wallet.approveTopup).not.toHaveBeenCalled();
@@ -194,7 +211,8 @@ describe('the transfer arrives before the form is finished', () => {
     matchedPaymentId: null,
     matchedTopupId: null,
     occurredAt: new Date('2026-09-16T04:55:27Z'),
-    rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك من محمد طه عطية مسعود على برقم مرجعي 3979e788',
+    rawMessage:
+      'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك من محمد طه عطية مسعود على برقم مرجعي 3979e788',
   };
 
   it('finds the transfer that arrived first and credits it — once', async () => {
@@ -211,7 +229,12 @@ describe('the transfer arrives before the form is finished', () => {
   it('(13) a receipt with no name in the SMS is not enough', async () => {
     const f = matchingFake({
       topups: [topupRow],
-      events: [{ ...eventRow, rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك برقم مرجعي 3979e788' }],
+      events: [
+        {
+          ...eventRow,
+          rawMessage: 'تم تنفيذ تحويل لحظي بمبلغ 2000.00 جم إلى حسابك برقم مرجعي 3979e788',
+        },
+      ],
     });
     expect((await f.svc.reconcileTopup('top1')).status).not.toBe('MATCHED');
     expect(f.wallet.approveTopup).not.toHaveBeenCalled();
@@ -230,7 +253,12 @@ describe('the transfer arrives before the form is finished', () => {
   });
 
   it('still reconciles a Vodafone top-up by its wallet number', async () => {
-    const vf = { ...topupRow, method: 'VODAFONE_CASH', reference: '01284120292', proofReading: null };
+    const vf = {
+      ...topupRow,
+      method: 'VODAFONE_CASH',
+      reference: '01284120292',
+      proofReading: null,
+    };
     const vfEvent = {
       ...eventRow,
       provider: 'VODAFONE_CASH',

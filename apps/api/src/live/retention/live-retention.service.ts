@@ -41,7 +41,9 @@ export class LiveRetentionService {
     private readonly storage: StorageProvider,
   ) {}
 
-  async sweep(now = Date.now()): Promise<{ audioPieces: number; audioFolders: number; recordings: number }> {
+  async sweep(
+    now = Date.now(),
+  ): Promise<{ audioPieces: number; audioFolders: number; recordings: number }> {
     const audioCut = new Date(now - transcriptionConfig().audioRetentionHours * 3600_000);
 
     // 1. Pieces that outlived their purpose — a whole class at a time, once its
@@ -67,7 +69,9 @@ export class LiveRetentionService {
       if (!p.audioDeletedAt) await this.storage.delete(p.key).catch(() => undefined);
     }
     if (stale.length) {
-      await this.prisma.liveAudioSegment.deleteMany({ where: { id: { in: stale.map((p) => p.id) } } }).catch(() => undefined);
+      await this.prisma.liveAudioSegment
+        .deleteMany({ where: { id: { in: stale.map((p) => p.id) } } })
+        .catch(() => undefined);
     }
 
     // 2. What is left in the folders of classes that old (orphaned objects).
@@ -92,7 +96,10 @@ export class LiveRetentionService {
     // 3. Failed recordings' raw pieces.
     const recCut = new Date(now - failedRecordingRetentionHours() * 3600_000);
     const failed = await this.prisma.liveRecording.findMany({
-      where: { status: 'FAILED', failedAt: { lt: recCut, gte: new Date(recCut.getTime() - LOOKBACK_MS) } },
+      where: {
+        status: 'FAILED',
+        failedAt: { lt: recCut, gte: new Date(recCut.getTime() - LOOKBACK_MS) },
+      },
       select: { id: true },
       take: BATCH,
     });
@@ -105,6 +112,10 @@ export class LiveRetentionService {
         `live.retention audioPieces=${stale.length} audioFolders=${oldClasses.length} failedRecordings=${failed.length}`,
       );
     }
-    return { audioPieces: stale.length, audioFolders: oldClasses.length, recordings: failed.length };
+    return {
+      audioPieces: stale.length,
+      audioFolders: oldClasses.length,
+      recordings: failed.length,
+    };
   }
 }

@@ -565,7 +565,9 @@ describe('Checkpoint C: every recording ends READY or FAILED, with its times', (
     expect(row.error).toMatch(/^FINALIZE_GAVE_UP/);
     expect(row.failedAt).toBeInstanceOf(Date);
     expect(await prisma.videoAsset.count({ where: { originalKey: finalKey(r.id) } })).toBe(0);
-    expect((await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).recordingStatus).toBe('FAILED');
+    expect(
+      (await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } })).recordingStatus,
+    ).toBe('FAILED');
     // The teacher reads a reason they can act on, not the technical one.
     expect((await b.recordings.latestView(w.ls.id))?.failure).toBe('PROCESSING_FAILED');
   });
@@ -581,7 +583,11 @@ describe('Checkpoint C: every recording ends READY or FAILED, with its times', (
       const c = await worker.claimFinalize();
       if (!c) break;
       if (c.id === r.id) mine = c;
-      else await prisma.liveRecording.update({ where: { id: c.id }, data: { leaseUntil: new Date(Date.now() + 3600_000) } });
+      else
+        await prisma.liveRecording.update({
+          where: { id: c.id },
+          data: { leaseUntil: new Date(Date.now() + 3600_000) },
+        });
     }
     expect(mine?.finalizeStartedAt).toBeInstanceOf(Date);
     const first = mine!.finalizeStartedAt!.getTime();
@@ -600,13 +606,23 @@ describe('Checkpoint C: every recording ends READY or FAILED, with its times', (
     const w = await world();
     const b = build();
     const r = await recorded(b, w, [{ uploaded: true }]);
-    await b.worker(await tmp()).finalize(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } }));
+    await b
+      .worker(await tmp())
+      .finalize(await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } }));
     // Still packaging (no worker ever ran it): an hour in, it is left alone…
-    await prisma.liveRecording.update({ where: { id: r.id }, data: { handedAt: new Date(Date.now() - 3600_000) } });
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { handedAt: new Date(Date.now() - 3600_000) },
+    });
     for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
-    expect((await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).status).toBe('PROCESSING');
+    expect((await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } })).status).toBe(
+      'PROCESSING',
+    );
     // …seven hours in, it has stalled.
-    await prisma.liveRecording.update({ where: { id: r.id }, data: { handedAt: new Date(Date.now() - 7 * 3600_000) } });
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { handedAt: new Date(Date.now() - 7 * 3600_000) },
+    });
     for (let i = 0; i < 1000; i++) if (!(await b.recordings.syncProcessing(100))) break;
     const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
     expect(row).toMatchObject({ status: 'FAILED', error: 'PROCESSING_STALLED' });
@@ -618,7 +634,10 @@ describe('Checkpoint C: every recording ends READY or FAILED, with its times', (
     const w = await world();
     const b = build();
     const r = await b.recordings.start(w.scope, w.ls.id, w.teacher.id);
-    await prisma.liveRecording.update({ where: { id: r.id }, data: { createdAt: new Date(Date.now() - 3 * 60_000) } });
+    await prisma.liveRecording.update({
+      where: { id: r.id },
+      data: { createdAt: new Date(Date.now() - 3 * 60_000) },
+    });
     await b.recordings.sweepStale();
     const row = await prisma.liveRecording.findUniqueOrThrow({ where: { id: r.id } });
     expect(row.failedAt).toBeInstanceOf(Date);
@@ -637,12 +656,16 @@ describe('Checkpoint C: temporary media is temporary', () => {
   }
   const HOUR = 3600_000;
 
-  it('a class\'s leftover audio is deleted together once its newest piece is past the window; in-work audio is kept', async () => {
+  it("a class's leftover audio is deleted together once its newest piece is past the window; in-work audio is kept", async () => {
     if (!guard()) return;
     const w = await world();
     await prisma.liveSession.update({
       where: { id: w.ls.id },
-      data: { status: 'ENDED', endedAt: new Date(Date.now() - 30 * HOUR), transcriptionMode: 'AUTO_WHEN_RECORDING' },
+      data: {
+        status: 'ENDED',
+        endedAt: new Date(Date.now() - 30 * HOUR),
+        transcriptionMode: 'AUTO_WHEN_RECORDING',
+      },
     });
     const mk = (seq: number, ageH: number) =>
       prisma.liveAudioSegment.create({
@@ -664,7 +687,10 @@ describe('Checkpoint C: temporary media is temporary', () => {
     expect(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } })).not.toBeNull();
     expect(await prisma.liveAudioSegment.findUnique({ where: { id: fresh.id } })).not.toBeNull();
     // Once the newest piece is past the window too, the class goes — all of it.
-    await prisma.liveAudioSegment.update({ where: { id: fresh.id }, data: { createdAt: new Date(Date.now() - 25 * HOUR) } });
+    await prisma.liveAudioSegment.update({
+      where: { id: fresh.id },
+      data: { createdAt: new Date(Date.now() - 25 * HOUR) },
+    });
     for (let i = 0; i < 200; i++) {
       await r.svc.sweep();
       if (!(await prisma.liveAudioSegment.findUnique({ where: { id: old.id } }))) break;
@@ -675,7 +701,10 @@ describe('Checkpoint C: temporary media is temporary', () => {
 
     // While its transcript is being made, even old audio stays.
     const w2 = await world();
-    await prisma.liveSession.update({ where: { id: w2.ls.id }, data: { transcriptStatus: 'PROCESSING' } });
+    await prisma.liveSession.update({
+      where: { id: w2.ls.id },
+      data: { transcriptStatus: 'PROCESSING' },
+    });
     const busy = await prisma.liveAudioSegment.create({
       data: {
         sessionId: w2.ls.id,
@@ -705,7 +734,8 @@ describe('Checkpoint C: temporary media is temporary', () => {
       },
     });
     const r = retention();
-    for (let i = 0; i < 200 && !r.prefixes.includes(`source/live-rec/${rec.id}/`); i++) await r.svc.sweep();
+    for (let i = 0; i < 200 && !r.prefixes.includes(`source/live-rec/${rec.id}/`); i++)
+      await r.svc.sweep();
     expect(r.prefixes).toContain(`source/live-rec/${rec.id}/`);
     expect(r.prefixes.every((p) => p.startsWith('source/'))).toBe(true);
     expect(r.deleted.some((k) => k.startsWith('hls/'))).toBe(false);

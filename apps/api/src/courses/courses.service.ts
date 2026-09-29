@@ -1232,24 +1232,38 @@ export class CoursesService {
     if (target.unitId) {
       const unit = await this.assertUnit(scope, target.unitId);
       if (unit.courseId !== courseId) {
-        throw new BadRequestException({ message: 'That section does not belong to this course', code: 'UNIT_NOT_IN_COURSE' });
+        throw new BadRequestException({
+          message: 'That section does not belong to this course',
+          code: 'UNIT_NOT_IN_COURSE',
+        });
       }
       unitId = unit.id;
     } else if (target.newUnitTitle?.trim()) {
-      unitId = (await this.createUnit(scope, courseId, { title: target.newUnitTitle.trim().slice(0, 200) })).id;
+      unitId = (
+        await this.createUnit(scope, courseId, { title: target.newUnitTitle.trim().slice(0, 200) })
+      ).id;
     } else {
       unitId = (await this.getOrCreateDefaultUnit(courseId)).id;
     }
 
     const holder = await this.videoHolder(lesson.videoAssetId);
     if (holder && !holder.deleted) {
-      throw new ConflictException({ message: 'This recording is already a lesson', code: 'VIDEO_IN_USE', lessonId: holder.id, courseId: holder.courseId });
+      throw new ConflictException({
+        message: 'This recording is already a lesson',
+        code: 'VIDEO_IN_USE',
+        lessonId: holder.id,
+        courseId: holder.courseId,
+      });
     }
     if (holder) {
       // Deleted rows are invisible to the soft-delete middleware: released directly.
-      await this.prisma.$executeRaw`UPDATE "Lesson" SET "videoAssetId" = NULL WHERE id = ${holder.id}`;
+      await this.prisma
+        .$executeRaw`UPDATE "Lesson" SET "videoAssetId" = NULL WHERE id = ${holder.id}`;
     }
-    const last = await this.prisma.lesson.aggregate({ where: { unitId }, _max: { sortOrder: true } });
+    const last = await this.prisma.lesson.aggregate({
+      where: { unitId },
+      _max: { sortOrder: true },
+    });
     try {
       return await this.prisma.lesson.create({
         data: {
@@ -1270,7 +1284,12 @@ export class CoursesService {
       // link lets exactly one lesson exist.
       if ((e as { code?: string }).code === 'P2002') {
         const h = await this.videoHolder(lesson.videoAssetId);
-        throw new ConflictException({ message: 'This recording is already a lesson', code: 'VIDEO_IN_USE', lessonId: h?.id, courseId: h?.courseId });
+        throw new ConflictException({
+          message: 'This recording is already a lesson',
+          code: 'VIDEO_IN_USE',
+          lessonId: h?.id,
+          courseId: h?.courseId,
+        });
       }
       throw e;
     }
@@ -1293,7 +1312,10 @@ export class CoursesService {
       throw new BadRequestException({ message: 'That lesson is not an exam', code: 'NOT_AN_EXAM' });
     }
     if (exam.unit.courseId !== after.unit.courseId) {
-      throw new BadRequestException({ message: 'The exam must be in the same course as the lesson', code: 'EXAM_OTHER_COURSE' });
+      throw new BadRequestException({
+        message: 'The exam must be in the same course as the lesson',
+        code: 'EXAM_OTHER_COURSE',
+      });
     }
     await this.prisma.$transaction([
       this.prisma.lesson.updateMany({

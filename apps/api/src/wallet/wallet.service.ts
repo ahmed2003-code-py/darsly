@@ -197,7 +197,14 @@ export class WalletService {
    */
   async declareTopup(
     userId: string,
-    dto: { amountCents: number; method: string; source: 'WALLET' | 'BANK'; senderWallet?: string; payerName?: string; reference?: string },
+    dto: {
+      amountCents: number;
+      method: string;
+      source: 'WALLET' | 'BANK';
+      senderWallet?: string;
+      payerName?: string;
+      reference?: string;
+    },
   ) {
     const student = await this.studentOf(userId);
     const amount = Math.round(dto.amountCents);
@@ -205,7 +212,10 @@ export class WalletService {
       throw new BadRequestException({ message: 'Invalid top-up amount', code: 'INVALID_AMOUNT' });
     }
     if (!['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'].includes(dto.method)) {
-      throw new BadRequestException({ message: 'Choose which Darsly account you are sending to', code: 'METHOD_INVALID' });
+      throw new BadRequestException({
+        message: 'Choose which Darsly account you are sending to',
+        code: 'METHOD_INVALID',
+      });
     }
     const declared = normalizeDeclaration({ ...dto }, await this.receivingHandles());
     const fields = {
@@ -215,11 +225,19 @@ export class WalletService {
       reference: declared.reference,
       payerName: declared.payerName,
     };
-    const open = await this.prisma.walletTopup.findFirst({ where: { studentId: student.id, status: 'PENDING' } });
+    const open = await this.prisma.walletTopup.findFirst({
+      where: { studentId: student.id, status: 'PENDING' },
+    });
     if (open) return this.redeclareTopup(open, fields);
     try {
       const t = await this.prisma.walletTopup.create({
-        data: { studentId: student.id, status: 'PENDING', proofImageUrl: null, claimedAt: null, ...fields },
+        data: {
+          studentId: student.id,
+          status: 'PENDING',
+          proofImageUrl: null,
+          claimedAt: null,
+          ...fields,
+        },
         select: { id: true },
       });
       return t;
@@ -227,7 +245,9 @@ export class WalletService {
       // Two declarations in the same instant: the one-pending index let one
       // through; this is the other — and the answer is the one that exists.
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        const again = await this.prisma.walletTopup.findFirst({ where: { studentId: student.id, status: 'PENDING' } });
+        const again = await this.prisma.walletTopup.findFirst({
+          where: { studentId: student.id, status: 'PENDING' },
+        });
         if (again) return this.redeclareTopup(again, fields);
       }
       throw e;
@@ -238,16 +258,25 @@ export class WalletService {
     open: { id: string; claimedAt: Date | null; proofImageUrl: string | null },
     fields: Record<string, unknown>,
   ) {
-    const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedTopupId: open.id }, select: { id: true } });
+    const matched = await this.prisma.paymentEvent.findFirst({
+      where: { matchedTopupId: open.id },
+      select: { id: true },
+    });
     if (open.claimedAt || open.proofImageUrl || matched) {
-      throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
+      throw new BadRequestException({
+        message: 'A top-up is already under review',
+        code: 'TOPUP_PENDING',
+      });
     }
     const flip = await this.prisma.walletTopup.updateMany({
       where: { id: open.id, status: 'PENDING', claimedAt: null },
       data: fields as never,
     });
     if (flip.count === 0) {
-      throw new BadRequestException({ message: 'A top-up is already under review', code: 'TOPUP_PENDING' });
+      throw new BadRequestException({
+        message: 'A top-up is already under review',
+        code: 'TOPUP_PENDING',
+      });
     }
     return { id: open.id };
   }
@@ -259,17 +288,32 @@ export class WalletService {
     if (!t || t.studentId !== student.id) throw new NotFoundException('Top-up not found');
     if (t.status === 'APPROVED') return this.topupStatus(userId, id); // the SMS came first
     if (t.status !== 'PENDING' || t.claimedAt) {
-      throw new BadRequestException({ message: 'A proof for this top-up was already sent', code: 'TOPUP_PENDING' });
+      throw new BadRequestException({
+        message: 'A proof for this top-up was already sent',
+        code: 'TOPUP_PENDING',
+      });
     }
     const reading = await this.proofReader.read(proofImageUrl);
-    const check = checkProofAgainstClaim(reading, { amountCents: t.amountCents }, await this.receivingHandles());
+    const check = checkProofAgainstClaim(
+      reading,
+      { amountCents: t.amountCents },
+      await this.receivingHandles(),
+    );
     if (check.verdict === 'DISAGREES') {
-      throw new BadRequestException({ message: check.problems.join(' '), code: 'PROOF_DISAGREES', problems: check.problems });
+      throw new BadRequestException({
+        message: check.problems.join(' '),
+        code: 'PROOF_DISAGREES',
+        problems: check.problems,
+      });
     }
     const proofKey = await this.proofs.store('topups', proofImageUrl, PROOF_MAX_BYTES);
     const flip = await this.prisma.walletTopup.updateMany({
       where: { id, status: 'PENDING', claimedAt: null },
-      data: { proofImageUrl: proofKey, proofReading: (reading ?? undefined) as never, claimedAt: new Date() },
+      data: {
+        proofImageUrl: proofKey,
+        proofReading: (reading ?? undefined) as never,
+        claimedAt: new Date(),
+      },
     });
     if (flip.count === 0) {
       await this.proofs.discard(proofKey);
@@ -294,7 +338,10 @@ export class WalletService {
   /** The student's open top-up, if any — to resume where they left off. */
   async openTopup(userId: string) {
     const student = await this.studentOf(userId);
-    const t = await this.prisma.walletTopup.findFirst({ where: { studentId: student.id, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    const t = await this.prisma.walletTopup.findFirst({
+      where: { studentId: student.id, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+    });
     return t ? this.topupView(t, student.id) : null;
   }
 
@@ -336,17 +383,29 @@ export class WalletService {
    */
   async expireDeclaredTopups(olderThanMs: number, limit = 100): Promise<number> {
     const rows = await this.prisma.walletTopup.findMany({
-      where: { status: 'PENDING', claimedAt: null, proofImageUrl: null, createdAt: { lt: new Date(Date.now() - olderThanMs) } },
+      where: {
+        status: 'PENDING',
+        claimedAt: null,
+        proofImageUrl: null,
+        createdAt: { lt: new Date(Date.now() - olderThanMs) },
+      },
       select: { id: true },
       take: limit,
     });
     let expired = 0;
     for (const r of rows) {
-      const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedTopupId: r.id }, select: { id: true } });
+      const matched = await this.prisma.paymentEvent.findFirst({
+        where: { matchedTopupId: r.id },
+        select: { id: true },
+      });
       if (matched) continue;
       const flip = await this.prisma.walletTopup.updateMany({
         where: { id: r.id, status: 'PENDING', claimedAt: null },
-        data: { status: 'REJECTED', rejectedReason: 'انتهت مهلة التحويل — ما وصلش تحويل خلال 72 ساعة', reviewedAt: new Date() },
+        data: {
+          status: 'REJECTED',
+          rejectedReason: 'انتهت مهلة التحويل — ما وصلش تحويل خلال 72 ساعة',
+          reviewedAt: new Date(),
+        },
       });
       expired += flip.count;
     }

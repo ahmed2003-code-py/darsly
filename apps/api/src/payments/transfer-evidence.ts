@@ -51,7 +51,12 @@ export interface EventEvidence {
  * all (a structured caller) falls back to the identifiers it was given.
  */
 export function eventEvidence(
-  input: { rawMessage?: string | null; reference?: string | null; identities?: string[] | null; payerName?: string | null },
+  input: {
+    rawMessage?: string | null;
+    reference?: string | null;
+    identities?: string[] | null;
+    payerName?: string | null;
+  },
   receiving: string[],
 ): EventEvidence {
   const raw = (input.rawMessage ?? '').trim();

@@ -52,8 +52,14 @@ describe('modes and switches', () => {
     expect(transcriptionConfig({ LIVE_TRANSCRIPTION_ENABLED: 'true' }).enabled).toBe(false);
     expect(transcriptionConfig({ OPENAI_API_KEY: 'k' }).enabled).toBe(false);
     const on = transcriptionConfig({ LIVE_TRANSCRIPTION_ENABLED: 'true', OPENAI_API_KEY: 'k' });
-    expect(on).toMatchObject({ enabled: true, model: 'gpt-4o-mini-transcribe', defaultMode: 'AUTO_WHEN_RECORDING' });
-    expect(transcriptionConfig({ LIVE_TRANSCRIPTION_DEFAULT_MODE: 'manual' }).defaultMode).toBe('MANUAL');
+    expect(on).toMatchObject({
+      enabled: true,
+      model: 'gpt-4o-mini-transcribe',
+      defaultMode: 'AUTO_WHEN_RECORDING',
+    });
+    expect(transcriptionConfig({ LIVE_TRANSCRIPTION_DEFAULT_MODE: 'manual' }).defaultMode).toBe(
+      'MANUAL',
+    );
     expect(transcriptionConfig({ LIVE_TRANSCRIPTION_DEFAULT_MODE: 'nonsense' }).defaultMode).toBe(
       'AUTO_WHEN_RECORDING',
     );
@@ -68,10 +74,16 @@ describe('modes and switches', () => {
     // Recording is not transcription: MANUAL ignores it.
     expect(captureActive({ ...base, mode: 'MANUAL', recording: true })).toBe(false);
     expect(captureActive({ ...base, mode: 'MANUAL', captureOnAt: t(1) })).toBe(true);
-    expect(captureActive({ ...base, mode: 'MANUAL', captureOnAt: t(1), captureOffAt: t(2) })).toBe(false);
-    expect(captureActive({ ...base, mode: 'MANUAL', captureOnAt: t(3), captureOffAt: t(2) })).toBe(true);
+    expect(captureActive({ ...base, mode: 'MANUAL', captureOnAt: t(1), captureOffAt: t(2) })).toBe(
+      false,
+    );
+    expect(captureActive({ ...base, mode: 'MANUAL', captureOnAt: t(3), captureOffAt: t(2) })).toBe(
+      true,
+    );
     // The global switch wins over everything.
-    expect(captureActive({ ...base, enabled: false, mode: 'AUTO_WHEN_RECORDING', recording: true })).toBe(false);
+    expect(
+      captureActive({ ...base, enabled: false, mode: 'AUTO_WHEN_RECORDING', recording: true }),
+    ).toBe(false);
   });
 
   it('reads what the bytes are, not what the upload claims', () => {
@@ -94,7 +106,13 @@ describe('the lesson-audio upload', () => {
   };
   function setup(
     session: Record<string, unknown> | null,
-    opts: { mode?: string; onAt?: Date | null; offAt?: Date | null; recording?: any; recent?: number } = {},
+    opts: {
+      mode?: string;
+      onAt?: Date | null;
+      offAt?: Date | null;
+      recording?: any;
+      recent?: number;
+    } = {},
   ) {
     const rows: any[] = [];
     const prisma = {
@@ -114,7 +132,10 @@ describe('the lesson-audio upload', () => {
         ),
       },
       liveAudioSegment: {
-        findUnique: jest.fn(async ({ where }: any) => rows.find((r) => r.seq === where.sessionId_roomName_seq.seq) ?? null),
+        findUnique: jest.fn(
+          async ({ where }: any) =>
+            rows.find((r) => r.seq === where.sessionId_roomName_seq.seq) ?? null,
+        ),
         count: jest.fn(async () => opts.recent ?? 0),
         upsert: jest.fn(async ({ where, create, update }: any) => {
           const hit = rows.find((r) => r.seq === where.sessionId_roomName_seq.seq);
@@ -125,15 +146,35 @@ describe('the lesson-audio upload', () => {
     };
     const storage = { put: jest.fn(async () => undefined) };
     const svc = new LiveService(
-      prisma as any, {} as any, {} as any, dailyProviders({}), {} as any, {} as any, {} as any,
+      prisma as any,
+      {} as any,
+      {} as any,
+      dailyProviders({}),
+      {} as any,
+      {} as any,
+      {} as any,
       storage as any,
     );
     return { svc, rows, storage, prisma };
   }
-  const live = { id: 's1', provider: 'CLOUDFLARE', roomName: 'cf-room', status: 'LIVE', endedAt: null };
-  const file = (b = webm(), mimetype = 'audio/webm;codecs=opus') => ({ buffer: b, size: b.length, mimetype });
+  const live = {
+    id: 's1',
+    provider: 'CLOUDFLARE',
+    roomName: 'cf-room',
+    status: 'LIVE',
+    endedAt: null,
+  };
+  const file = (b = webm(), mimetype = 'audio/webm;codecs=opus') => ({
+    buffer: b,
+    size: b.length,
+    mimetype,
+  });
   const T = () => Math.floor(Date.now() / 1000);
-  const code = (p: Promise<unknown>) => p.then(() => 'ok', (e: any) => e?.response?.code ?? e?.message);
+  const code = (p: Promise<unknown>) =>
+    p.then(
+      () => 'ok',
+      (e: any) => e?.response?.code ?? e?.message,
+    );
 
   it('is refused while transcription is switched off', async () => {
     delete process.env.LIVE_TRANSCRIPTION_ENABLED;
@@ -152,15 +193,24 @@ describe('the lesson-audio upload', () => {
       const { svc, rows, storage } = setup(live);
       const t = T();
       await svc.storeAudioPiece(scope, 's1', t, file(), 180_000);
-      expect(await svc.storeAudioPiece(scope, 's1', t, file(), 180_000)).toMatchObject({ duplicate: true });
+      expect(await svc.storeAudioPiece(scope, 's1', t, file(), 180_000)).toMatchObject({
+        duplicate: true,
+      });
       expect(rows).toEqual([
-        expect.objectContaining({ seq: t, sizeBytes: 4000, durationMs: 180_000, key: audioKey('s1', 'cf-room', t) }),
+        expect.objectContaining({
+          seq: t,
+          sizeBytes: 4000,
+          durationMs: 180_000,
+          key: audioKey('s1', 'cf-room', t),
+        }),
       ]);
       expect(storage.put).toHaveBeenCalledTimes(1);
       expect((storage.put.mock.calls[0] as any[])[0]).toMatch(/^source\/live-audio\//);
       // Already transcribed: a different upload for that second is ignored too.
       rows[0].text = 'words';
-      expect(await svc.storeAudioPiece(scope, 's1', t, file(webm(5000)))).toMatchObject({ duplicate: true });
+      expect(await svc.storeAudioPiece(scope, 's1', t, file(webm(5000)))).toMatchObject({
+        duplicate: true,
+      });
       expect(rows[0].sizeBytes).toBe(4000);
     });
 
@@ -175,7 +225,9 @@ describe('the lesson-audio upload', () => {
       const { svc } = setup(live);
       const html = Buffer.from('<html>'.padEnd(4000, 'x'));
       expect(await code(svc.storeAudioPiece(scope, 's1', T(), file(html)))).toBe('BAD_AUDIO');
-      expect(await code(svc.storeAudioPiece(scope, 's1', T(), file(webm(), 'text/html')))).toBe('BAD_AUDIO');
+      expect(await code(svc.storeAudioPiece(scope, 's1', T(), file(webm(), 'text/html')))).toBe(
+        'BAD_AUDIO',
+      );
       expect(await code(svc.storeAudioPiece(scope, 's1', T(), file(webm(50))))).toBe('EMPTY_AUDIO');
     });
 
@@ -185,80 +237,123 @@ describe('the lesson-audio upload', () => {
     });
 
     it('OFF mode, and capture that is off, take nothing', async () => {
-      expect(await code(setup(live, { mode: 'OFF' }).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
-        'CAPTURE_OFF',
-      );
+      expect(
+        await code(setup(live, { mode: 'OFF' }).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('CAPTURE_OFF');
       // AUTO with no recording running.
-      expect(await code(setup(live, { recording: null }).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
-        'CAPTURE_OFF',
-      );
+      expect(
+        await code(setup(live, { recording: null }).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('CAPTURE_OFF');
       // MANUAL, never switched on.
-      expect(await code(setup(live, { mode: 'MANUAL' }).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
-        'CAPTURE_OFF',
-      );
+      expect(
+        await code(setup(live, { mode: 'MANUAL' }).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('CAPTURE_OFF');
       // MANUAL, switched on.
       expect(
-        await code(setup(live, { mode: 'MANUAL', onAt: new Date() }).svc.storeAudioPiece(scope, 's1', T(), file())),
+        await code(
+          setup(live, { mode: 'MANUAL', onAt: new Date() }).svc.storeAudioPiece(
+            scope,
+            's1',
+            T(),
+            file(),
+          ),
+        ),
       ).toBe('ok');
     });
 
     it('takes the piece flushed just after capture stopped, and nothing much later', async () => {
       const stopped = (ago: number) => ({
-        recording: { status: 'UPLOADING', stopRequestedAt: new Date(Date.now() - ago), stoppedAt: null },
+        recording: {
+          status: 'UPLOADING',
+          stopRequestedAt: new Date(Date.now() - ago),
+          stoppedAt: null,
+        },
       });
-      expect(await code(setup(live, stopped(5_000)).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('ok');
-      expect(await code(setup(live, stopped(10 * 60_000)).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
-        'CAPTURE_OFF',
-      );
+      expect(
+        await code(setup(live, stopped(5_000)).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('ok');
+      expect(
+        await code(setup(live, stopped(10 * 60_000)).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('CAPTURE_OFF');
     });
 
     it('takes the last piece just after the end, and nothing later', async () => {
       const justEnded = { ...live, status: 'ENDED', endedAt: new Date(Date.now() - 5_000) };
       expect(await code(setup(justEnded).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('ok');
       const longAgo = { ...live, status: 'ENDED', endedAt: new Date(Date.now() - 10 * 60_000) };
-      expect(await code(setup(longAgo).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('NOT_LIVE');
+      expect(await code(setup(longAgo).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
+        'NOT_LIVE',
+      );
     });
 
     it('refuses a Daily class, a bad piece number and an empty file', async () => {
-      expect(await code(setup({ ...live, provider: 'DAILY' }).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
-        'NOT_CLOUDFLARE',
-      );
+      expect(
+        await code(
+          setup({ ...live, provider: 'DAILY' }).svc.storeAudioPiece(scope, 's1', T(), file()),
+        ),
+      ).toBe('NOT_CLOUDFLARE');
       expect(await code(setup(live).svc.storeAudioPiece(scope, 's1', 7, file()))).toBe('BAD_SEQ');
-      expect(await code(setup(live).svc.storeAudioPiece(scope, 's1', T(), undefined))).toBe('EMPTY_AUDIO');
+      expect(await code(setup(live).svc.storeAudioPiece(scope, 's1', T(), undefined))).toBe(
+        'EMPTY_AUDIO',
+      );
     });
 
     it("someone else's class is not found", async () => {
-      expect(await code(setup(null).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe('Session not found');
+      expect(await code(setup(null).svc.storeAudioPiece(scope, 's1', T(), file()))).toBe(
+        'Session not found',
+      );
     });
   });
 });
 
 describe('what a transcription failure is (2026-09-27: every call refused 429 insufficient_quota)', () => {
-  const body = (code: string, type = code) => JSON.stringify({ error: { message: 'x', type, code } });
+  const body = (code: string, type = code) =>
+    JSON.stringify({ error: { message: 'x', type, code } });
 
   it('no credits / billing / a bad key is the ACCOUNT — final, never waited on', () => {
     const quota = classifySttRefusal(429, body('insufficient_quota'));
-    expect(quota).toMatchObject({ kind: 'ACCOUNT', errorClass: 'TERMINAL', detail: '429 insufficient_quota' });
+    expect(quota).toMatchObject({
+      kind: 'ACCOUNT',
+      errorClass: 'TERMINAL',
+      detail: '429 insufficient_quota',
+    });
     expect(classifySttRefusal(401, body('invalid_api_key')).kind).toBe('ACCOUNT');
     expect(classifySttRefusal(403, '').kind).toBe('ACCOUNT');
     expect(classifySttRefusal(400, body('billing_hard_limit_reached')).kind).toBe('ACCOUNT');
     // The exact production body (the code is null there; the type carries it).
-    const prod = JSON.stringify({ error: { message: 'You have no credits remaining.', type: 'insufficient_quota', param: null, code: null } });
+    const prod = JSON.stringify({
+      error: {
+        message: 'You have no credits remaining.',
+        type: 'insufficient_quota',
+        param: null,
+        code: null,
+      },
+    });
     expect(classifySttRefusal(429, prod).kind).toBe('ACCOUNT');
     // Stored detail is short: no provider message, no URL.
     expect(quota.detail).not.toMatch(/credits|http/);
   });
 
   it('a true rate limit, an outage and a timeout are worth another try; a rate limit keeps its Retry-After', () => {
-    expect(classifySttRefusal(429, body('rate_limit_exceeded'), '7')).toMatchObject({ kind: 'RATE_LIMIT', errorClass: 'RETRYABLE', retryAfterMs: 7000 });
-    expect(classifySttRefusal(429, '')).toMatchObject({ kind: 'RATE_LIMIT', retryAfterMs: undefined });
+    expect(classifySttRefusal(429, body('rate_limit_exceeded'), '7')).toMatchObject({
+      kind: 'RATE_LIMIT',
+      errorClass: 'RETRYABLE',
+      retryAfterMs: 7000,
+    });
+    expect(classifySttRefusal(429, '')).toMatchObject({
+      kind: 'RATE_LIMIT',
+      retryAfterMs: undefined,
+    });
     expect(classifySttRefusal(500, '')).toMatchObject({ kind: 'SERVER', errorClass: 'RETRYABLE' });
     expect(classifySttRefusal(502, '<html>bad gateway</html>').kind).toBe('SERVER');
     expect(new SttError('TIMEOUT', 'TimeoutError').errorClass).toBe('RETRYABLE');
   });
 
   it('a file it cannot read fails that piece only; anything else thrown counts as a network failure', () => {
-    expect(classifySttRefusal(400, body('invalid_value'))).toMatchObject({ kind: 'BAD_AUDIO', errorClass: 'TERMINAL' });
+    expect(classifySttRefusal(400, body('invalid_value'))).toMatchObject({
+      kind: 'BAD_AUDIO',
+      errorClass: 'TERMINAL',
+    });
     expect(classifySttRefusal(415, '').kind).toBe('BAD_AUDIO');
     expect(classifySttRefusal(404, '').kind).toBe('REQUEST');
     expect(sttFailureKind(new Error('socket hang up'))).toBe('NETWORK');

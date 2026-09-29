@@ -772,7 +772,10 @@ describe('B.7 on Postgres: rules, and what a finished lesson shows', () => {
     expect(d.summary).toMatchObject({ stage: 'UNAVAILABLE', canGenerate: false });
     // Being transcribed: TRANSCRIBING, and the summary waits for it — while
     // the recording is still packaging.
-    await prisma.liveSession.update({ where: { id: w.ls.id }, data: { transcriptStatus: 'PROCESSING' } });
+    await prisma.liveSession.update({
+      where: { id: w.ls.id },
+      data: { transcriptStatus: 'PROCESSING' },
+    });
     const d2: any = await svc.sessionDetail(w.teacher.id, w.ls.id);
     expect(d2.transcript).toMatchObject({ stage: 'TRANSCRIBING' });
     expect(d2.summary).toMatchObject({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });

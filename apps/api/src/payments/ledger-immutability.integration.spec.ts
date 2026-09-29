@@ -31,12 +31,22 @@ describe('Ledger immutability on Postgres', () => {
     const txnId = await ledger.creditWallet(student.id, 1_234, 'immutability test');
     const entry = await prisma.ledgerEntry.findFirstOrThrow({ where: { transactionId: txnId } });
 
-    await expect(prisma.ledgerEntry.update({ where: { id: entry.id }, data: { amountCents: 1 } })).rejects.toThrow(/append-only/);
-    await expect(prisma.$executeRaw`DELETE FROM "LedgerEntry" WHERE id = ${entry.id}`).rejects.toThrow(/append-only/);
+    await expect(
+      prisma.ledgerEntry.update({ where: { id: entry.id }, data: { amountCents: 1 } }),
+    ).rejects.toThrow(/append-only/);
+    await expect(
+      prisma.$executeRaw`DELETE FROM "LedgerEntry" WHERE id = ${entry.id}`,
+    ).rejects.toThrow(/append-only/);
     // The middleware turns this into UPDATE ... SET deletedAt — refused too.
-    await expect(prisma.ledgerEntry.delete({ where: { id: entry.id } })).rejects.toThrow(/append-only/);
-    await expect(prisma.ledgerTransaction.update({ where: { id: txnId }, data: { description: 'x' } })).rejects.toThrow(/append-only/);
-    await expect(prisma.ledgerTransaction.delete({ where: { id: txnId } })).rejects.toThrow(/append-only/);
+    await expect(prisma.ledgerEntry.delete({ where: { id: entry.id } })).rejects.toThrow(
+      /append-only/,
+    );
+    await expect(
+      prisma.ledgerTransaction.update({ where: { id: txnId }, data: { description: 'x' } }),
+    ).rejects.toThrow(/append-only/);
+    await expect(prisma.ledgerTransaction.delete({ where: { id: txnId } })).rejects.toThrow(
+      /append-only/,
+    );
     // Still there, still counting.
     expect(await ledger.walletBalance(student.id)).toBe(1_234);
   });

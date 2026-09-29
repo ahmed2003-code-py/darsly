@@ -135,7 +135,6 @@ export class LiveRtcController {
   constructor(private readonly rtc: LiveRtcService) {}
 
   @Get('live/:id/rtc/state')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Who is in the classroom, what is published, who may speak' })
@@ -145,7 +144,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Open a WebRTC connection to the classroom' })
@@ -155,7 +153,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/publish')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Send tracks (checked against what this person may send)' })
@@ -170,7 +167,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/subscribe')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Receive published tracks' })
@@ -185,7 +181,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/layer')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Receive a different simulcast layer of a video' })
@@ -200,7 +195,6 @@ export class LiveRtcController {
   }
 
   @Put('live/:id/rtc/connections/:cid/renegotiate')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   renegotiate(
@@ -214,7 +208,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/connections/:cid/close-tracks')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   closeTracks(
@@ -228,7 +221,6 @@ export class LiveRtcController {
   }
 
   @Delete('live/:id/rtc/connections/:cid')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   close(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('cid') cid: string) {
@@ -237,7 +229,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/hand')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'Raise or lower your hand' })
@@ -247,7 +238,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/hand/:userId')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: "The teacher approves, rejects or revokes a student's hand" })
@@ -262,7 +252,6 @@ export class LiveRtcController {
   }
 
   @Post('live/:id/rtc/remove/:userId')
-
   @GuestAllowed()
   @Roles(Role.STUDENT, Role.TEACHER)
   @ApiOperation({ summary: 'The teacher removes someone from the classroom' })

@@ -2,7 +2,11 @@ import { BadRequestException, ConflictException, Injectable, Logger } from '@nes
 import { Prisma } from '@prisma/client';
 import { CourseScope, CoursesService } from '../courses/courses.service';
 import { LiveScope, LiveService } from '../live/live.service';
-import { ImportScope, PaperImportService, type UploadedPaper } from '../paper-import/paper-import.service';
+import {
+  ImportScope,
+  PaperImportService,
+  type UploadedPaper,
+} from '../paper-import/paper-import.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Everything a teacher's request carries: the three scopes the reused services speak. */
@@ -63,7 +67,14 @@ export class LiveContentService {
         title: true,
         type: true,
         videoAssetId: true,
-        unit: { select: { id: true, title: true, isDefault: true, course: { select: { id: true, title: true, status: true } } } },
+        unit: {
+          select: {
+            id: true,
+            title: true,
+            isDefault: true,
+            course: { select: { id: true, title: true, status: true } },
+          },
+        },
         quiz: { select: { _count: { select: { questions: true } } } },
       },
     });
@@ -82,7 +93,8 @@ export class LiveContentService {
         usable: transcript.usable,
         partial: transcript.partial,
         // How much class the transcript covers — for "نص الحصة (١٢ دقيقة)".
-        durationSec: ((s.transcriptMeta ?? null) as { audioSeconds?: number } | null)?.audioSeconds ?? null,
+        durationSec:
+          ((s.transcriptMeta ?? null) as { audioSeconds?: number } | null)?.audioSeconds ?? null,
       },
       summaryReady: s.summaryStatus === 'READY' && !!s.summary,
       lessons: lessons.map((l) => ({
@@ -95,7 +107,13 @@ export class LiveContentService {
         questionCount: l.quiz?._count.questions ?? null,
       })),
       examSession: exam
-        ? { id: exam.id, status: exam.status, stage: exam.stage, lessonId: exam.lessonId, partial: !!(exam.sourceMeta as { partial?: boolean } | null)?.partial }
+        ? {
+            id: exam.id,
+            status: exam.status,
+            stage: exam.stage,
+            lessonId: exam.lessonId,
+            partial: !!(exam.sourceMeta as { partial?: boolean } | null)?.partial,
+          }
         : null,
     };
   }
@@ -111,10 +129,16 @@ export class LiveContentService {
     return this.claimed(sessionId, async () => {
       const { session: s, recording } = await this.live.contentSource(scope.live, sessionId);
       if (s.status !== 'ENDED') {
-        throw new ConflictException({ message: 'The class has not ended', code: 'CLASS_NOT_ENDED' });
+        throw new ConflictException({
+          message: 'The class has not ended',
+          code: 'CLASS_NOT_ENDED',
+        });
       }
       if (!recording) {
-        throw new ConflictException({ message: 'The recording is not ready', code: 'RECORDING_NOT_READY' });
+        throw new ConflictException({
+          message: 'The recording is not ready',
+          code: 'RECORDING_NOT_READY',
+        });
       }
       const holder = await this.courses.videoHolder(recording.videoAssetId);
       if (holder && !holder.deleted) {
@@ -123,11 +147,17 @@ export class LiveContentService {
 
       const transcript = this.transcriptOf(s);
       if (dto.includeTranscript && !transcript.usable) {
-        throw new ConflictException({ message: 'There is no transcript to include', code: 'TRANSCRIPT_NOT_AVAILABLE' });
+        throw new ConflictException({
+          message: 'There is no transcript to include',
+          code: 'TRANSCRIPT_NOT_AVAILABLE',
+        });
       }
       const summaryReady = s.summaryStatus === 'READY' && !!s.summary;
       if (dto.includeSummary && !summaryReady) {
-        throw new ConflictException({ message: 'There is no summary to include', code: 'SUMMARY_NOT_AVAILABLE' });
+        throw new ConflictException({
+          message: 'There is no summary to include',
+          code: 'SUMMARY_NOT_AVAILABLE',
+        });
       }
       // A frozen copy, not a pointer: regenerating the class's summary later
       // must never change what a published lesson shows.
@@ -145,7 +175,10 @@ export class LiveContentService {
       let courseId: string;
       if (dto.target === 'NEW_COURSE') {
         if (!dto.newCourse?.title?.trim() || !dto.newCourse.gradeId) {
-          throw new BadRequestException({ message: 'Name the course and choose its school year', code: 'NEW_COURSE_INCOMPLETE' });
+          throw new BadRequestException({
+            message: 'Name the course and choose its school year',
+            code: 'NEW_COURSE_INCOMPLETE',
+          });
         }
         // The ordinary course creation: DRAFT, free until the teacher prices
         // it, years and subject checked as for a course made by hand.
@@ -157,14 +190,18 @@ export class LiveContentService {
         } as never);
         courseId = course.id;
       } else {
-        if (!dto.courseId) throw new BadRequestException({ message: 'Choose a course', code: 'COURSE_REQUIRED' });
+        if (!dto.courseId)
+          throw new BadRequestException({ message: 'Choose a course', code: 'COURSE_REQUIRED' });
         courseId = dto.courseId;
       }
 
       const lesson = await this.courses.addRecordedLesson(
         scope.course,
         courseId,
-        { unitId: dto.target === 'EXISTING_COURSE' ? dto.unitId : undefined, newUnitTitle: dto.newUnitTitle },
+        {
+          unitId: dto.target === 'EXISTING_COURSE' ? dto.unitId : undefined,
+          newUnitTitle: dto.newUnitTitle,
+        },
         {
           title: dto.title?.trim() || s.title,
           description: dto.description ?? (s.description || undefined),
@@ -206,20 +243,35 @@ export class LiveContentService {
   async createExam(
     scope: ContentScope,
     sessionId: string,
-    dto: { acknowledgePartial?: boolean; title?: string; transcript?: boolean; files?: UploadedPaper[] },
+    dto: {
+      acknowledgePartial?: boolean;
+      title?: string;
+      transcript?: boolean;
+      files?: UploadedPaper[];
+    },
   ) {
     const files = dto.files ?? [];
     const withTranscript = dto.transcript !== false;
     if (!withTranscript && !files.length) {
-      throw new BadRequestException({ message: 'Choose the transcript, a file, or both', code: 'NO_SOURCE' });
+      throw new BadRequestException({
+        message: 'Choose the transcript, a file, or both',
+        code: 'NO_SOURCE',
+      });
     }
     return this.claimed(sessionId, async () => {
       const { session: s } = await this.live.contentSource(scope.live, sessionId);
       if (s.status !== 'ENDED') {
-        throw new ConflictException({ message: 'The class has not ended', code: 'CLASS_NOT_ENDED' });
+        throw new ConflictException({
+          message: 'The class has not ended',
+          code: 'CLASS_NOT_ENDED',
+        });
       }
       const existing = await this.prisma.paperImport.findFirst({
-        where: { sourceLiveSessionId: sessionId, deletedAt: null, status: { notIn: ['CANCELED', 'FAILED'] } },
+        where: {
+          sourceLiveSessionId: sessionId,
+          deletedAt: null,
+          status: { notIn: ['CANCELED', 'FAILED'] },
+        },
         orderBy: { createdAt: 'desc' },
         select: { id: true, status: true, stage: true, title: true },
       });
@@ -261,7 +313,13 @@ export class LiveContentService {
         `live.content.exam liveSession=${sessionId} import=${created.id} transcript=${withTranscript} ` +
           `files=${files.length} partial=${withTranscript && transcript.partial}`,
       );
-      return { created: true, id: created.id, status: created.status, stage: created.stage, title: created.title };
+      return {
+        created: true,
+        id: created.id,
+        status: created.status,
+        stage: created.stage,
+        title: created.title,
+      };
     });
   }
 
@@ -274,7 +332,10 @@ export class LiveContentService {
     await this.live.contentSource(scope.live, sessionId);
     const video = await this.recordingLesson(sessionId);
     if (!video) {
-      throw new ConflictException({ message: 'Add the recording to a course first', code: 'LESSON_REQUIRED' });
+      throw new ConflictException({
+        message: 'Add the recording to a course first',
+        code: 'LESSON_REQUIRED',
+      });
     }
     await this.courses.placeExamAfter(scope.course, examLessonId, video.id, sessionId);
     return this.status(scope, sessionId);
@@ -284,13 +345,19 @@ export class LiveContentService {
   async examCandidates(
     scope: ContentScope,
     sessionId: string,
-  ): Promise<{ courseId: string | null; exams: { id: string; title: string; unitTitle: string }[] }> {
+  ): Promise<{
+    courseId: string | null;
+    exams: { id: string; title: string; unitTitle: string }[];
+  }> {
     await this.live.contentSource(scope.live, sessionId);
     const video = await this.recordingLesson(sessionId);
     if (!video) return { courseId: null, exams: [] };
     const course = await this.courses.getMine(scope.course, video.unit.courseId);
-    const exams = (course.units ?? []).flatMap((u: { title: string; lessons?: { id: string; title: string; type: string }[] }) =>
-      (u.lessons ?? []).filter((l) => l.type === 'QUIZ').map((l) => ({ id: l.id, title: l.title, unitTitle: u.title })),
+    const exams = (course.units ?? []).flatMap(
+      (u: { title: string; lessons?: { id: string; title: string; type: string }[] }) =>
+        (u.lessons ?? [])
+          .filter((l) => l.type === 'QUIZ')
+          .map((l) => ({ id: l.id, title: l.title, unitTitle: u.title })),
     );
     return { courseId: video.unit.courseId, exams };
   }
@@ -299,22 +366,37 @@ export class LiveContentService {
 
   private recordingLesson(sessionId: string) {
     return this.prisma.lesson.findFirst({
-      where: { sourceLiveSessionId: sessionId, type: 'VIDEO', videoAssetId: { not: null }, unit: { deletedAt: null, course: { deletedAt: null } } },
+      where: {
+        sourceLiveSessionId: sessionId,
+        type: 'VIDEO',
+        videoAssetId: { not: null },
+        unit: { deletedAt: null, course: { deletedAt: null } },
+      },
       select: { id: true, unit: { select: { courseId: true } } },
     });
   }
 
-  private transcriptOf(s: { transcriptStatus: string; transcriptText: string | null; transcriptSegments: unknown }) {
+  private transcriptOf(s: {
+    transcriptStatus: string;
+    transcriptText: string | null;
+    transcriptSegments: unknown;
+  }) {
     const segments = (Array.isArray(s.transcriptSegments) ? s.transcriptSegments : []) as {
       startSec: number | null;
       durationSec: number | null;
       text: string;
     }[];
-    const usable = (s.transcriptStatus === 'READY' || s.transcriptStatus === 'PARTIAL') && !!s.transcriptText?.trim();
+    const usable =
+      (s.transcriptStatus === 'READY' || s.transcriptStatus === 'PARTIAL') &&
+      !!s.transcriptText?.trim();
     return {
       usable,
       partial: s.transcriptStatus === 'PARTIAL',
-      segments: segments.length ? segments : s.transcriptText ? [{ startSec: null, durationSec: null, text: s.transcriptText }] : [],
+      segments: segments.length
+        ? segments
+        : s.transcriptText
+          ? [{ startSec: null, durationSec: null, text: s.transcriptText }]
+          : [],
     };
   }
 
@@ -324,10 +406,21 @@ export class LiveContentService {
       select: {
         id: true,
         title: true,
-        unit: { select: { id: true, title: true, isDefault: true, course: { select: { id: true, title: true, status: true } } } },
+        unit: {
+          select: {
+            id: true,
+            title: true,
+            isDefault: true,
+            course: { select: { id: true, title: true, status: true } },
+          },
+        },
       },
     });
-    return { lesson: { id: l.id, title: l.title }, unit: { id: l.unit.id, title: l.unit.title, isDefault: l.unit.isDefault }, course: l.unit.course };
+    return {
+      lesson: { id: l.id, title: l.title },
+      unit: { id: l.unit.id, title: l.unit.title, isDefault: l.unit.isDefault },
+      course: l.unit.course,
+    };
   }
 
   /**
@@ -337,11 +430,17 @@ export class LiveContentService {
   private async claimed<T>(sessionId: string, fn: () => Promise<T>): Promise<T> {
     const now = new Date();
     const got = await this.prisma.liveSession.updateMany({
-      where: { id: sessionId, OR: [{ contentClaimUntil: null }, { contentClaimUntil: { lt: now } }] },
+      where: {
+        id: sessionId,
+        OR: [{ contentClaimUntil: null }, { contentClaimUntil: { lt: now } }],
+      },
       data: { contentClaimUntil: new Date(now.getTime() + CLAIM_MS) },
     });
     if (got.count === 0) {
-      throw new ConflictException({ message: 'This class is already being converted — a moment', code: 'CONVERSION_IN_PROGRESS' });
+      throw new ConflictException({
+        message: 'This class is already being converted — a moment',
+        code: 'CONVERSION_IN_PROGRESS',
+      });
     }
     try {
       return await fn();

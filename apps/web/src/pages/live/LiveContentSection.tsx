@@ -31,12 +31,19 @@ interface ContentStatus {
     unit: { id: string; title: string; isDefault: boolean };
     questionCount: number | null;
   }[];
-  examSession: { id: string; status: string; stage: string; lessonId: string | null; partial: boolean } | null;
+  examSession: {
+    id: string;
+    status: string;
+    stage: string;
+    lessonId: string | null;
+    partial: boolean;
+  } | null;
 }
 
 type Dialog = null | 'existing' | 'new' | 'link' | 'exam';
 
-const errCode = (e: unknown) => (e as { response?: { data?: { code?: string } } })?.response?.data?.code;
+const errCode = (e: unknown) =>
+  (e as { response?: { data?: { code?: string } } })?.response?.data?.code;
 
 export default function LiveContentSection({
   sessionId,
@@ -54,7 +61,8 @@ export default function LiveContentSection({
   const key = ['live-content', sessionId];
   const status = useQuery({
     queryKey: key,
-    queryFn: async () => (await api.get(`/teacher/live/${sessionId}/content`)).data as ContentStatus,
+    queryFn: async () =>
+      (await api.get(`/teacher/live/${sessionId}/content`)).data as ContentStatus,
   });
   const refresh = () => qc.invalidateQueries({ queryKey: key });
 
@@ -70,11 +78,14 @@ export default function LiveContentSection({
 
   const recordingLesson = s.lessons.find((l) => l.isRecording);
   const exams = s.lessons.filter((l) => l.type === 'QUIZ');
-  const openExamSession = s.examSession && s.examSession.status !== 'COMPLETED' ? s.examSession : null;
+  const openExamSession =
+    s.examSession && s.examSession.status !== 'COMPLETED' ? s.examSession : null;
 
   // One session per class: an open one is reopened, otherwise the sources are chosen first.
   const startExam = () =>
-    openExamSession ? navigate(`/teacher/exam-studio/${openExamSession.id}${courseParam()}`) : setDialog('exam');
+    openExamSession
+      ? navigate(`/teacher/exam-studio/${openExamSession.id}${courseParam()}`)
+      : setDialog('exam');
 
   return (
     <section
@@ -83,7 +94,10 @@ export default function LiveContentSection({
       aria-labelledby="rec-content-title"
     >
       <div className="mb-3 flex items-start gap-3">
-        <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-on-primary">
+        <span
+          aria-hidden
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary text-on-primary"
+        >
           <span className="material-symbols-outlined">auto_stories</span>
         </span>
         <div className="min-w-0">
@@ -96,12 +110,16 @@ export default function LiveContentSection({
 
       {/* What it already became. */}
       {recordingLesson && (
-        <div className="mb-3 rounded-xl border border-emerald-600/30 bg-emerald-600/5 p-3" role="status">
+        <div
+          className="mb-3 rounded-xl border border-emerald-600/30 bg-emerald-600/5 p-3"
+          role="status"
+        >
           <p className="flex items-start gap-2 text-sm font-semibold">
-            <span aria-hidden className="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+            <span aria-hidden className="material-symbols-outlined text-[18px] text-emerald-600">
+              check_circle
+            </span>
             <span className="min-w-0">
-              {t('liveContent.addedTo')}{' '}
-              <span dir="auto">{recordingLesson.course.title}</span>
+              {t('liveContent.addedTo')} <span dir="auto">{recordingLesson.course.title}</span>
               {!recordingLesson.unit.isDefault && (
                 <>
                   {' ← '}
@@ -113,30 +131,49 @@ export default function LiveContentSection({
             </span>
           </p>
           {recordingLesson.course.status === 'DRAFT' && (
-            <p className="ms-6 mt-1 text-xs text-on-surface-variant">{t('liveContent.courseIsDraft')}</p>
+            <p className="ms-6 mt-1 text-xs text-on-surface-variant">
+              {t('liveContent.courseIsDraft')}
+            </p>
           )}
           <div className="ms-6 mt-2 flex flex-wrap gap-2">
-            <Link className="btn-secondary !py-1.5 text-sm" to={`/learn/${recordingLesson.course.id}/${recordingLesson.id}`}>
+            <Link
+              className="btn-secondary !py-1.5 text-sm"
+              to={`/learn/${recordingLesson.course.id}/${recordingLesson.id}`}
+            >
               {t('liveContent.openLesson')}
             </Link>
-            <Link className="btn-ghost !py-1.5 text-sm" to={`/teacher/courses/${recordingLesson.course.id}`}>
+            <Link
+              className="btn-ghost !py-1.5 text-sm"
+              to={`/teacher/courses/${recordingLesson.course.id}`}
+            >
               {t('liveContent.editLesson')}
             </Link>
           </div>
         </div>
       )}
       {exams.map((e) => (
-        <div key={e.id} className="mb-3 rounded-xl border border-emerald-600/30 bg-emerald-600/5 p-3" role="status">
+        <div
+          key={e.id}
+          className="mb-3 rounded-xl border border-emerald-600/30 bg-emerald-600/5 p-3"
+          role="status"
+        >
           <p className="flex items-center gap-2 text-sm font-semibold">
-            <span aria-hidden className="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+            <span aria-hidden className="material-symbols-outlined text-[18px] text-emerald-600">
+              check_circle
+            </span>
             {t('liveContent.examLinked', { count: e.questionCount ?? 0 })}
-            <span className="truncate font-normal text-on-surface-variant" dir="auto">— {e.title}</span>
+            <span className="truncate font-normal text-on-surface-variant" dir="auto">
+              — {e.title}
+            </span>
           </p>
           <div className="ms-6 mt-2 flex flex-wrap gap-2">
             <Link className="btn-secondary !py-1.5 text-sm" to={`/learn/${e.course.id}/${e.id}`}>
               {t('liveContent.openExam')}
             </Link>
-            <Link className="btn-ghost !py-1.5 text-sm" to={`/teacher/lessons/${e.id}/quiz?course=${e.course.id}`}>
+            <Link
+              className="btn-ghost !py-1.5 text-sm"
+              to={`/teacher/lessons/${e.id}/quiz?course=${e.course.id}`}
+            >
               {t('liveContent.editExam')}
             </Link>
           </div>
@@ -145,8 +182,13 @@ export default function LiveContentSection({
       {openExamSession && (
         <div className="mb-3 rounded-xl border border-outline-variant/60 p-3 text-sm">
           <p className="font-semibold">{t('liveContent.examInProgress')}</p>
-          {openExamSession.partial && <p className="text-xs text-on-surface-variant">{t('liveContent.examPartialBody')}</p>}
-          <Link className="btn-secondary mt-2 !py-1.5 text-sm" to={`/teacher/exam-studio/${openExamSession.id}${courseParam()}`}>
+          {openExamSession.partial && (
+            <p className="text-xs text-on-surface-variant">{t('liveContent.examPartialBody')}</p>
+          )}
+          <Link
+            className="btn-secondary mt-2 !py-1.5 text-sm"
+            to={`/teacher/exam-studio/${openExamSession.id}${courseParam()}`}
+          >
             {t('liveContent.openStudio')}
           </Link>
         </div>
@@ -156,26 +198,46 @@ export default function LiveContentSection({
       <div className="grid gap-2 sm:grid-cols-3">
         {!recordingLesson && (
           <>
-            <button type="button" className="btn-primary justify-center" onClick={() => setDialog('existing')}>
-              <span aria-hidden className="material-symbols-outlined text-[18px]">playlist_add</span>
+            <button
+              type="button"
+              className="btn-primary justify-center"
+              onClick={() => setDialog('existing')}
+            >
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                playlist_add
+              </span>
               {t('liveContent.addToCourse')}
             </button>
-            <button type="button" className="btn-secondary justify-center" onClick={() => setDialog('new')}>
-              <span aria-hidden className="material-symbols-outlined text-[18px]">video_library</span>
+            <button
+              type="button"
+              className="btn-secondary justify-center"
+              onClick={() => setDialog('new')}
+            >
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                video_library
+              </span>
               {t('liveContent.newLesson')}
             </button>
           </>
         )}
         <button type="button" className="btn-secondary justify-center" onClick={startExam}>
-          <span aria-hidden className="material-symbols-outlined text-[18px]">quiz</span>
+          <span aria-hidden className="material-symbols-outlined text-[18px]">
+            quiz
+          </span>
           {openExamSession ? t('liveContent.openStudio') : t('liveContent.createExam')}
         </button>
       </div>
       {!s.transcript.usable && !openExamSession && (
-        <p className="mt-2 text-xs text-on-surface-variant">{t('liveContent.examWithoutTranscript')}</p>
+        <p className="mt-2 text-xs text-on-surface-variant">
+          {t('liveContent.examWithoutTranscript')}
+        </p>
       )}
       {recordingLesson && (
-        <button type="button" className="mt-3 text-sm font-semibold text-primary-text hover:underline" onClick={() => setDialog('link')}>
+        <button
+          type="button"
+          className="mt-3 text-sm font-semibold text-primary-text hover:underline"
+          onClick={() => setDialog('link')}
+        >
           {t('liveContent.linkExam')}
         </button>
       )}
@@ -252,12 +314,21 @@ function PublishDialog({
 
   const courses = useQuery({
     queryKey: ['teacher-courses'],
-    queryFn: async () => (await api.get('/teacher/courses')).data as { id: string; title: string; status: string; kind?: string }[],
+    queryFn: async () =>
+      (await api.get('/teacher/courses')).data as {
+        id: string;
+        title: string;
+        status: string;
+        kind?: string;
+      }[],
     enabled: mode === 'existing',
   });
   const course = useQuery({
     queryKey: ['teacher-course', courseId],
-    queryFn: async () => (await api.get(`/teacher/courses/${courseId}`)).data as { units: { id: string; title: string; isDefault: boolean }[] },
+    queryFn: async () =>
+      (await api.get(`/teacher/courses/${courseId}`)).data as {
+        units: { id: string; title: string; isDefault: boolean }[];
+      },
     enabled: mode === 'existing' && !!courseId,
   });
   const profile = useQuery({
@@ -272,9 +343,9 @@ function PublishDialog({
   });
   const myStages: string[] = profile.data?.stages ?? [];
   const myYears = (grades.data ?? []).filter((g) => g.stage && myStages.includes(g.stage));
-  const mySubjects: { id: string; nameAr: string; nameEn: string }[] = (profile.data?.subjects ?? []).map(
-    (s: { subject: { id: string; nameAr: string; nameEn: string } }) => s.subject,
-  );
+  const mySubjects: { id: string; nameAr: string; nameEn: string }[] = (
+    profile.data?.subjects ?? []
+  ).map((s: { subject: { id: string; nameAr: string; nameEn: string } }) => s.subject);
   useEffect(() => {
     if (!gradeId && myYears.length === 1) setGradeId(myYears[0].id);
   }, [gradeId, myYears]);
@@ -323,7 +394,12 @@ function PublishDialog({
   });
 
   return (
-    <Modal open onClose={onClose} title={mode === 'existing' ? t('liveContent.addToCourse') : t('liveContent.newCourseTitle')} wide>
+    <Modal
+      open
+      onClose={onClose}
+      title={mode === 'existing' ? t('liveContent.addToCourse') : t('liveContent.newCourseTitle')}
+      wide
+    >
       <div className="space-y-4">
         {mode === 'existing' ? (
           <>
@@ -354,7 +430,12 @@ function PublishDialog({
             </Field>
             {courseId && (
               <Field label={t('liveContent.chooseSection')} id="lc-section">
-                <select id="lc-section" className="input" value={unit} onChange={(e) => setUnit(e.target.value)}>
+                <select
+                  id="lc-section"
+                  className="input"
+                  value={unit}
+                  onChange={(e) => setUnit(e.target.value)}
+                >
                   <option value="">{t('liveContent.noSection')}</option>
                   {sections.map((u) => (
                     <option key={u.id} value={u.id}>
@@ -379,12 +460,26 @@ function PublishDialog({
           </>
         ) : (
           <>
-            <p className="rounded-xl bg-surface-container-low p-3 text-sm text-on-surface-variant">{t('liveContent.newCourseHint')}</p>
+            <p className="rounded-xl bg-surface-container-low p-3 text-sm text-on-surface-variant">
+              {t('liveContent.newCourseHint')}
+            </p>
             <Field label={t('liveContent.courseName')} id="lc-course-title">
-              <input id="lc-course-title" className="input" dir="auto" maxLength={200} value={courseTitle} onChange={(e) => setCourseTitle(e.target.value)} />
+              <input
+                id="lc-course-title"
+                className="input"
+                dir="auto"
+                maxLength={200}
+                value={courseTitle}
+                onChange={(e) => setCourseTitle(e.target.value)}
+              />
             </Field>
             <Field label={t('liveContent.year')} id="lc-grade">
-              <select id="lc-grade" className="input" value={gradeId} onChange={(e) => setGradeId(e.target.value)}>
+              <select
+                id="lc-grade"
+                className="input"
+                value={gradeId}
+                onChange={(e) => setGradeId(e.target.value)}
+              >
                 <option value="">{t('liveContent.pickYear')}</option>
                 {myYears.map((g) => (
                   <option key={g.id} value={g.id}>
@@ -395,7 +490,12 @@ function PublishDialog({
             </Field>
             {mySubjects.length > 1 && (
               <Field label={t('liveContent.subject')} id="lc-subject">
-                <select id="lc-subject" className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                <select
+                  id="lc-subject"
+                  className="input"
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                >
                   <option value="">{t('liveContent.pickSubject')}</option>
                   {mySubjects.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -409,10 +509,25 @@ function PublishDialog({
         )}
 
         <Field label={t('liveContent.lessonTitle')} id="lc-title">
-          <input id="lc-title" className="input" dir="auto" maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input
+            id="lc-title"
+            className="input"
+            dir="auto"
+            maxLength={200}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         </Field>
         <Field label={t('liveContent.lessonDescription')} id="lc-desc">
-          <textarea id="lc-desc" className="input" dir="auto" rows={3} maxLength={5000} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea
+            id="lc-desc"
+            className="input"
+            dir="auto"
+            rows={3}
+            maxLength={5000}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
         </Field>
 
         <fieldset className="space-y-2">
@@ -421,7 +536,9 @@ function PublishDialog({
             <input type="checkbox" checked disabled className="mt-1 accent-primary" />
             <span>{t('liveContent.includeRecording')}</span>
           </label>
-          <label className={`flex items-start gap-2 text-sm ${status.summaryReady ? '' : 'opacity-60'}`}>
+          <label
+            className={`flex items-start gap-2 text-sm ${status.summaryReady ? '' : 'opacity-60'}`}
+          >
             <input
               type="checkbox"
               className="mt-1 accent-primary"
@@ -431,10 +548,16 @@ function PublishDialog({
             />
             <span>
               {t('liveContent.includeSummary')}
-              {!status.summaryReady && <span className="block text-xs text-on-surface-variant">{t('liveContent.summaryUnavailable')}</span>}
+              {!status.summaryReady && (
+                <span className="block text-xs text-on-surface-variant">
+                  {t('liveContent.summaryUnavailable')}
+                </span>
+              )}
             </span>
           </label>
-          <label className={`flex items-start gap-2 text-sm ${status.transcript.usable ? '' : 'opacity-60'}`}>
+          <label
+            className={`flex items-start gap-2 text-sm ${status.transcript.usable ? '' : 'opacity-60'}`}
+          >
             <input
               type="checkbox"
               className="mt-1 accent-primary"
@@ -444,8 +567,16 @@ function PublishDialog({
             />
             <span>
               {t('liveContent.includeTranscript')}
-              {status.transcript.partial && <span className="block text-xs text-on-surface-variant">{t('record.transcript.partial')}</span>}
-              {!status.transcript.usable && <span className="block text-xs text-on-surface-variant">{t('liveContent.transcriptUnavailable')}</span>}
+              {status.transcript.partial && (
+                <span className="block text-xs text-on-surface-variant">
+                  {t('record.transcript.partial')}
+                </span>
+              )}
+              {!status.transcript.usable && (
+                <span className="block text-xs text-on-surface-variant">
+                  {t('liveContent.transcriptUnavailable')}
+                </span>
+              )}
             </span>
           </label>
           <p className="text-xs text-on-surface-variant">{t('liveContent.noExtraCost')}</p>
@@ -467,7 +598,11 @@ function PublishDialog({
               publish.mutate();
             }}
           >
-            {publish.isPending ? t('common.saving') : mode === 'existing' ? t('liveContent.submitExisting') : t('liveContent.submitNew')}
+            {publish.isPending
+              ? t('common.saving')
+              : mode === 'existing'
+                ? t('liveContent.submitExisting')
+                : t('liveContent.submitNew')}
           </button>
         </div>
       </div>
@@ -475,7 +610,15 @@ function PublishDialog({
   );
 }
 
-function LinkExamDialog({ sessionId, onClose, onDone }: { sessionId: string; onClose: () => void; onDone: () => void }) {
+function LinkExamDialog({
+  sessionId,
+  onClose,
+  onDone,
+}: {
+  sessionId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const [pick, setPick] = useState('');
   const busy = useRef(false);
@@ -488,7 +631,8 @@ function LinkExamDialog({ sessionId, onClose, onDone }: { sessionId: string; onC
       },
   });
   const link = useMutation({
-    mutationFn: async () => (await api.post(`/teacher/live/${sessionId}/content/link-exam`, { examLessonId: pick })).data,
+    mutationFn: async () =>
+      (await api.post(`/teacher/live/${sessionId}/content/link-exam`, { examLessonId: pick })).data,
     onSuccess: onDone,
     onSettled: () => {
       busy.current = false;
@@ -508,10 +652,20 @@ function LinkExamDialog({ sessionId, onClose, onDone }: { sessionId: string; onC
                 key={e.id}
                 className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm ${pick === e.id ? 'border-primary' : 'border-outline-variant/60'}`}
               >
-                <input type="radio" name="lc-exam" className="accent-primary" checked={pick === e.id} onChange={() => setPick(e.id)} />
+                <input
+                  type="radio"
+                  name="lc-exam"
+                  className="accent-primary"
+                  checked={pick === e.id}
+                  onChange={() => setPick(e.id)}
+                />
                 <span className="min-w-0">
-                  <span className="block font-semibold" dir="auto">{e.title}</span>
-                  <span className="block text-xs text-on-surface-variant" dir="auto">{e.unitTitle}</span>
+                  <span className="block font-semibold" dir="auto">
+                    {e.title}
+                  </span>
+                  <span className="block text-xs text-on-surface-variant" dir="auto">
+                    {e.unitTitle}
+                  </span>
                 </span>
               </label>
             ))}

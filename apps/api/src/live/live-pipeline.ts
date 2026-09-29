@@ -110,7 +110,11 @@ export function pipelineStages(x: PipelineInput): {
     summary = { stage: 'READY', canGenerate: false };
   } else if (x.summaryStatus === 'PROCESSING') {
     summary = { stage: 'GENERATING', canGenerate: false };
-  } else if (x.provider === 'CLOUDFLARE' && transcript.stage !== 'READY' && transcript.stage !== 'PARTIAL') {
+  } else if (
+    x.provider === 'CLOUDFLARE' &&
+    transcript.stage !== 'READY' &&
+    transcript.stage !== 'PARTIAL'
+  ) {
     // Never asked for, never failed: it is waiting, or it cannot happen.
     summary = {
       stage:

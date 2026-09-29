@@ -125,10 +125,14 @@ export default function PublicLivePage() {
         {t('livePublic.seatConfirmed')}
       </p>
       <button className="btn-primary w-full" onClick={() => navigate(`/live/${id}/meeting`)}>
-        <span className="material-symbols-outlined text-base">{m?.canJoin ? 'videocam' : 'settings_voice'}</span>
+        <span className="material-symbols-outlined text-base">
+          {m?.canJoin ? 'videocam' : 'settings_voice'}
+        </span>
         {m?.canJoin ? t('live.join') : t('livePublic.prepareDevices')}
       </button>
-      {!m?.canJoin && <p className="text-xs text-on-surface-variant">{t('livePublic.prepareHint')}</p>}
+      {!m?.canJoin && (
+        <p className="text-xs text-on-surface-variant">{t('livePublic.prepareHint')}</p>
+      )}
     </div>
   );
 
@@ -178,7 +182,11 @@ export default function PublicLivePage() {
         </div>
       );
     } else if (full) {
-      action = <p className="rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container">{t('live.full')}</p>;
+      action = (
+        <p className="rounded-xl bg-error-container px-4 py-3 text-sm font-semibold text-on-error-container">
+          {t('live.full')}
+        </p>
+      );
     } else {
       action = (
         <form
@@ -217,13 +225,26 @@ export default function PublicLivePage() {
             </Field>
           )}
           <ErrorNote error={guestSeat.error} />
-          <button className="btn-primary w-full" disabled={!nameOk || guestSeat.isPending} aria-busy={guestSeat.isPending || undefined}>
-            <span className="material-symbols-outlined text-base">{free ? 'event_available' : 'shopping_cart'}</span>
-            {guestSeat.isPending ? t('common.saving') : free ? t('livePublic.reserveFree') : t('guest.reserve')}
+          <button
+            className="btn-primary w-full"
+            disabled={!nameOk || guestSeat.isPending}
+            aria-busy={guestSeat.isPending || undefined}
+          >
+            <span className="material-symbols-outlined text-base">
+              {free ? 'event_available' : 'shopping_cart'}
+            </span>
+            {guestSeat.isPending
+              ? t('common.saving')
+              : free
+                ? t('livePublic.reserveFree')
+                : t('guest.reserve')}
           </button>
           <p className="text-center text-xs text-outline">
             {t('guest.noAccountNeeded')}{' '}
-            <Link to={loginUrlFor(location.pathname)} className="font-semibold text-primary hover:underline">
+            <Link
+              to={loginUrlFor(location.pathname)}
+              className="font-semibold text-primary hover:underline"
+            >
               {t('livePublic.haveAccount')}
             </Link>
           </p>
@@ -278,7 +299,9 @@ export default function PublicLivePage() {
           </div>
 
           <div className="flex items-center justify-between rounded-2xl bg-primary-fixed/40 p-4">
-            <span className="text-sm text-on-surface-variant">{free ? t('livePublic.entry') : t('liveBuy.seatPrice')}</span>
+            <span className="text-sm text-on-surface-variant">
+              {free ? t('livePublic.entry') : t('liveBuy.seatPrice')}
+            </span>
             <span className="font-heading text-3xl font-bold text-primary-text tabular-nums">
               {free ? t('liveBuy.free') : egp(o.studentPaysCents)}
             </span>
@@ -286,7 +309,9 @@ export default function PublicLivePage() {
           {!free && <RefundAndReplaySummary offer={o} />}
 
           {over ? (
-            <p className="rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">{t('livePublic.overHint')}</p>
+            <p className="rounded-xl bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant">
+              {t('livePublic.overHint')}
+            </p>
           ) : (
             action
           )}

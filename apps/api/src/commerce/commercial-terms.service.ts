@@ -55,7 +55,11 @@ export class CommercialTermsService {
    * effectiveFrom, then by creation, so two versions starting at the same
    * instant resolve to the one written last.
    */
-  async effectiveFor(academyId: string, at = new Date(), db: Db = this.prisma): Promise<CommercialTerms> {
+  async effectiveFor(
+    academyId: string,
+    at = new Date(),
+    db: Db = this.prisma,
+  ): Promise<CommercialTerms> {
     const order = [{ effectiveFrom: 'desc' as const }, { createdAt: 'desc' as const }];
     const own = await db.commercialTerms.findFirst({
       where: { academyId, effectiveFrom: { lte: at } },
@@ -108,7 +112,9 @@ export class CommercialTermsService {
         });
     return {
       academyId,
-      effective: effective ? { ...effective, inherited: academyId != null && effective.academyId == null } : null,
+      effective: effective
+        ? { ...effective, inherited: academyId != null && effective.academyId == null }
+        : null,
       versions: rows,
     };
   }
@@ -116,7 +122,10 @@ export class CommercialTermsService {
   /** A new version. Validates the shape the database will also check, so a refusal names what is wrong. */
   async createVersion(academyId: string | null, input: NewTermsInput, adminUserId: string) {
     if (academyId) {
-      const a = await this.prisma.academy.findUnique({ where: { id: academyId }, select: { id: true } });
+      const a = await this.prisma.academy.findUnique({
+        where: { id: academyId },
+        select: { id: true },
+      });
       if (!a) throw new NotFoundException('Academy not found');
     }
     const fail = (message: string) => {
@@ -132,7 +141,11 @@ export class CommercialTermsService {
         fail('A deducted fee must be below 100%');
       feeBps = input.feeBps as number;
     } else if (input.feeType === 'FIXED') {
-      if (!isInt(input.feeFixedCents) || input.feeFixedCents < 0 || input.feeFixedCents > MAX_PRICE_CENTS)
+      if (
+        !isInt(input.feeFixedCents) ||
+        input.feeFixedCents < 0 ||
+        input.feeFixedCents > MAX_PRICE_CENTS
+      )
         fail('A fixed fee is a whole number of piasters, zero or more');
       feeFixedCents = input.feeFixedCents as number;
     } else fail('Unknown fee type');
@@ -142,7 +155,9 @@ export class CommercialTermsService {
     const effectiveFrom = input.effectiveFrom ? new Date(input.effectiveFrom) : new Date(now);
     if (!Number.isFinite(effectiveFrom.getTime())) fail('effectiveFrom is not a date');
     if (effectiveFrom.getTime() < now - PAST_TOLERANCE_MS)
-      fail('Terms cannot start in the past — sales already made keep the terms they were made under');
+      fail(
+        'Terms cannot start in the past — sales already made keep the terms they were made under',
+      );
 
     const row = await this.prisma.commercialTerms.create({
       data: {

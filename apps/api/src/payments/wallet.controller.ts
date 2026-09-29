@@ -107,7 +107,10 @@ export class WalletController {
         include: {
           course: { select: { title: true } },
           livePurchase: {
-            select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
+            select: {
+              session: { select: { title: true } },
+              guestBuyer: { select: { displayName: true } },
+            },
           },
           student: { include: { user: { select: { fullName: true } } } },
           invoice: { select: { serial: true } },
@@ -239,9 +242,12 @@ export class WalletController {
           take: 10,
           include: {
             course: { select: { title: true } },
-          livePurchase: {
-            select: { session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } },
-          },
+            livePurchase: {
+              select: {
+                session: { select: { title: true } },
+                guestBuyer: { select: { displayName: true } },
+              },
+            },
             student: { include: { user: { select: { fullName: true } } } },
           },
         }),
@@ -258,7 +264,11 @@ export class WalletController {
     });
     const shareOf = new Map(mine.map((e) => [e.transaction.paymentId, e.amountCents]));
     // Their share of Live seats sold here and not yet delivered.
-    const livePending = await livePendingEarnings(this.prisma, { academyId: academy.id, tenantId }, 'teacher');
+    const livePending = await livePendingEarnings(
+      this.prisma,
+      { academyId: academy.id, tenantId },
+      'teacher',
+    );
     return {
       scope: 'MEMBER' as const,
       kind: academy.kind,

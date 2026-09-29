@@ -40,7 +40,11 @@ describe('the Live pricing engine', () => {
   });
 
   it('DEDUCTED: 100 EGP at 10% — the student pays 100, Darsly 10, the seller 90', () => {
-    const p = priceLiveSeat({ basePriceCents: 10_000, terms: pct(1000, 'DEDUCTED'), split: personal });
+    const p = priceLiveSeat({
+      basePriceCents: 10_000,
+      terms: pct(1000, 'DEDUCTED'),
+      split: personal,
+    });
     expect(p).toMatchObject({
       studentPaysCents: 10_000,
       feeCents: 1_000,
@@ -50,11 +54,15 @@ describe('the Live pricing engine', () => {
   });
 
   it('takes basis points: 7.5% of 100 EGP is 7.50', () => {
-    expect(priceLiveSeat({ basePriceCents: 10_000, terms: pct(750), split: personal }).feeCents).toBe(750);
+    expect(
+      priceLiveSeat({ basePriceCents: 10_000, terms: pct(750), split: personal }).feeCents,
+    ).toBe(750);
   });
 
   it('FIXED fees, both modes', () => {
-    expect(priceLiveSeat({ basePriceCents: 5_000, terms: fixed(700), split: personal })).toMatchObject({
+    expect(
+      priceLiveSeat({ basePriceCents: 5_000, terms: fixed(700), split: personal }),
+    ).toMatchObject({
       studentPaysCents: 5_700,
       feeCents: 700,
       teacherCents: 5_000,
@@ -71,7 +79,10 @@ describe('the Live pricing engine', () => {
     expect(run(500, fixed(700, 'DEDUCTED'))).toThrow(/whole price/);
     expect(run(1_000, pct(10_000, 'DEDUCTED'))).toThrow(PricingError);
     // One piaster left for the seller is a valid (if odd) configuration.
-    expect(priceLiveSeat({ basePriceCents: 701, terms: fixed(700, 'DEDUCTED'), split: personal }).teacherCents).toBe(1);
+    expect(
+      priceLiveSeat({ basePriceCents: 701, terms: fixed(700, 'DEDUCTED'), split: personal })
+        .teacherCents,
+    ).toBe(1);
   });
 
   it('splits a Center sale after the fee, the teacher by the agreed share and the Center the rest', () => {
@@ -83,16 +94,31 @@ describe('the Live pricing engine', () => {
       centerCents: 4_000,
       teacherSharePercent: 60,
     });
-    const d = priceLiveSeat({ basePriceCents: 10_000, terms: pct(1000, 'DEDUCTED'), split: center(60) });
-    expect(d).toMatchObject({ studentPaysCents: 10_000, feeCents: 1_000, teacherCents: 5_400, centerCents: 3_600 });
+    const d = priceLiveSeat({
+      basePriceCents: 10_000,
+      terms: pct(1000, 'DEDUCTED'),
+      split: center(60),
+    });
+    expect(d).toMatchObject({
+      studentPaysCents: 10_000,
+      feeCents: 1_000,
+      teacherCents: 5_400,
+      centerCents: 3_600,
+    });
   });
 
   it('rounds half-up exactly once per step, the other side taking the remainder', () => {
     // 3.33 EGP at 12.5% = 41.625 piasters → 42.
-    expect(priceLiveSeat({ basePriceCents: 333, terms: pct(1250), split: personal }).feeCents).toBe(42);
+    expect(priceLiveSeat({ basePriceCents: 333, terms: pct(1250), split: personal }).feeCents).toBe(
+      42,
+    );
     // 0.5 piaster of fee → 1 (half-up); 0.49 → 0.
-    expect(priceLiveSeat({ basePriceCents: 50, terms: pct(100), split: personal }).feeCents).toBe(1);
-    expect(priceLiveSeat({ basePriceCents: 49, terms: pct(100), split: personal }).feeCents).toBe(0);
+    expect(priceLiveSeat({ basePriceCents: 50, terms: pct(100), split: personal }).feeCents).toBe(
+      1,
+    );
+    expect(priceLiveSeat({ basePriceCents: 49, terms: pct(100), split: personal }).feeCents).toBe(
+      0,
+    );
     // A 33% share of 1 piaster: the teacher 0, the Center 1 — never 1 + 1.
     const tiny = priceLiveSeat({ basePriceCents: 1, terms: pct(0), split: center(33) });
     expect(tiny.teacherCents + tiny.centerCents).toBe(1);
@@ -102,7 +128,9 @@ describe('the Live pricing engine', () => {
   });
 
   it('never creates or loses a piaster, across thousands of awkward combinations', () => {
-    const bases = [1, 2, 3, 7, 49, 50, 99, 101, 333, 999, 1_001, 14_950, 99_999, 1_234_567, 100_000_000];
+    const bases = [
+      1, 2, 3, 7, 49, 50, 99, 101, 333, 999, 1_001, 14_950, 99_999, 1_234_567, 100_000_000,
+    ];
     const bpsList = [0, 1, 33, 50, 99, 250, 333, 750, 999, 1_250, 2_000, 3_333, 9_999, 10_000];
     const shares = [0, 1, 33, 50, 67, 99, 100];
     let checked = 0;
@@ -135,25 +163,55 @@ describe('the Live pricing engine', () => {
   });
 
   it('applies a discount before the fee; a 100% discount is a seat that costs nothing', () => {
-    const p = priceLiveSeat({ basePriceCents: 10_000, discountCents: 2_500, terms: pct(1000), split: personal });
-    expect(p).toMatchObject({ discountCents: 2_500, feeCents: 750, studentPaysCents: 8_250, teacherCents: 7_500 });
-    const free = priceLiveSeat({ basePriceCents: 10_000, discountCents: 10_000, terms: fixed(500), split: personal });
-    expect(free).toMatchObject({ studentPaysCents: 0, feeCents: 0, teacherCents: 0, centerCents: 0 });
+    const p = priceLiveSeat({
+      basePriceCents: 10_000,
+      discountCents: 2_500,
+      terms: pct(1000),
+      split: personal,
+    });
+    expect(p).toMatchObject({
+      discountCents: 2_500,
+      feeCents: 750,
+      studentPaysCents: 8_250,
+      teacherCents: 7_500,
+    });
+    const free = priceLiveSeat({
+      basePriceCents: 10_000,
+      discountCents: 10_000,
+      terms: fixed(500),
+      split: personal,
+    });
+    expect(free).toMatchObject({
+      studentPaysCents: 0,
+      feeCents: 0,
+      teacherCents: 0,
+      centerCents: 0,
+    });
   });
 
   it('refuses nonsense inputs rather than pricing them', () => {
     const t = pct(1000);
     for (const base of [0, -100, 1.5, NaN, 100_000_001]) {
-      expect(() => priceLiveSeat({ basePriceCents: base, terms: t, split: personal })).toThrow(PricingError);
+      expect(() => priceLiveSeat({ basePriceCents: base, terms: t, split: personal })).toThrow(
+        PricingError,
+      );
     }
-    expect(() => priceLiveSeat({ basePriceCents: 100, discountCents: 101, terms: t, split: personal })).toThrow(
-      /discount/,
-    );
-    expect(() => priceLiveSeat({ basePriceCents: 100, terms: pct(10_001), split: personal })).toThrow(PricingError);
     expect(() =>
-      priceLiveSeat({ basePriceCents: 100, terms: { ...pct(100), feeFixedCents: 5 }, split: personal }),
+      priceLiveSeat({ basePriceCents: 100, discountCents: 101, terms: t, split: personal }),
+    ).toThrow(/discount/);
+    expect(() =>
+      priceLiveSeat({ basePriceCents: 100, terms: pct(10_001), split: personal }),
     ).toThrow(PricingError);
-    expect(() => priceLiveSeat({ basePriceCents: 100, terms: t, split: center(101) })).toThrow(PricingError);
+    expect(() =>
+      priceLiveSeat({
+        basePriceCents: 100,
+        terms: { ...pct(100), feeFixedCents: 5 },
+        split: personal,
+      }),
+    ).toThrow(PricingError);
+    expect(() => priceLiveSeat({ basePriceCents: 100, terms: t, split: center(101) })).toThrow(
+      PricingError,
+    );
   });
 
   it('rounds with integers only', () => {
@@ -178,7 +236,19 @@ describe('money input', () => {
   });
 
   it('refuses anything that is not a plain amount', () => {
-    for (const bad of ['', '-5', '1.005', '1e3', '1,000', '12.', '.5', 'abc', '10 EGP', '9999999999', '+5']) {
+    for (const bad of [
+      '',
+      '-5',
+      '1.005',
+      '1e3',
+      '1,000',
+      '12.',
+      '.5',
+      'abc',
+      '10 EGP',
+      '9999999999',
+      '+5',
+    ]) {
       expect(parseMoneyToCents(bad)).toBeNull();
     }
     expect(parseMoneyToCents(null)).toBeNull();

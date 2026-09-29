@@ -106,7 +106,10 @@ export function Highlight({ text, q }: { text: string; q: string }) {
     <>
       {parts.map((p, i) =>
         p.toLowerCase() === q.toLowerCase() ? (
-          <mark key={i} className="rounded bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/30">
+          <mark
+            key={i}
+            className="rounded bg-amber-200/70 px-0.5 text-inherit dark:bg-amber-400/30"
+          >
             {p}
           </mark>
         ) : (
@@ -126,7 +129,10 @@ export function LegacySummaryView({ data }: { data: LegacySummary }) {
       {data.topics.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {data.topics.map((tp, i) => (
-            <span key={i} className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed">
+            <span
+              key={i}
+              className="rounded-full bg-primary-fixed px-2.5 py-1 text-xs font-semibold text-on-primary-fixed"
+            >
               {tp}
             </span>
           ))}
@@ -182,13 +188,17 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
           <p className="text-sm leading-relaxed">{n.quickSummary}</p>
         </Part>
       )}
-      {n.keyPoints.length > 0 && <Part title={t('summary.keyPoints')}>{list(n.keyPoints.map((k) => k.text))}</Part>}
+      {n.keyPoints.length > 0 && (
+        <Part title={t('summary.keyPoints')}>{list(n.keyPoints.map((k) => k.text))}</Part>
+      )}
       {n.concepts.length > 0 && (
         <Part title={t('summary.concepts')}>
           <dl className="space-y-1.5">
             {n.concepts.map((c, i) => (
               <div key={i} className="text-sm">
-                <dt className="inline font-semibold" dir="auto">{c.term}</dt>
+                <dt className="inline font-semibold" dir="auto">
+                  {c.term}
+                </dt>
                 <dd className="inline text-on-surface-variant"> — {c.explanation}</dd>
               </div>
             ))}
@@ -200,17 +210,28 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
           <ul className="space-y-1.5">
             {n.formulas.map((fm, i) => (
               <li key={i} className="text-sm">
-                <span dir="ltr" className="rounded bg-surface-container px-1.5 py-0.5 font-mono text-[13px]">{fm.formula}</span>
+                <span
+                  dir="ltr"
+                  className="rounded bg-surface-container px-1.5 py-0.5 font-mono text-[13px]"
+                >
+                  {fm.formula}
+                </span>
                 <span className="text-on-surface-variant"> — {fm.meaning}</span>
               </li>
             ))}
           </ul>
         </Part>
       )}
-      {n.examples.length > 0 && <Part title={t('summary.examples')}>{list(n.examples.map((e) => e.text))}</Part>}
+      {n.examples.length > 0 && (
+        <Part title={t('summary.examples')}>{list(n.examples.map((e) => e.text))}</Part>
+      )}
       {n.corrections.length > 0 && (
         <Part title={t('summary.corrections')}>
-          {list(n.corrections.map((c) => t('summary.correctionLine', { wrong: c.wrong, corrected: c.corrected })))}
+          {list(
+            n.corrections.map((c) =>
+              t('summary.correctionLine', { wrong: c.wrong, corrected: c.corrected }),
+            ),
+          )}
         </Part>
       )}
       {n.questions.length > 0 && (
@@ -220,7 +241,11 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
               <div key={i}>
                 <dt className="text-sm font-semibold">{q.question}</dt>
                 <dd className="text-sm text-on-surface-variant">
-                  {q.answered && q.answer ? q.answer : <span className="text-outline">{t('summary.unanswered')}</span>}
+                  {q.answered && q.answer ? (
+                    q.answer
+                  ) : (
+                    <span className="text-outline">{t('summary.unanswered')}</span>
+                  )}
                 </dd>
               </div>
             ))}
@@ -229,7 +254,11 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
       )}
       <Part title={t('summary.homework')}>
         {n.homework.length ? (
-          list(n.homework.map((h) => (h.due ? t('summary.homeworkDue', { task: h.task, due: h.due }) : h.task)))
+          list(
+            n.homework.map((h) =>
+              h.due ? t('summary.homeworkDue', { task: h.task, due: h.due }) : h.task,
+            ),
+          )
         ) : (
           <p className="text-sm text-outline">{t('summary.noneHomework')}</p>
         )}
@@ -237,7 +266,9 @@ export function StudyNotesView({ n }: { n: StudyNotes }) {
       {n.reviewPoints.length > 0 && <Part title={t('summary.review')}>{list(n.reviewPoints)}</Part>}
       {n.studyNotes && (
         <Part title={t('summary.studyNotes')}>
-          <p className="whitespace-pre-wrap text-sm leading-7">{n.studyNotes.replace(/^#+\s*/gm, '')}</p>
+          <p className="whitespace-pre-wrap text-sm leading-7">
+            {n.studyNotes.replace(/^#+\s*/gm, '')}
+          </p>
         </Part>
       )}
     </div>
@@ -252,7 +283,8 @@ export function TranscriptViewer({ segments, partial }: { segments: Segment[]; p
   const [copied, setCopied] = useState(false);
   const query = q.trim();
   const shown = useMemo(
-    () => (query ? segments.filter((s) => s.text.toLowerCase().includes(query.toLowerCase())) : segments),
+    () =>
+      query ? segments.filter((s) => s.text.toLowerCase().includes(query.toLowerCase())) : segments,
     [segments, query],
   );
   const visible = query || all ? shown : shown.slice(0, 3);
@@ -267,7 +299,9 @@ export function TranscriptViewer({ segments, partial }: { segments: Segment[]; p
   };
   return (
     <div className="space-y-3">
-      {partial && <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />}
+      {partial && (
+        <Status title={t('record.transcript.PARTIAL')} hint={t('record.transcript.partial')} />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <span
@@ -305,7 +339,10 @@ export function TranscriptViewer({ segments, partial }: { segments: Segment[]; p
                 {clock(s.startSec)}
               </span>
             )}
-            <p dir="auto" className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-8 text-on-surface">
+            <p
+              dir="auto"
+              className="min-w-0 flex-1 whitespace-pre-wrap text-[15px] leading-8 text-on-surface"
+            >
               <Highlight text={s.text} q={query} />
             </p>
           </li>

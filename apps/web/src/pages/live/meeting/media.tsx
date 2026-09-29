@@ -75,13 +75,18 @@ export function NameTag({
   return (
     <span className="inline-flex max-w-full items-center gap-1.5 rounded-lg bg-black/55 px-2 py-1 text-xs font-semibold text-white">
       {!p.audio && (
-        <span className="material-symbols-outlined text-[15px] text-red-300" aria-label={t('meeting.micOff')}>
+        <span
+          className="material-symbols-outlined text-[15px] text-red-300"
+          aria-label={t('meeting.micOff')}
+        >
           mic_off
         </span>
       )}
       <span className="truncate">{p.local ? t('meeting.you') : p.name}</span>
       {isTeacher && !compact && (
-        <span className="shrink-0 text-[10px] font-bold text-zinc-300">· {t('meeting.teacherBadge')}</span>
+        <span className="shrink-0 text-[10px] font-bold text-zinc-300">
+          · {t('meeting.teacherBadge')}
+        </span>
       )}
       {pinned && (
         <span className="material-symbols-outlined text-[14px]" aria-label={t('meeting.pinned')}>

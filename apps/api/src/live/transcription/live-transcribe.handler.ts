@@ -50,7 +50,8 @@ type PieceOutcome =
   | { kind: 'owed'; billed: number; why: string; waitMs?: number; rateLimited: boolean }
   | { kind: 'account'; billed: number; why: string };
 
-type CallResult = { ok: true; text: string } | { ok: false; kind: SttFailureKind; why: string; waitMs?: number };
+type CallResult =
+  { ok: true; text: string } | { ok: false; kind: SttFailureKind; why: string; waitMs?: number };
 
 /**
  * The LIVE_TRANSCRIBE job: a finished Darsly-hosted class's audio pieces, in
@@ -99,7 +100,8 @@ export class LiveTranscribeHandler implements AiJobHandler {
     private readonly storage: StorageProvider,
     stt?: SpeechToText,
     /** Replaceable in tests. */
-    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((r) => setTimeout(r, ms)),
     /** Told when the words changed (queues the summary); a no-op in tests that do not care. */
     private readonly onChanged: TranscriptChanged = async () => undefined,
   ) {
@@ -107,7 +109,10 @@ export class LiveTranscribeHandler implements AiJobHandler {
   }
 
   async handle(job: AiJob): Promise<AiJobResult | void> {
-    const { liveSessionId, roomName } = (job.input ?? {}) as { liveSessionId?: string; roomName?: string };
+    const { liveSessionId, roomName } = (job.input ?? {}) as {
+      liveSessionId?: string;
+      roomName?: string;
+    };
     if (!liveSessionId || !roomName) throw new AiJobError('No session on job', 'TERMINAL');
     const session = await this.prisma.liveSession.findUnique({
       where: { id: liveSessionId },
@@ -131,7 +136,9 @@ export class LiveTranscribeHandler implements AiJobHandler {
     // Pieces are accepted until LAST_PIECE_GRACE_MS after the end. The ones
     // already here are worked on meanwhile; the transcript is decided only
     // once that window has closed, so nothing can arrive behind it.
-    const windowClosesAt = session.endedAt ? session.endedAt.getTime() + LAST_PIECE_GRACE_MS + UPLOAD_SETTLE_MS : 0;
+    const windowClosesAt = session.endedAt
+      ? session.endedAt.getTime() + LAST_PIECE_GRACE_MS + UPLOAD_SETTLE_MS
+      : 0;
     let billedMs = 0;
     let account: string | null = null;
     let rateLimited = false;
@@ -184,13 +191,21 @@ export class LiveTranscribeHandler implements AiJobHandler {
       } else if ((owed.size || rateLimited) && !lastTry) {
         // Everything saved so far stays saved; the rest is tried again later.
         const waits = [...owed.values()].map((o) => o.waitMs ?? 0);
-        const delay = Math.max(retryDelayFor(job.attempts), Math.min(Math.max(0, ...waits), 10 * 60_000));
+        const delay = Math.max(
+          retryDelayFor(job.attempts),
+          Math.min(Math.max(0, ...waits), 10 * 60_000),
+        );
         const why = [...owed.values()][0]?.why ?? 'rate limited';
         this.logger.warn(
           `live.transcript.retry-later ${ctx} class=${rateLimited ? 'RATE_LIMIT' : 'TRANSIENT'} owed=${owed.size} ` +
             `inMs=${delay} nextRunAfter=${new Date(Date.now() + delay).toISOString()} why="${why}"`,
         );
-        throw new AiJobError(`Transcription will be retried: ${why}`, 'RETRYABLE', undefined, delay);
+        throw new AiJobError(
+          `Transcription will be retried: ${why}`,
+          'RETRYABLE',
+          undefined,
+          delay,
+        );
       }
       const out = await finalizeTranscript(this.prisma, {
         sessionId: liveSessionId,
@@ -207,7 +222,12 @@ export class LiveTranscribeHandler implements AiJobHandler {
           `estUsd=${usd.toFixed(4)} model=${cfg.model} runMs=${Date.now() - t0} sinceEndMs=${sinceEnd()}`,
       );
       if (out.status === 'PENDING') {
-        throw new AiJobError('New audio arrived while finishing; trying again', 'RETRYABLE', undefined, retryDelayFor(1));
+        throw new AiJobError(
+          'New audio arrived while finishing; trying again',
+          'RETRYABLE',
+          undefined,
+          retryDelayFor(1),
+        );
       }
       return { costCents: Math.ceil(usd * 100) };
     } finally {
@@ -238,7 +258,9 @@ export class LiveTranscribeHandler implements AiJobHandler {
         if ((await work(p)) === 'stop') stop = true;
       }
     };
-    await Promise.all(Array.from({ length: Math.min(TRANSCRIBE_CONCURRENCY, pieces.length) }, lane));
+    await Promise.all(
+      Array.from({ length: Math.min(TRANSCRIBE_CONCURRENCY, pieces.length) }, lane),
+    );
     return lost;
   }
 
@@ -254,7 +276,10 @@ export class LiveTranscribeHandler implements AiJobHandler {
           { transcriptLeaseUntil: { lt: now } },
         ],
       },
-      data: { transcriptLeaseJobId: jobId, transcriptLeaseUntil: new Date(now.getTime() + TRANSCRIPT_LEASE_MS) },
+      data: {
+        transcriptLeaseJobId: jobId,
+        transcriptLeaseUntil: new Date(now.getTime() + TRANSCRIPT_LEASE_MS),
+      },
     });
     return r.count === 1;
   }
@@ -273,7 +298,13 @@ export class LiveTranscribeHandler implements AiJobHandler {
    * or "owed". Transient failures are retried here a couple of times; an
    * answer the guards reject is asked for once more.
    */
-  private async piece(job: AiJob, p: LiveAudioSegment, title: string, model: string, lastTry: boolean): Promise<PieceOutcome> {
+  private async piece(
+    job: AiJob,
+    p: LiveAudioSegment,
+    title: string,
+    model: string,
+    lastTry: boolean,
+  ): Promise<PieceOutcome> {
     const ms = estimateMs(p);
     if (isTooShort(p)) {
       await this.saveWords(p, '', 'TOO_SHORT');
@@ -296,7 +327,8 @@ export class LiveTranscribeHandler implements AiJobHandler {
     let prompt: string | undefined = title;
     for (;;) {
       // A stalled owner that lost the class pays for nothing more.
-      if (calls++ > 0 && !(await this.claim(job.id, p.sessionId))) return { kind: 'failed', billed };
+      if (calls++ > 0 && !(await this.claim(job.id, p.sessionId)))
+        return { kind: 'failed', billed };
       const r = await this.call(job, p, audio, filename, prompt, title, model, ms);
       if (r.ok) {
         billed++;
@@ -312,7 +344,10 @@ export class LiveTranscribeHandler implements AiJobHandler {
             prompt = undefined;
             continue;
           }
-          await this.fail(p, 'GUARD_REJECTED: PROMPT_ECHO (the answer was the lesson title, twice)');
+          await this.fail(
+            p,
+            'GUARD_REJECTED: PROMPT_ECHO (the answer was the lesson title, twice)',
+          );
           return { kind: 'failed', billed };
         }
         if (looksLikeRepetitionLoop(r.text, ms)) {
@@ -361,7 +396,10 @@ export class LiveTranscribeHandler implements AiJobHandler {
     model: string,
     ms: number,
   ): Promise<CallResult> {
-    await this.prisma.liveAudioSegment.update({ where: { id: p.id }, data: { attempts: { increment: 1 } } });
+    await this.prisma.liveAudioSegment.update({
+      where: { id: p.id },
+      data: { attempts: { increment: 1 } },
+    });
     const t0 = Date.now();
     let r: CallResult;
     try {

@@ -588,7 +588,16 @@ describe('the summary is written only from the transcript', () => {
     expect(call.messages[0].content).toContain('<<<TRANSCRIPT>>>');
     // The grounded study-notes schema: every factual item carries evidence.
     expect(call.schema.required).toEqual(
-      expect.arrayContaining(['title', 'quickSummary', 'keyPoints', 'concepts', 'questions', 'homework', 'corrections', 'studyNotes']),
+      expect.arrayContaining([
+        'title',
+        'quickSummary',
+        'keyPoints',
+        'concepts',
+        'questions',
+        'homework',
+        'corrections',
+        'studyNotes',
+      ]),
     );
     expect(call.schema.properties.keyPoints.items.required).toContain('evidence');
     // The summary model, with nothing kept by the provider.

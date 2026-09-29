@@ -168,14 +168,24 @@ export interface TransferDeclaration {
  *            reference only if they have one. Nothing is invented.
  */
 export function normalizeDeclaration(
-  input: { source?: string; senderWallet?: string; payerName?: string; reference?: string; method?: string },
+  input: {
+    source?: string;
+    senderWallet?: string;
+    payerName?: string;
+    reference?: string;
+    method?: string;
+  },
   receivingHandles: string[] = [],
 ): TransferDeclaration {
   const source = input.source;
   const payerName = (input.payerName ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
   if (source === 'WALLET') {
     // Same shape and own-number rules as every Vodafone Cash reference.
-    const reference = normalizePayerReference('VODAFONE_CASH', input.senderWallet, receivingHandles);
+    const reference = normalizePayerReference(
+      'VODAFONE_CASH',
+      input.senderWallet,
+      receivingHandles,
+    );
     // Into Darsly's wallet, the provider prints the sending number — that is
     // the identity. Into Darsly's InstaPay / bank account, the bank's SMS
     // names only the sender (the 27 Sep "test the money" transfer: wallet →
@@ -200,5 +210,8 @@ export function normalizeDeclaration(
     const reference = raw ? normalizePayerReference('BANK_TRANSFER', raw, receivingHandles) : '';
     return { source, reference, payerName };
   }
-  throw new BadRequestException({ message: 'Say where you are transferring from', code: 'SOURCE_REQUIRED' });
+  throw new BadRequestException({
+    message: 'Say where you are transferring from',
+    code: 'SOURCE_REQUIRED',
+  });
 }

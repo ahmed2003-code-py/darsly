@@ -28,9 +28,9 @@ describe('lesson audio capture', () => {
     const refused = jest.fn(async () => {
       throw { response: { status: 409 } };
     });
-    await expect(uploadWithRetry(refused, 1, new Blob(['x']), [1, 1], async () => undefined)).resolves.toBe(
-      false,
-    );
+    await expect(
+      uploadWithRetry(refused, 1, new Blob(['x']), [1, 1], async () => undefined),
+    ).resolves.toBe(false);
     expect(refused).toHaveBeenCalledTimes(1);
   });
 

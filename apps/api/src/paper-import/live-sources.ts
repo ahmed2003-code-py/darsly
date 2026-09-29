@@ -71,8 +71,16 @@ export function transcriptChunks(segments: { text: string }[]): SourceChunk[] {
 export function mergeSources(documents: SourceChunk[], transcript: SourceChunk[]): SourceChunk[] {
   const at = (i: number, n: number) => (n <= 1 ? 0 : i / (n - 1));
   const all = [
-    ...documents.map((c, i) => ({ c: { ...c, sourceKind: c.sourceKind ?? ('DOCUMENT' as const) }, pos: at(i, documents.length), tie: 0 })),
-    ...transcript.map((c, i) => ({ c: { ...c, sourceKind: 'LIVE_TRANSCRIPT' as const }, pos: at(i, transcript.length), tie: 1 })),
+    ...documents.map((c, i) => ({
+      c: { ...c, sourceKind: c.sourceKind ?? ('DOCUMENT' as const) },
+      pos: at(i, documents.length),
+      tie: 0,
+    })),
+    ...transcript.map((c, i) => ({
+      c: { ...c, sourceKind: 'LIVE_TRANSCRIPT' as const },
+      pos: at(i, transcript.length),
+      tie: 1,
+    })),
   ];
   all.sort((a, b) => a.pos - b.pos || a.tie - b.tie);
   return all.map((x, index) => ({ ...x.c, index }));
@@ -81,7 +89,9 @@ export function mergeSources(documents: SourceChunk[], transcript: SourceChunk[]
 /** Content words for matching across the two sources: folded, and without the article. */
 function terms(text: string): Set<string> {
   const out = new Set<string>();
-  for (const raw of foldArabic(text ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+  for (const raw of foldArabic(text ?? '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)) {
     const w = raw.replace(/^(وال|بال|فال|كال|لل|ال)(?=\p{L}{3})/u, '');
     if (w.length >= 4) out.add(w);
   }
@@ -113,7 +123,9 @@ export function sourceEmphasis(chunks: SourceChunk[]): number[] {
     for (const w of t[i]) vocab.get(k)!.add(w);
   });
   return chunks.map((c, i) => {
-    const other = [...vocab.entries()].filter(([k]) => k !== (c.sourceKind ?? 'DOCUMENT')).map(([, v]) => v);
+    const other = [...vocab.entries()]
+      .filter(([k]) => k !== (c.sourceKind ?? 'DOCUMENT'))
+      .map(([, v]) => v);
     if (!t[i].size || !other.length) return 1;
     // Counted, not a share: colloquial speech and a slide share a handful of
     // terms («الـ overfitting», "validation loss") amid very different wording.
@@ -128,7 +140,13 @@ export type QuestionSourceKind = 'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT' | 'BOTH
 export interface QuestionProvenance {
   kind: QuestionSourceKind;
   /** Where a teacher checks it: the chunk it was written from, and the other source's closest match when it has one. */
-  evidence: { sourceKind: 'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT'; sourceId: string; chunk: number; file: string; page: number | null }[];
+  evidence: {
+    sourceKind: 'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT';
+    sourceId: string;
+    chunk: number;
+    file: string;
+    page: number | null;
+  }[];
 }
 
 /**
@@ -141,13 +159,20 @@ export interface QuestionProvenance {
  * the honest mistake to make.
  */
 export function questionProvenance(
-  q: { text: string; modelAnswer?: string | null; options?: { text: string }[] | null; sourceChunk?: number | null },
+  q: {
+    text: string;
+    modelAnswer?: string | null;
+    options?: { text: string }[] | null;
+    sourceChunk?: number | null;
+  },
   chunks: SourceChunk[],
   ids: { liveSessionId: string | null },
 ): QuestionProvenance | null {
   const own = chunks.find((c) => c.index === q.sourceChunk);
   if (!own) return null;
-  const kindOf = (c: SourceChunk) => (c.sourceKind === 'LIVE_TRANSCRIPT' ? 'LIVE_TRANSCRIPT' : 'UPLOADED_DOCUMENT') as 'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT';
+  const kindOf = (c: SourceChunk) =>
+    (c.sourceKind === 'LIVE_TRANSCRIPT' ? 'LIVE_TRANSCRIPT' : 'UPLOADED_DOCUMENT') as
+      'LIVE_TRANSCRIPT' | 'UPLOADED_DOCUMENT';
   const cite = (c: SourceChunk) => ({
     sourceKind: kindOf(c),
     sourceId: kindOf(c) === 'LIVE_TRANSCRIPT' ? (ids.liveSessionId ?? '') : c.sourceFile,
@@ -157,7 +182,9 @@ export function questionProvenance(
   });
   const evidence = [cite(own)];
   if (kindsOf(chunks).size < 2) return { kind: kindOf(own), evidence };
-  const asked = terms([q.text, q.modelAnswer ?? '', ...(q.options ?? []).map((o) => o.text)].join(' '));
+  const asked = terms(
+    [q.text, q.modelAnswer ?? '', ...(q.options ?? []).map((o) => o.text)].join(' '),
+  );
   let best: { c: SourceChunk; shared: number } | null = null;
   for (const c of chunks) {
     if (kindOf(c) === kindOf(own)) continue;

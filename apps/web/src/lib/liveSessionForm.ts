@@ -19,13 +19,7 @@ import {
  * `fields: [{ field, code, params }]` and lands under the same field.
  */
 export type LiveFormField =
-  | 'title'
-  | 'description'
-  | 'priceCents'
-  | 'startsAt'
-  | 'durationMin'
-  | 'capacity'
-  | 'replayDays';
+  'title' | 'description' | 'priceCents' | 'startsAt' | 'durationMin' | 'capacity' | 'replayDays';
 /** Form order — the first invalid one is where focus goes. */
 export const LIVE_FORM_ORDER: LiveFormField[] = [
   'title',
@@ -97,7 +91,8 @@ export function clientErrors(
       minuteStart + LIVE_SESSION_RULES.pastGraceMin * 60_000,
     ),
   );
-  if (opts.capacityRequired && !v.capacity.trim()) out.capacity ??= { code: 'CAPACITY_REQUIRED', params: {} };
+  if (opts.capacityRequired && !v.capacity.trim())
+    out.capacity ??= { code: 'CAPACITY_REQUIRED', params: {} };
   return out;
 }
 
@@ -141,8 +136,10 @@ export function commerceErrors(c: {
     const cents = parseMoneyToCents(c.price);
     if (!c.price.trim()) out.priceCents = { code: 'PRICE_REQUIRED', params: {} };
     else if (cents == null) out.priceCents = { code: 'PRICE_INVALID', params: {} };
-    else if (cents < LIVE_PRICE_MIN_CENTS) out.priceCents = { code: 'PRICE_TOO_LOW', params: { min: LIVE_PRICE_MIN_CENTS / 100 } };
-    else if (cents > LIVE_PRICE_MAX_CENTS) out.priceCents = { code: 'PRICE_TOO_HIGH', params: { max: LIVE_PRICE_MAX_CENTS / 100 } };
+    else if (cents < LIVE_PRICE_MIN_CENTS)
+      out.priceCents = { code: 'PRICE_TOO_LOW', params: { min: LIVE_PRICE_MIN_CENTS / 100 } };
+    else if (cents > LIVE_PRICE_MAX_CENTS)
+      out.priceCents = { code: 'PRICE_TOO_HIGH', params: { max: LIVE_PRICE_MAX_CENTS / 100 } };
   }
   if (c.replayPolicy === 'INCLUDED_DAYS') {
     const n = Number(c.replayDays.trim());
@@ -162,8 +159,12 @@ export function serverErrors(error: unknown): LiveFormErrors {
   const out: LiveFormErrors = {};
   if (Array.isArray(data?.fields)) {
     for (const f of data.fields as { field?: unknown; code?: unknown; params?: unknown }[]) {
-      if (typeof f?.field !== 'string' || !LIVE_FORM_ORDER.includes(f.field as LiveFormField)) continue;
-      const params = (f.params && typeof f.params === 'object' ? { ...f.params } : {}) as Record<string, number>;
+      if (typeof f?.field !== 'string' || !LIVE_FORM_ORDER.includes(f.field as LiveFormField))
+        continue;
+      const params = (f.params && typeof f.params === 'object' ? { ...f.params } : {}) as Record<
+        string,
+        number
+      >;
       // The server speaks piasters; the form shows EGP.
       if (f.field === 'priceCents') {
         if (typeof params.min === 'number') params.min = params.min / 100;

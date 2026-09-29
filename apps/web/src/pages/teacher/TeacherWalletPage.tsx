@@ -170,7 +170,9 @@ export default function TeacherWalletPage() {
             They move into the balance above once the class is delivered. */}
         <div className="card">
           <p className="text-sm text-on-surface-variant">{t('liveCommerce.pendingEarnings')}</p>
-          <p className="font-heading text-3xl font-extrabold">{egp(wallet.livePendingCents ?? 0)}</p>
+          <p className="font-heading text-3xl font-extrabold">
+            {egp(wallet.livePendingCents ?? 0)}
+          </p>
           <p className="mt-1 text-xs text-outline">
             {t('liveCommerce.pendingEarningsHint', { count: wallet.livePendingSeats ?? 0 })}
           </p>

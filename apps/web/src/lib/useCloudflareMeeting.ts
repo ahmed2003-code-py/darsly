@@ -698,9 +698,7 @@ export function useCloudflareMeeting(
     const poll = setInterval(refresh, STATE_POLL_MS);
     const net = setInterval(() => {
       // Said out loud (aria-live on the page) while a connection is down.
-      const down = [recv.current, send.current].some(
-        (c) => c && !c.closed && c.downSince != null,
-      );
+      const down = [recv.current, send.current].some((c) => c && !c.closed && c.downSince != null);
       setConnection(down ? 'reconnecting' : 'connected');
       void reconnect();
     }, 2_000);
@@ -808,7 +806,9 @@ export function useCloudflareMeeting(
           const form = new FormData();
           form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
           if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
-          return api.post(`/teacher/live/${liveSessionId}/audio/${seq}`, form).then(() => undefined);
+          return api
+            .post(`/teacher/live/${liveSessionId}/audio/${seq}`, form)
+            .then(() => undefined);
         },
         undefined,
         idbPieceStore(),
@@ -846,7 +846,8 @@ export function useCloudflareMeeting(
       const tracks: MediaStreamTrack[] = [];
       const mic = local.current.get('AUDIO')?.track;
       if (mic) tracks.push(mic);
-      for (const p of pulled.current.values()) if (p.kind === 'AUDIO' && p.track) tracks.push(p.track);
+      for (const p of pulled.current.values())
+        if (p.kind === 'AUDIO' && p.track) tracks.push(p.track);
       lessonAudio.current?.setTracks(tracks);
     };
     sync();

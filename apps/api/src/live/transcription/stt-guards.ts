@@ -99,7 +99,8 @@ export function looksLikeRepetitionLoop(text: string, durationMs: number | null)
   }
   const covered = new Uint8Array(w.length);
   for (let i = 0; i + LOOP_WINDOW <= w.length; i++) {
-    if ((counts.get(w.slice(i, i + LOOP_WINDOW).join(' ')) ?? 0) >= LOOP_REPEATS) covered.fill(1, i, i + LOOP_WINDOW);
+    if ((counts.get(w.slice(i, i + LOOP_WINDOW).join(' ')) ?? 0) >= LOOP_REPEATS)
+      covered.fill(1, i, i + LOOP_WINDOW);
   }
   return covered.reduce((a, b) => a + b, 0) / w.length >= 0.3;
 }

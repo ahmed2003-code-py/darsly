@@ -82,7 +82,9 @@ describe('the evidence the server reads from an SMS', () => {
   it('(12) our receiving number in an SMS is never a payer — even with a country code', () => {
     const e = ev(`تم استلام مبلغ 24 جنيه من 2${OURS}`);
     expect(e.senderNumbers).toEqual([]);
-    expect(eventEvidence({ reference: OURS, identities: [OURS, `+2${OURS}`] }, RECEIVING).senderNumbers).toEqual([]);
+    expect(
+      eventEvidence({ reference: OURS, identities: [OURS, `+2${OURS}`] }, RECEIVING).senderNumbers,
+    ).toEqual([]);
   });
 
   it('(12) a buyer reference equal to our number is no identity at all', () => {
@@ -107,7 +109,11 @@ describe('the matching policy', () => {
   });
 
   it('(3) a receipt copied from another buyer, different payer → never verified', () => {
-    const fake = cand({ receipt: RECEIPT, ownerName: 'محمود ابراهيم سعيد', declaredPayerName: 'محمود ابراهيم سعيد' });
+    const fake = cand({
+      receipt: RECEIPT,
+      ownerName: 'محمود ابراهيم سعيد',
+      declaredPayerName: 'محمود ابراهيم سعيد',
+    });
     const d = decideMatch(ev(bankToWalletSms('احمد عبدالعزيز هريدى')), [fake], ctx());
     expect(d.status).not.toBe('MATCHED');
   });
@@ -119,13 +125,21 @@ describe('the matching policy', () => {
   });
 
   it('(4) wrong (valid-looking) sender number, right amount, matching receipt, same name → never verified', () => {
-    const c = cand({ reference: '01099999999', receipt: RECEIPT, ownerName: 'احمد عبد العزيز هريدي' });
+    const c = cand({
+      reference: '01099999999',
+      receipt: RECEIPT,
+      ownerName: 'احمد عبد العزيز هريدي',
+    });
     const d = decideMatch(ev(walletSms('01284120292')), [c], ctx());
     expect(d.status).toBe('AMBIGUOUS');
   });
 
   it('(4) wrong typed sender number, right amount, matching receipt → never verified', () => {
-    const c = cand({ reference: '01999999999', receipt: RECEIPT, ownerName: 'احمد عبد العزيز هريدي' });
+    const c = cand({
+      reference: '01999999999',
+      receipt: RECEIPT,
+      ownerName: 'احمد عبد العزيز هريدي',
+    });
     const d = decideMatch(ev(walletSms('01284120292')), [c], ctx());
     expect(d.status).toBe('AMBIGUOUS');
     if (d.status !== 'MATCHED') expect(d.note).toMatch(/sender number/);
@@ -133,7 +147,11 @@ describe('the matching policy', () => {
 
   it('(5) the provider-printed sender number equals the declared one → matched (strong)', () => {
     const c = cand({ reference: '01284120292' });
-    const d = decideMatch(ev(walletSms('01284120292')), [c, cand({ id: 'p2', reference: '01111111111' })], ctx());
+    const d = decideMatch(
+      ev(walletSms('01284120292')),
+      [c, cand({ id: 'p2', reference: '01111111111' })],
+      ctx(),
+    );
     expect(d).toMatchObject({ status: 'MATCHED', basis: 'SENDER_NUMBER' });
     if (d.status === 'MATCHED') expect(d.candidate.id).toBe('p1');
   });
@@ -146,13 +164,21 @@ describe('the matching policy', () => {
 
   it('(6) bank → wallet: another unclaimed transfer of the amount is waiting → a person decides', () => {
     const c = cand({ declaredPayerName: 'أحمد عبد العزيز هريدي' });
-    const d = decideMatch(ev(bankToWalletSms('احمد عبدالعزيز هريدى')), [c], ctx({ otherOpenEvents: 1 }));
+    const d = decideMatch(
+      ev(bankToWalletSms('احمد عبدالعزيز هريدى')),
+      [c],
+      ctx({ otherOpenEvents: 1 }),
+    );
     expect(d.status).toBe('AMBIGUOUS');
   });
 
   it('(6) bank → wallet: two candidates of the amount → a person decides, even if one name fits', () => {
     const c = cand({ declaredPayerName: 'أحمد عبد العزيز هريدي' });
-    const d = decideMatch(ev(bankToWalletSms('احمد عبدالعزيز هريدى')), [c, cand({ id: 'p2' })], ctx());
+    const d = decideMatch(
+      ev(bankToWalletSms('احمد عبدالعزيز هريدى')),
+      [c, cand({ id: 'p2' })],
+      ctx(),
+    );
     expect(d.status).toBe('AMBIGUOUS');
   });
 
@@ -164,7 +190,11 @@ describe('the matching policy', () => {
 
   it('(7) a two-part name is not enough to prove who paid', () => {
     expect(namesAgreeStrongly('احمد هريدي', 'احمد هريدي')).toBe(false);
-    const d = decideMatch(ev(bankToWalletSms('احمد هريدي')), [cand({ declaredPayerName: 'احمد هريدي' })], ctx());
+    const d = decideMatch(
+      ev(bankToWalletSms('احمد هريدي')),
+      [cand({ declaredPayerName: 'احمد هريدي' })],
+      ctx(),
+    );
     expect(d.status).toBe('AMBIGUOUS');
   });
 
@@ -215,24 +245,37 @@ describe('the matching policy', () => {
 
 describe('what a buyer may declare', () => {
   it('(11) our receiving number as the sending wallet is refused', () => {
-    expect(() => normalizeDeclaration({ source: 'WALLET', senderWallet: OURS }, RECEIVING)).toThrow();
+    expect(() =>
+      normalizeDeclaration({ source: 'WALLET', senderWallet: OURS }, RECEIVING),
+    ).toThrow();
     expect(() => normalizePayerReference('VODAFONE_CASH', `+2${OURS}`, RECEIVING)).toThrow();
   });
 
   it('(11) our InstaPay address as a bank reference is refused', () => {
-    expect(() => normalizeDeclaration({ source: 'BANK', payerName: 'احمد محمد علي', reference: 'darsly@instapay' }, RECEIVING)).toThrow();
+    expect(() =>
+      normalizeDeclaration(
+        { source: 'BANK', payerName: 'احمد محمد علي', reference: 'darsly@instapay' },
+        RECEIVING,
+      ),
+    ).toThrow();
   });
 
   it('a wallet source needs a real Egyptian wallet number', () => {
-    expect(() => normalizeDeclaration({ source: 'WALLET', senderWallet: '12345' }, RECEIVING)).toThrow();
-    expect(normalizeDeclaration({ source: 'WALLET', senderWallet: '+20 128 412 0292' }, RECEIVING)).toMatchObject({
+    expect(() =>
+      normalizeDeclaration({ source: 'WALLET', senderWallet: '12345' }, RECEIVING),
+    ).toThrow();
+    expect(
+      normalizeDeclaration({ source: 'WALLET', senderWallet: '+20 128 412 0292' }, RECEIVING),
+    ).toMatchObject({
       source: 'WALLET',
       reference: '01284120292',
     });
   });
 
   it('a bank source needs no number, only the account holder’s name', () => {
-    expect(normalizeDeclaration({ source: 'BANK', payerName: '  احمد  محمد علي ' }, RECEIVING)).toEqual({
+    expect(
+      normalizeDeclaration({ source: 'BANK', payerName: '  احمد  محمد علي ' }, RECEIVING),
+    ).toEqual({
       source: 'BANK',
       reference: '',
       payerName: 'احمد محمد علي',

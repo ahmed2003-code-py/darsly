@@ -50,7 +50,8 @@ class SubmitPaymentDto {
 /** Before transferring for a course: which Darsly account, and where the money comes FROM. */
 class DeclarePaymentDto {
   @IsId() courseId: string;
-  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method: 'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
+  @IsIn(['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER']) method:
+    'INSTAPAY' | 'VODAFONE_CASH' | 'BANK_TRANSFER' | 'OTHER';
   @IsIn(['WALLET', 'BANK']) source: 'WALLET' | 'BANK';
   @IsOptional() @IsString() @MaxLength(20) senderWallet?: string;
   @IsOptional() @IsString() @MaxLength(80) payerName?: string;
@@ -143,7 +144,10 @@ export class ManualPaymentsController {
   @Post('payments/declare')
   @ApiBearerAuth()
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Declare a course transfer (creates the PENDING payment before the transfer)' })
+  @ApiOperation({
+    summary:
+      '[student] Declare a course transfer (creates the PENDING payment before the transfer)',
+  })
   async declare(@CurrentUser() u: JwtPayload, @Body() dto: DeclarePaymentDto) {
     const payment = await this.payments.submit(u.sub, { ...dto, declare: true });
     await this.matching.reconcilePayment(payment.id).catch(() => undefined);
@@ -153,7 +157,9 @@ export class ManualPaymentsController {
   @Post('payments/:id/proof')
   @ApiBearerAuth()
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] Attach the transfer receipt (supporting evidence) to my declared payment' })
+  @ApiOperation({
+    summary: '[student] Attach the transfer receipt (supporting evidence) to my declared payment',
+  })
   async proof(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: ProofDto) {
     const out = await this.payments.attachProof(u.sub, id, dto.proofImageUrl);
     await this.matching.reconcilePayment(id).catch(() => undefined);
@@ -171,7 +177,9 @@ export class ManualPaymentsController {
   @Get('payments/for-course/:courseId')
   @ApiBearerAuth()
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] My open (or just confirmed) transfer for a course, to resume the checkout' })
+  @ApiOperation({
+    summary: '[student] My open (or just confirmed) transfer for a course, to resume the checkout',
+  })
   forCourse(@CurrentUser() u: JwtPayload, @Param('courseId') courseId: string) {
     return this.payments.openForCourse(u.sub, courseId);
   }

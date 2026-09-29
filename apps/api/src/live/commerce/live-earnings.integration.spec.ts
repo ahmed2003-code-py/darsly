@@ -1,5 +1,11 @@
 import { PrismaService } from '../../prisma/prisma.service';
-import { accountBalance, assertLedgerBalanced, commerceStack, commerceWorld, fundWallet } from './testing';
+import {
+  accountBalance,
+  assertLedgerBalanced,
+  commerceStack,
+  commerceWorld,
+  fundWallet,
+} from './testing';
 
 /**
  * Commerce C against a real PostgreSQL: held money becomes earnings exactly
@@ -45,7 +51,11 @@ async function drain() {
 }
 
 /** A class that started `ranMin` minutes ago, with `n` wallet-bought seats. */
-async function runningClass(opts: { ranMin: number; seats?: number; center?: { teacherSharePercent: number } | null }) {
+async function runningClass(opts: {
+  ranMin: number;
+  seats?: number;
+  center?: { teacherSharePercent: number } | null;
+}) {
   const w = await commerceWorld(prisma, {
     students: opts.seats ?? 1,
     startsInMs: -opts.ranMin * 60_000,
@@ -80,8 +90,12 @@ describe('Commerce C on Postgres: delivery and release', () => {
     for (const p of purchases) {
       expect((await S.commerce.byId(p.id)).status).toBe('DELIVERED');
       expect(await accountBalance(prisma, `purchase:${p.id}:held`)).toBe(0);
-      expect(await prisma.ledgerTransaction.count({ where: { idempotencyKey: `live-release:${p.id}` } })).toBe(1);
-      const t = await prisma.ledgerTransaction.findFirstOrThrow({ where: { idempotencyKey: `live-release:${p.id}` } });
+      expect(
+        await prisma.ledgerTransaction.count({ where: { idempotencyKey: `live-release:${p.id}` } }),
+      ).toBe(1);
+      const t = await prisma.ledgerTransaction.findFirstOrThrow({
+        where: { idempotencyKey: `live-release:${p.id}` },
+      });
       await assertLedgerBalanced(prisma, [t.id]);
     }
     expect(await accountBalance(prisma, `teacher:${w.tp.id}:balance`)).toBe(20_000);
@@ -92,7 +106,10 @@ describe('Commerce C on Postgres: delivery and release', () => {
     // The whole journey balances: what the students paid is exactly what
     // Darsly and the teacher received, with nothing left in the holding accounts.
     const fee = await prisma.ledgerEntry.aggregate({
-      where: { account: 'platform:commission', transaction: { idempotencyKey: { in: purchases.map((p) => `live-release:${p.id}`) } } },
+      where: {
+        account: 'platform:commission',
+        transaction: { idempotencyKey: { in: purchases.map((p) => `live-release:${p.id}`) } },
+      },
       _sum: { amountCents: true },
     });
     expect(fee._sum.amountCents).toBe(4_000);
@@ -114,9 +131,14 @@ describe('Commerce C on Postgres: delivery and release', () => {
     expect(await prisma.liveBooking.count({ where: { purchaseId: p.id } })).toBe(1);
 
     // Finance releases it — twice, at once; it moves once.
-    await Promise.allSettled([S.commerce.adminRelease(p.id, 'admin'), S.commerce.adminRelease(p.id, 'admin')]);
+    await Promise.allSettled([
+      S.commerce.adminRelease(p.id, 'admin'),
+      S.commerce.adminRelease(p.id, 'admin'),
+    ]);
     expect(await accountBalance(prisma, `teacher:${w.tp.id}:balance`)).toBe(10_000);
-    expect(await prisma.ledgerTransaction.count({ where: { idempotencyKey: `live-release:${p.id}` } })).toBe(1);
+    expect(
+      await prisma.ledgerTransaction.count({ where: { idempotencyKey: `live-release:${p.id}` } }),
+    ).toBe(1);
   });
 
   it('a reviewed purchase refunded by finance: wallet back, seat gone, no release possible after', async () => {
@@ -125,22 +147,34 @@ describe('Commerce C on Postgres: delivery and release', () => {
     await S.live.endSession(w.session.id, 'MANUAL');
     await drain();
     const id = purchases[0].id;
-    await Promise.allSettled([S.commerce.adminRefund(id, 'admin'), S.commerce.adminRefund(id, 'admin')]);
+    await Promise.allSettled([
+      S.commerce.adminRefund(id, 'admin'),
+      S.commerce.adminRefund(id, 'admin'),
+    ]);
     expect((await S.commerce.byId(id)).status).toBe('REFUNDED');
     expect(await S.ledger.walletBalance(w.students[0].sp.id)).toBe(50_000);
     expect(await prisma.refund.count({ where: { livePurchaseId: id } })).toBe(1);
     expect(await prisma.liveBooking.count({ where: { purchaseId: id } })).toBe(0);
     expect(await accountBalance(prisma, `purchase:${id}:held`)).toBe(0);
-    await expect(S.commerce.adminRelease(id, 'admin')).rejects.toMatchObject({ response: { code: 'PURCHASE_STATE_CONFLICT' } });
+    await expect(S.commerce.adminRelease(id, 'admin')).rejects.toMatchObject({
+      response: { code: 'PURCHASE_STATE_CONFLICT' },
+    });
     await drain();
     expect(await accountBalance(prisma, `teacher:${w.tp.id}:balance`)).toBe(0);
   });
 
   it('a Center sale releases Darsly’s fee, the teacher’s share and the Center’s share from the snapshot', async () => {
     if (!guard()) return;
-    const { w, purchases } = await runningClass({ ranMin: 50, center: { teacherSharePercent: 70 } });
+    const { w, purchases } = await runningClass({
+      ranMin: 50,
+      center: { teacherSharePercent: 70 },
+    });
     // Terms and split change AFTER the sale: the release must not care.
-    await S.terms.createVersion(w.academyId, { feeType: 'PERCENT', feeBps: 5000, feeMode: 'DEDUCTED' }, w.teacher.id);
+    await S.terms.createVersion(
+      w.academyId,
+      { feeType: 'PERCENT', feeBps: 5000, feeMode: 'DEDUCTED' },
+      w.teacher.id,
+    );
     await prisma.academy.update({ where: { id: w.academyId }, data: { teacherSharePercent: 10 } });
     await S.live.endSession(w.session.id, 'MANUAL');
     await drain();
@@ -164,7 +198,10 @@ describe('Commerce C on Postgres: delivery and release', () => {
     await fundWallet(prisma, S.ledger, w.students[0].sp.id, 50_000);
     const p = await S.commerce.payWithWallet(w.students[0].user.id, w.session.id);
     // Move the class into the past (it never started).
-    await prisma.liveSession.update({ where: { id: w.session.id }, data: { startsAt: new Date(Date.now() - 3 * 3600_000) } });
+    await prisma.liveSession.update({
+      where: { id: w.session.id },
+      data: { startsAt: new Date(Date.now() - 3 * 3600_000) },
+    });
     await drain();
     const after = await prisma.livePurchase.findUniqueOrThrow({ where: { id: p.id } });
     expect(after).toMatchObject({ status: 'NEEDS_REVIEW', reviewReason: 'never started' });

@@ -57,7 +57,9 @@ export async function queueLiveSummary(
       { liveSessionId: sessionId, ...(opts.force ? { force: true } : {}) },
       { sameInput: { path: 'liveSessionId', equals: sessionId } },
     );
-    logger.log(`live.summary.queued liveSession=${sessionId} reason=${opts.reason} force=${!!opts.force}`);
+    logger.log(
+      `live.summary.queued liveSession=${sessionId} reason=${opts.reason} force=${!!opts.force}`,
+    );
     return 'PROCESSING';
   } catch (e) {
     // Not queued (AI switched off, month's budget spent, a job appeared a

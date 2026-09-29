@@ -12,7 +12,8 @@ export function lessonLiveView(liveContent: unknown) {
   if (!c) return null;
   return {
     summary: c.includeSummary && c.summary ? forViewers(c.summary) : null,
-    transcript: c.includeTranscript && Array.isArray(c.transcriptSegments) ? c.transcriptSegments : null,
+    transcript:
+      c.includeTranscript && Array.isArray(c.transcriptSegments) ? c.transcriptSegments : null,
     transcriptPartial: !!c.includeTranscript && !!c.transcriptPartial,
   };
 }

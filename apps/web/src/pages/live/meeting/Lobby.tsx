@@ -97,7 +97,10 @@ function DeviceLine({
   const { t } = useTranslation();
   return (
     <div className="flex items-start gap-3 py-3">
-      <span aria-hidden className={`material-symbols-outlined mt-0.5 text-[22px] ${problem ? 'text-error' : 'text-on-surface-variant'}`}>
+      <span
+        aria-hidden
+        className={`material-symbols-outlined mt-0.5 text-[22px] ${problem ? 'text-error' : 'text-on-surface-variant'}`}
+      >
         {icon}
       </span>
       <div className="min-w-0 flex-1">
@@ -109,7 +112,11 @@ function DeviceLine({
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <p className="text-xs leading-relaxed text-error">{problem}</p>
             {onRetry && (
-              <button type="button" className="text-xs font-bold text-primary-text hover:underline" onClick={onRetry}>
+              <button
+                type="button"
+                className="text-xs font-bold text-primary-text hover:underline"
+                onClick={onRetry}
+              >
                 {t('meeting.dev.retry')}
               </button>
             )}
@@ -163,12 +170,15 @@ export default function Lobby({
   const devicesOn = !listenOnly || testing;
   const dev = useLobbyDevices(devicesOn);
   const now = useNow(!!waiting, skewMs);
-  const problemText = (kind: 'cam' | 'mic', p: DeviceProblem | null) => (p ? t(`meeting.dev.${kind}.${p}`) : null);
+  const problemText = (kind: 'cam' | 'mic', p: DeviceProblem | null) =>
+    p ? t(`meeting.dev.${kind}.${p}`) : null;
   const opensIn = waiting ? countdown(waiting.opensAt, now) : null;
   const canJoin = ready && !joining && !waiting;
 
   const enter = () => {
-    const choice = listenOnly ? { mic: false, cam: false } : { mic: dev.micOn && !dev.micProblem, cam: dev.camOn && !dev.camProblem };
+    const choice = listenOnly
+      ? { mic: false, cam: false }
+      : { mic: dev.micOn && !dev.micProblem, cam: dev.camOn && !dev.camProblem };
     // The classroom opens the devices itself; the lobby lets go first.
     dev.release();
     setTesting(false);
@@ -195,7 +205,9 @@ export default function Lobby({
             <span className="text-sm text-zinc-300">{t('meeting.dev.checking')}</span>
           ) : (
             <span className="flex flex-col items-center gap-2 text-sm text-zinc-300">
-              <span aria-hidden className="material-symbols-outlined text-4xl">videocam_off</span>
+              <span aria-hidden className="material-symbols-outlined text-4xl">
+                videocam_off
+              </span>
               {dev.camProblem ? t('meeting.dev.noPreview') : t('meeting.dev.camOffPreview')}
             </span>
           )}
@@ -227,7 +239,13 @@ export default function Lobby({
       <DeviceLine
         icon="videocam"
         title={t('meeting.dev.camera')}
-        status={dev.camProblem ? t('meeting.dev.unavailable') : dev.camOn ? t('meeting.dev.on') : t('meeting.dev.off')}
+        status={
+          dev.camProblem
+            ? t('meeting.dev.unavailable')
+            : dev.camOn
+              ? t('meeting.dev.on')
+              : t('meeting.dev.off')
+        }
         problem={problemText('cam', dev.camProblem)}
         onRetry={dev.camProblem === 'denied' || dev.camProblem === 'busy' ? dev.retry : undefined}
       >
@@ -288,7 +306,9 @@ export default function Lobby({
     <div className="min-h-dvh bg-surface pb-28 text-on-surface sm:pb-8">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 pt-3 sm:px-6">
         <button type="button" className="btn-ghost px-3 text-on-surface-variant" onClick={onBack}>
-          <span aria-hidden className="material-symbols-outlined text-[20px] rtl:rotate-180">arrow_back</span>
+          <span aria-hidden className="material-symbols-outlined text-[20px] rtl:rotate-180">
+            arrow_back
+          </span>
           {t('meeting.back')}
         </button>
         <ColorModeToggle />
@@ -306,24 +326,40 @@ export default function Lobby({
           </h1>
           <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-outline">
             <span className="inline-flex items-center gap-1">
-              <span aria-hidden className="material-symbols-outlined text-[18px]">schedule</span>
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                schedule
+              </span>
               {when(session.startsAt, i18n.language)}
             </span>
             <span className="inline-flex items-center gap-1">
-              <span aria-hidden className="material-symbols-outlined text-[18px]">timer</span>
+              <span aria-hidden className="material-symbols-outlined text-[18px]">
+                timer
+              </span>
               {t('live.minutes', { count: session.durationMin })}
             </span>
           </p>
           {waiting ? (
-            <p className="flex items-start gap-2 rounded-xl bg-secondary-container/50 p-3 text-sm text-on-secondary-container" role="status">
-              <span aria-hidden className="material-symbols-outlined text-[20px]">hourglass_top</span>
+            <p
+              className="flex items-start gap-2 rounded-xl bg-secondary-container/50 p-3 text-sm text-on-secondary-container"
+              role="status"
+            >
+              <span aria-hidden className="material-symbols-outlined text-[20px]">
+                hourglass_top
+              </span>
               <span className="tabular-nums">
-                {waiting.code === 'NOT_OPEN_YET' && opensIn ? t('meeting.lobby.waitingOpen', { time: opensIn }) : t('meeting.lobby.waitingTeacherHint')}
+                {waiting.code === 'NOT_OPEN_YET' && opensIn
+                  ? t('meeting.lobby.waitingOpen', { time: opensIn })
+                  : t('meeting.lobby.waitingTeacherHint')}
               </span>
             </p>
           ) : (
-            <p className="flex items-start gap-2 rounded-xl bg-secondary-container/50 p-3 text-sm text-on-secondary-container" role="status">
-              <span aria-hidden className="material-symbols-outlined text-[20px]">check_circle</span>
+            <p
+              className="flex items-start gap-2 rounded-xl bg-secondary-container/50 p-3 text-sm text-on-secondary-container"
+              role="status"
+            >
+              <span aria-hidden className="material-symbols-outlined text-[20px]">
+                check_circle
+              </span>
               {t('meeting.lobby.open')}
             </p>
           )}
@@ -331,7 +367,10 @@ export default function Lobby({
           {listenOnly && (
             <ul className="space-y-3 pt-1">
               <li className="flex items-start gap-3">
-                <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary-text">
+                <span
+                  aria-hidden
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-fixed text-primary-text"
+                >
                   <span className="material-symbols-outlined text-[22px]">headphones</span>
                 </span>
                 <div>
@@ -340,7 +379,10 @@ export default function Lobby({
                 </div>
               </li>
               <li className="flex items-start gap-3">
-                <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-container-high text-on-surface-variant">
+                <span
+                  aria-hidden
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-surface-container-high text-on-surface-variant"
+                >
                   <span className="material-symbols-outlined text-[22px]">back_hand</span>
                 </span>
                 <div>
@@ -350,11 +392,20 @@ export default function Lobby({
               </li>
             </ul>
           )}
-          {!isTeacher && !listenOnly && <p className="text-xs text-outline">{t('meeting.dev.studentSendHint')}</p>}
+          {!isTeacher && !listenOnly && (
+            <p className="text-xs text-outline">{t('meeting.dev.studentSendHint')}</p>
+          )}
 
           <div className="hidden space-y-2 pt-2 sm:block">
-            <button className="btn-primary w-full py-3 text-base" disabled={!canJoin} onClick={enter} aria-busy={joining || undefined}>
-              <span aria-hidden className="material-symbols-outlined text-[20px]">{waiting ? 'schedule' : 'login'}</span>
+            <button
+              className="btn-primary w-full py-3 text-base"
+              disabled={!canJoin}
+              onClick={enter}
+              aria-busy={joining || undefined}
+            >
+              <span aria-hidden className="material-symbols-outlined text-[20px]">
+                {waiting ? 'schedule' : 'login'}
+              </span>
               {joinLabel}
             </button>
           </div>
@@ -366,7 +417,11 @@ export default function Lobby({
               {preview}
               {devices}
               {listenOnly && (
-                <button type="button" className="text-sm font-semibold text-on-surface-variant hover:underline" onClick={() => setTesting(false)}>
+                <button
+                  type="button"
+                  className="text-sm font-semibold text-on-surface-variant hover:underline"
+                  onClick={() => setTesting(false)}
+                >
                   {t('meeting.lobby.stopTest')}
                 </button>
               )}
@@ -376,7 +431,9 @@ export default function Lobby({
               <p className="font-heading font-bold">{t('meeting.lobby.testTitle')}</p>
               <p className="mt-1 text-sm text-on-surface-variant">{t('meeting.lobby.testHint')}</p>
               <button type="button" className="btn-ghost mt-3" onClick={() => setTesting(true)}>
-                <span aria-hidden className="material-symbols-outlined text-base">settings_voice</span>
+                <span aria-hidden className="material-symbols-outlined text-base">
+                  settings_voice
+                </span>
                 {t('meeting.lobby.testButton')}
               </button>
             </div>
@@ -386,8 +443,15 @@ export default function Lobby({
 
       {/* On a phone the way in stays under the thumb, whatever is scrolled. */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-outline-variant bg-surface-container-lowest px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 sm:hidden">
-        <button className="btn-primary w-full py-3 text-base" disabled={!canJoin} onClick={enter} aria-busy={joining || undefined}>
-          <span aria-hidden className="material-symbols-outlined text-[20px]">{waiting ? 'schedule' : 'login'}</span>
+        <button
+          className="btn-primary w-full py-3 text-base"
+          disabled={!canJoin}
+          onClick={enter}
+          aria-busy={joining || undefined}
+        >
+          <span aria-hidden className="material-symbols-outlined text-[20px]">
+            {waiting ? 'schedule' : 'login'}
+          </span>
           {joinLabel}
         </button>
       </div>

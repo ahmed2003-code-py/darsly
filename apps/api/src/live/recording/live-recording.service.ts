@@ -95,7 +95,12 @@ export class LiveRecordingService {
         // Never started: nothing was recorded, so there is nothing to keep.
         await this.prisma.liveRecording.updateMany({
           where: { id: rec.id, status: 'REQUESTED' },
-          data: { stopRequestedAt: now, status: 'FAILED', error: 'STOPPED_BEFORE_START', failedAt: now },
+          data: {
+            stopRequestedAt: now,
+            status: 'FAILED',
+            error: 'STOPPED_BEFORE_START',
+            failedAt: now,
+          },
         });
       } else {
         await this.prisma.liveRecording.updateMany({
@@ -105,7 +110,9 @@ export class LiveRecordingService {
       }
     }
     if (active.length) {
-      this.logger.log(`live.recording.stop_requested liveSession=${id} recordings=${active.length}`);
+      this.logger.log(
+        `live.recording.stop_requested liveSession=${id} recordings=${active.length}`,
+      );
       this.rtc.changed(id);
     }
     return { id, stopping: active.length };
@@ -143,8 +150,7 @@ export class LiveRecordingService {
       });
       // Still packaging after this long is not coming back (the video worker
       // is off everywhere, say): it fails rather than processing forever.
-      const stalled =
-        !!r.handedAt && Date.now() - r.handedAt.getTime() > PROCESSING_STALL_MS;
+      const stalled = !!r.handedAt && Date.now() - r.handedAt.getTime() > PROCESSING_STALL_MS;
       const next = !asset
         ? 'FAILED'
         : asset.status === 'READY'

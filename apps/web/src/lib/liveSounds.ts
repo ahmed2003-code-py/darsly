@@ -11,7 +11,12 @@
 export type LiveSound = 'join' | 'leave' | 'hand' | 'message';
 
 const KEY = 'darsly-live-sounds';
-const MIN_GAP_MS: Record<LiveSound, number> = { join: 4000, leave: 4000, hand: 1500, message: 1200 };
+const MIN_GAP_MS: Record<LiveSound, number> = {
+  join: 4000,
+  leave: 4000,
+  hand: 1500,
+  message: 1200,
+};
 /** Two notes each: [frequency Hz, start s, length s]. */
 const NOTES: Record<LiveSound, [number, number, number][]> = {
   join: [

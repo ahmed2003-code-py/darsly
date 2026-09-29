@@ -60,7 +60,11 @@ export async function finalizeTranscript(
     giveUpPending: boolean;
     onChanged?: TranscriptChanged;
   },
-): Promise<{ status: 'READY' | 'PARTIAL' | 'FAILED' | 'PENDING' | 'LOST'; meta: TranscriptMeta; changed: boolean }> {
+): Promise<{
+  status: 'READY' | 'PARTIAL' | 'FAILED' | 'PENDING' | 'LOST';
+  meta: TranscriptMeta;
+  changed: boolean;
+}> {
   const where = { sessionId: opts.sessionId, roomName: opts.roomName };
   if (opts.giveUpPending) {
     await prisma.liveAudioSegment.updateMany({
@@ -74,9 +78,13 @@ export async function finalizeTranscript(
     select: { startedAt: true, transcriptText: true, transcriptRevision: true },
   });
   const failed = rows.filter((r) => r.error).length;
-  const providerUnavailable = rows.filter((r) => r.error?.startsWith('PROVIDER_UNAVAILABLE')).length;
+  const providerUnavailable = rows.filter((r) =>
+    r.error?.startsWith('PROVIDER_UNAVAILABLE'),
+  ).length;
   const pending = rows.filter((r) => r.text === null && !r.error).length;
-  const classStartSec = Math.floor((session.startedAt?.getTime() ?? (rows[0]?.seq ?? 0) * 1000) / 1000);
+  const classStartSec = Math.floor(
+    (session.startedAt?.getTime() ?? (rows[0]?.seq ?? 0) * 1000) / 1000,
+  );
   const { segments, text } = assembleTranscript(rows, classStartSec);
   const sentMs = rows.filter((r) => r.attempts > 0).reduce((n, r) => n + estimateMs(r), 0);
   const changed = (text || null) !== (session.transcriptText ?? null);
@@ -89,7 +97,13 @@ export async function finalizeTranscript(
     skipped: rows.filter((r) => !!r.skipReason).length,
     failed,
     partial: status === 'PARTIAL',
-    reason: text ? null : providerUnavailable ? 'PROVIDER_UNAVAILABLE' : failed ? 'ALL_FAILED' : 'NO_SPEECH',
+    reason: text
+      ? null
+      : providerUnavailable
+        ? 'PROVIDER_UNAVAILABLE'
+        : failed
+          ? 'ALL_FAILED'
+          : 'NO_SPEECH',
     providerUnavailable,
     audioSeconds: Math.round(rows.reduce((n, r) => n + estimateMs(r), 0) / 1000),
     model: opts.model,
@@ -112,7 +126,9 @@ export async function finalizeTranscript(
       ...(changed
         ? {
             transcriptText: text || null,
-            transcriptSegments: text ? (segments as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+            transcriptSegments: text
+              ? (segments as unknown as Prisma.InputJsonValue)
+              : Prisma.DbNull,
           }
         : {}),
     },

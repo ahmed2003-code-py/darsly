@@ -604,7 +604,9 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
           error: `FINALIZE: ${(e as Error).message.slice(0, 300)}`,
           finalizeAttempts: tries,
           // Back off before the next try.
-          leaseUntil: new Date(Date.now() + Math.min(10 * 60_000, 15_000 * 2 ** Math.min(tries - 1, 6))),
+          leaseUntil: new Date(
+            Date.now() + Math.min(10 * 60_000, 15_000 * 2 ** Math.min(tries - 1, 6)),
+          ),
           leaseOwner: null,
         },
       });

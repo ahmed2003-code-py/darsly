@@ -78,7 +78,8 @@ export default function LiveTransferForm({
 }) {
   const { t } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
-  const declared = purchase.payment?.status === 'PENDING' && !purchase.payment.claimedAt ? purchase.payment : null;
+  const declared =
+    purchase.payment?.status === 'PENDING' && !purchase.payment.claimedAt ? purchase.payment : null;
   const [editing, setEditing] = useState(false);
   const [method, setMethod] = useState(declared?.method ?? '');
   const [source, setSource] = useState<'WALLET' | 'BANK' | ''>(declared?.transferSource ?? '');
@@ -98,7 +99,8 @@ export default function LiveTransferForm({
     queryFn: async () => (await api.get('/payment-accounts')).data,
   });
   const list: any[] = accounts ?? [];
-  const ours = (v: string) => !!tenDigits(v) && list.some((a) => tenDigits(a.handle) === tenDigits(v));
+  const ours = (v: string) =>
+    !!tenDigits(v) && list.some((a) => tenDigits(a.handle) === tenDigits(v));
 
   // The same rules the server enforces, so a wrong answer is seen while it can be fixed.
   const walletDigits = senderWallet.replace(/\D/g, '');
@@ -108,9 +110,12 @@ export default function LiveTransferForm({
   // Into Darsly's InstaPay / bank account the bank's SMS names only the
   // sender — their name is what lets it confirm by itself, so it is asked for
   // there (and always for a bank / InstaPay source).
-  const needName = source === 'BANK' || (source === 'WALLET' && !!method && method !== 'VODAFONE_CASH');
+  const needName =
+    source === 'BANK' || (source === 'WALLET' && !!method && method !== 'VODAFONE_CASH');
   const canDeclare =
-    !!method && (source === 'WALLET' ? walletOk : source === 'BANK' ? true : false) && (!needName || nameOk);
+    !!method &&
+    (source === 'WALLET' ? walletOk : source === 'BANK' ? true : false) &&
+    (!needName || nameOk);
 
   const account = list.find((a) => a.method === (declared?.method ?? method)) ?? null;
   const showStep2 = !!declared && !editing;
@@ -126,45 +131,59 @@ export default function LiveTransferForm({
       <div className={`grid gap-5 ${underReview ? '' : 'sm:grid-cols-2'}`}>
         {/* Money that arrived and waits for a person: "transfer now" would
             read as "pay again" — only the optional receipt stays. */}
-        {!underReview && <div>
-          <p className="mb-2 flex items-center gap-2 font-heading font-bold">
-            <span className="material-symbols-outlined text-primary rtl:-scale-x-100">north_east</span>
-            {t('liveTransfer.step2Title')}
-          </p>
-          <div className="mb-3 flex items-center justify-between rounded-xl bg-primary-fixed/40 p-3">
-            <span className="text-xs text-outline">{t('liveTransfer.sendExactly')}</span>
-            <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">
-              {egp(purchase.studentPaysCents)}
-            </span>
-          </div>
-          {account && (
-            <div className="rounded-xl border border-outline-variant/60 p-3">
-              <p className="text-xs text-outline">{t('liveTransfer.toAccount')}</p>
-              <div className="mt-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">{METHOD_ICON[account.method] ?? 'payments'}</span>
-                <span className="font-bold">{account.label}</span>
-              </div>
-              <p className="mt-1 select-all font-mono text-sm text-on-surface-variant" dir="ltr">
-                {account.handle}
-              </p>
-              {account.instructions && <p className="mt-1 text-xs text-outline">{account.instructions}</p>}
+        {!underReview && (
+          <div>
+            <p className="mb-2 flex items-center gap-2 font-heading font-bold">
+              <span className="material-symbols-outlined text-primary rtl:-scale-x-100">
+                north_east
+              </span>
+              {t('liveTransfer.step2Title')}
+            </p>
+            <div className="mb-3 flex items-center justify-between rounded-xl bg-primary-fixed/40 p-3">
+              <span className="text-xs text-outline">{t('liveTransfer.sendExactly')}</span>
+              <span className="font-heading text-2xl font-bold tracking-tight text-primary tabular-nums">
+                {egp(purchase.studentPaysCents)}
+              </span>
             </div>
-          )}
-          <div className="mt-3 flex items-start justify-between gap-2 rounded-xl bg-surface-container-low/60 p-3 text-sm">
-            <span>
-              {declared.transferSource === 'WALLET'
-                ? t('liveTransfer.fromWallet', { number: declared.senderWallet })
-                : t('liveTransfer.fromBank', { name: declared.payerName })}
-            </span>
-            <button type="button" className="shrink-0 text-xs font-bold text-primary hover:underline" onClick={() => setEditing(true)}>
-              {t('liveTransfer.edit')}
-            </button>
+            {account && (
+              <div className="rounded-xl border border-outline-variant/60 p-3">
+                <p className="text-xs text-outline">{t('liveTransfer.toAccount')}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary">
+                    {METHOD_ICON[account.method] ?? 'payments'}
+                  </span>
+                  <span className="font-bold">{account.label}</span>
+                </div>
+                <p className="mt-1 select-all font-mono text-sm text-on-surface-variant" dir="ltr">
+                  {account.handle}
+                </p>
+                {account.instructions && (
+                  <p className="mt-1 text-xs text-outline">{account.instructions}</p>
+                )}
+              </div>
+            )}
+            <div className="mt-3 flex items-start justify-between gap-2 rounded-xl bg-surface-container-low/60 p-3 text-sm">
+              <span>
+                {declared.transferSource === 'WALLET'
+                  ? t('liveTransfer.fromWallet', { number: declared.senderWallet })
+                  : t('liveTransfer.fromBank', { name: declared.payerName })}
+              </span>
+              <button
+                type="button"
+                className="shrink-0 text-xs font-bold text-primary hover:underline"
+                onClick={() => setEditing(true)}
+              >
+                {t('liveTransfer.edit')}
+              </button>
+            </div>
+            <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] leading-5 text-primary">
+                verified
+              </span>
+              {autoConfirmNote ?? t('liveTransfer.autoConfirm')}
+            </p>
           </div>
-          <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-on-surface-variant">
-            <span className="material-symbols-outlined text-[16px] leading-5 text-primary">verified</span>
-            {autoConfirmNote ?? t('liveTransfer.autoConfirm')}
-          </p>
-        </div>}
+        )}
 
         <div>
           <p className="mb-2 flex items-center gap-2 font-heading font-bold">
@@ -173,7 +192,9 @@ export default function LiveTransferForm({
           </p>
           <label
             className={`mb-3 flex items-start gap-2 rounded-xl border p-3 text-sm transition ${
-              transferred ? 'border-secondary bg-secondary-container/25' : 'border-outline-variant/60'
+              transferred
+                ? 'border-secondary bg-secondary-container/25'
+                : 'border-outline-variant/60'
             }`}
           >
             <input
@@ -206,7 +227,11 @@ export default function LiveTransferForm({
             </button>
           </Field>
           {proof && (
-            <img src={proof} alt="" className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain" />
+            <img
+              src={proof}
+              alt=""
+              className="mb-3 max-h-40 rounded-lg border border-outline-variant/50 object-contain"
+            />
           )}
           <ErrorNote error={error} />
           <button
@@ -237,8 +262,18 @@ export default function LiveTransferForm({
         declaringNow.current = true;
         onDeclare(
           source === 'WALLET'
-            ? { method, source, senderWallet: senderWallet.trim(), payerName: needName ? payerName.trim() : undefined }
-            : { method, source, payerName: payerName.trim(), reference: reference.trim() || undefined },
+            ? {
+                method,
+                source,
+                senderWallet: senderWallet.trim(),
+                payerName: needName ? payerName.trim() : undefined,
+              }
+            : {
+                method,
+                source,
+                payerName: payerName.trim(),
+                reference: reference.trim() || undefined,
+              },
         );
         setEditing(false);
         setTimeout(() => (declaringNow.current = false), 1500);
@@ -256,7 +291,9 @@ export default function LiveTransferForm({
             <label
               key={a.id}
               className={`flex cursor-pointer items-center gap-2 rounded-xl border p-3 text-sm ${
-                method === a.method ? 'border-primary bg-primary-fixed/30' : 'border-outline-variant/60'
+                method === a.method
+                  ? 'border-primary bg-primary-fixed/30'
+                  : 'border-outline-variant/60'
               }`}
             >
               <input
@@ -266,12 +303,16 @@ export default function LiveTransferForm({
                 checked={method === a.method}
                 onChange={() => setMethod(a.method)}
               />
-              <span className="material-symbols-outlined text-primary">{METHOD_ICON[a.method] ?? 'payments'}</span>
+              <span className="material-symbols-outlined text-primary">
+                {METHOD_ICON[a.method] ?? 'payments'}
+              </span>
               <span className="font-bold">{a.label}</span>
             </label>
           ))}
         </div>
-        {!isLoading && list.length === 0 && <p className="text-sm text-outline">{t('pay.noAccounts')}</p>}
+        {!isLoading && list.length === 0 && (
+          <p className="text-sm text-outline">{t('pay.noAccounts')}</p>
+        )}
       </fieldset>
 
       <fieldset>
@@ -296,7 +337,9 @@ export default function LiveTransferForm({
                   {s === 'WALLET' ? t('liveTransfer.sourceWallet') : t('liveTransfer.sourceBank')}
                 </span>
                 <span className="block text-xs text-on-surface-variant">
-                  {s === 'WALLET' ? t('liveTransfer.sourceWalletHint') : t('liveTransfer.sourceBankHint')}
+                  {s === 'WALLET'
+                    ? t('liveTransfer.sourceWalletHint')
+                    : t('liveTransfer.sourceBankHint')}
                 </span>
               </span>
             </label>
@@ -324,17 +367,26 @@ export default function LiveTransferForm({
             placeholder="01xxxxxxxxx"
           />
           {walletIsOurs ? (
-            <p className="mt-1 text-xs text-error" role="alert">{t('liveTransfer.ownNumber')}</p>
+            <p className="mt-1 text-xs text-error" role="alert">
+              {t('liveTransfer.ownNumber')}
+            </p>
           ) : (
-            walletDigits.length >= 10 && !walletOk && (
-              <p className="mt-1 text-xs text-error" role="alert">{t('liveTransfer.badWallet')}</p>
+            walletDigits.length >= 10 &&
+            !walletOk && (
+              <p className="mt-1 text-xs text-error" role="alert">
+                {t('liveTransfer.badWallet')}
+              </p>
             )
           )}
         </Field>
       )}
 
       {source === 'WALLET' && needName && (
-        <Field label={t('liveTransfer.walletOwnerName')} hint={t('liveTransfer.walletOwnerNameHint')} id="live-transfer-wallet-name">
+        <Field
+          label={t('liveTransfer.walletOwnerName')}
+          hint={t('liveTransfer.walletOwnerNameHint')}
+          id="live-transfer-wallet-name"
+        >
           <input
             id="live-transfer-wallet-name"
             className="input"
@@ -349,7 +401,11 @@ export default function LiveTransferForm({
 
       {source === 'BANK' && (
         <>
-          <Field label={t('liveTransfer.payerName')} hint={t('liveTransfer.payerNameHint')} id="live-transfer-name">
+          <Field
+            label={t('liveTransfer.payerName')}
+            hint={t('liveTransfer.payerNameHint')}
+            id="live-transfer-name"
+          >
             <input
               id="live-transfer-name"
               className="input"
@@ -375,7 +431,11 @@ export default function LiveTransferForm({
 
       <ErrorNote error={declareError} />
       <div className="flex gap-2">
-        <button className="btn-primary flex-1" disabled={!canDeclare || declaring} aria-busy={declaring || undefined}>
+        <button
+          className="btn-primary flex-1"
+          disabled={!canDeclare || declaring}
+          aria-busy={declaring || undefined}
+        >
           {declaring ? t('common.saving') : t('liveTransfer.continue')}
         </button>
         {declared && editing && (

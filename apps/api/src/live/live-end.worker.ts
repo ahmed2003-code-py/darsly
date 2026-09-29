@@ -107,7 +107,8 @@ export class LiveEndWorker implements OnModuleInit, OnModuleDestroy {
       if (Date.now() - this.lastReconcile >= LIVE_TRANSCRIPT_RECONCILE_EVERY_MS) {
         this.lastReconcile = Date.now();
         const r = await this.live.reconcileTranscripts();
-        if (r.requeued || r.decided) this.logger.log(`live transcript recovery: ${r.requeued} requeued, ${r.decided} decided`);
+        if (r.requeued || r.decided)
+          this.logger.log(`live transcript recovery: ${r.requeued} requeued, ${r.decided} decided`);
       }
     } catch (e) {
       this.logger.error(`live transcript recovery error: ${(e as Error).message}`);

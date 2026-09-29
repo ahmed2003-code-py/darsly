@@ -221,7 +221,12 @@ export class QuestionGeneratorService {
    * is the allow-list: a model not on it is refused before anything is sent.
    */
   async generate(req: GenerationRequest): Promise<GenerationResult> {
-    return this.call(req.tier, this.prompt(req), this.outputCeiling(req.plan.length), schemaFor(req.chunks));
+    return this.call(
+      req.tier,
+      this.prompt(req),
+      this.outputCeiling(req.plan.length),
+      schemaFor(req.chunks),
+    );
   }
 
   /**
@@ -410,7 +415,11 @@ export class QuestionGeneratorService {
         insufficient: !!res.data?.insufficient,
         supportable: Number.isFinite(res.data?.supportable) ? res.data.supportable : 0,
         ...(Array.isArray(res.data?.sourceConflicts)
-          ? { sourceConflicts: res.data.sourceConflicts.filter((c) => typeof c === 'string' && c.trim()).slice(0, 5) }
+          ? {
+              sourceConflicts: res.data.sourceConflicts
+                .filter((c) => typeof c === 'string' && c.trim())
+                .slice(0, 5),
+            }
           : {}),
         model,
         effort,

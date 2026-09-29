@@ -153,9 +153,15 @@ export class ManualPaymentsService {
     // Live seat: a wallet's number, never ours; a bank / InstaPay holder's
     // name). The older proof-first form still sends only a reference.
     if (dto.declare && (isCash || dto.method === 'WALLET')) {
-      throw new BadRequestException({ message: 'Only a transfer is declared', code: 'METHOD_INVALID' });
+      throw new BadRequestException({
+        message: 'Only a transfer is declared',
+        code: 'METHOD_INVALID',
+      });
     }
-    const declared = dto.declare || dto.source ? normalizeDeclaration({ ...dto }, await this.receivingHandles()) : null;
+    const declared =
+      dto.declare || dto.source
+        ? normalizeDeclaration({ ...dto }, await this.receivingHandles())
+        : null;
     const reference = isCash
       ? (dto.reference ?? '').trim().slice(0, 120)
       : declared
@@ -386,20 +392,43 @@ export class ManualPaymentsService {
    */
   private async redeclare(paymentId: string, dto: SubmitPaymentDto) {
     const declared = normalizeDeclaration({ ...dto }, await this.receivingHandles());
-    const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: paymentId }, select: { id: true } });
+    const matched = await this.prisma.paymentEvent.findFirst({
+      where: { matchedPaymentId: paymentId },
+      select: { id: true },
+    });
     if (matched) {
-      throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+      throw new ConflictException({
+        message: 'A payment is already under review',
+        code: 'PAYMENT_PENDING',
+      });
     }
     const flip = await this.prisma.payment.updateMany({
       where: { id: paymentId, status: 'PENDING', claimedAt: null },
-      data: { method: dto.method as never, transferSource: declared.source, reference: declared.reference, payerName: declared.payerName },
+      data: {
+        method: dto.method as never,
+        transferSource: declared.source,
+        reference: declared.reference,
+        payerName: declared.payerName,
+      },
     });
     if (flip.count === 0) {
-      throw new ConflictException({ message: 'A payment is already under review', code: 'PAYMENT_PENDING' });
+      throw new ConflictException({
+        message: 'A payment is already under review',
+        code: 'PAYMENT_PENDING',
+      });
     }
     return this.prisma.payment.findUniqueOrThrow({
       where: { id: paymentId },
-      select: { id: true, status: true, amountCents: true, walletCents: true, enrollmentId: true, createdAt: true, method: true, cashReceiver: true },
+      select: {
+        id: true,
+        status: true,
+        amountCents: true,
+        walletCents: true,
+        enrollmentId: true,
+        createdAt: true,
+        method: true,
+        cashReceiver: true,
+      },
     });
   }
 
@@ -411,21 +440,37 @@ export class ManualPaymentsService {
   async attachProof(userId: string, paymentId: string, proofImageUrl: string) {
     const student = await this.studentOf(userId);
     const payment = await this.prisma.payment.findUnique({ where: { id: paymentId } });
-    if (!payment || payment.studentId !== student.id || !payment.courseId) throw new NotFoundException('Payment not found');
+    if (!payment || payment.studentId !== student.id || !payment.courseId)
+      throw new NotFoundException('Payment not found');
     if (payment.status === 'PAID') return this.statusFor(userId, paymentId); // the SMS came first
     if (payment.status !== 'PENDING' || payment.claimedAt) {
-      throw new ConflictException({ message: 'A proof for this payment was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+      throw new ConflictException({
+        message: 'A proof for this payment was already sent',
+        code: 'PAYMENT_ALREADY_SUBMITTED',
+      });
     }
     const due = payment.amountCents - payment.walletCents;
     const reading = await this.proofReader.read(proofImageUrl);
-    const check = checkProofAgainstClaim(reading, { amountCents: due }, await this.receivingHandles());
+    const check = checkProofAgainstClaim(
+      reading,
+      { amountCents: due },
+      await this.receivingHandles(),
+    );
     if (check.verdict === 'DISAGREES') {
-      throw new BadRequestException({ message: check.problems.join(' '), code: 'PROOF_DISAGREES', problems: check.problems });
+      throw new BadRequestException({
+        message: check.problems.join(' '),
+        code: 'PROOF_DISAGREES',
+        problems: check.problems,
+      });
     }
     const proofKey = await this.proofs.store('payments', proofImageUrl, PROOF_MAX_BYTES);
     const flip = await this.prisma.payment.updateMany({
       where: { id: paymentId, status: 'PENDING', claimedAt: null },
-      data: { proofImageUrl: proofKey, proofReading: (reading ?? undefined) as never, claimedAt: new Date() },
+      data: {
+        proofImageUrl: proofKey,
+        proofReading: (reading ?? undefined) as never,
+        claimedAt: new Date(),
+      },
     });
     if (flip.count === 0) {
       await this.proofs.discard(proofKey).catch(() => undefined);
@@ -456,7 +501,8 @@ export class ManualPaymentsService {
       where: { id: paymentId },
       include: { enrollment: { select: { status: true } } },
     });
-    if (!p || p.studentId !== student.id || !p.courseId) throw new NotFoundException('Payment not found');
+    if (!p || p.studentId !== student.id || !p.courseId)
+      throw new NotFoundException('Payment not found');
     return this.checkoutView(p);
   }
 
@@ -469,7 +515,10 @@ export class ManualPaymentsService {
         courseId,
         gateway: 'manual',
         method: { notIn: ['CASH', 'WALLET'] },
-        OR: [{ status: 'PENDING' }, { status: 'PAID', paidAt: { gte: new Date(Date.now() - 24 * 3600_000) } }],
+        OR: [
+          { status: 'PENDING' },
+          { status: 'PAID', paidAt: { gte: new Date(Date.now() - 24 * 3600_000) } },
+        ],
       },
       orderBy: { createdAt: 'desc' },
       include: { enrollment: { select: { status: true } } },
@@ -535,10 +584,18 @@ export class ManualPaymentsService {
     });
     let expired = 0;
     for (const r of rows) {
-      const matched = await this.prisma.paymentEvent.findFirst({ where: { matchedPaymentId: r.id }, select: { id: true } });
+      const matched = await this.prisma.paymentEvent.findFirst({
+        where: { matchedPaymentId: r.id },
+        select: { id: true },
+      });
       if (matched) continue;
       try {
-        await this.reject({ sub: 'system', role: Role.SUPER_ADMIN }, r.id, 'انتهت مهلة التحويل — ما وصلش تحويل خلال 72 ساعة', true);
+        await this.reject(
+          { sub: 'system', role: Role.SUPER_ADMIN },
+          r.id,
+          'انتهت مهلة التحويل — ما وصلش تحويل خلال 72 ساعة',
+          true,
+        );
         expired++;
       } catch {
         // Claimed or verified in the meantime: not ours to close.
@@ -1373,7 +1430,10 @@ export class ManualPaymentsService {
     const rows = await this.prisma.payment.findMany({
       where: { studentId: student.id, gateway: 'manual' },
       orderBy: { createdAt: 'desc' },
-      include: { course: { select: { title: true } }, livePurchase: { select: { session: { select: { title: true } } } }, },
+      include: {
+        course: { select: { title: true } },
+        livePurchase: { select: { session: { select: { title: true } } } },
+      },
     });
     return rows.map((p) => ({
       id: p.id,

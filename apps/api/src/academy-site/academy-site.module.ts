@@ -72,7 +72,9 @@ import { AdaptiveReaderService } from '../paper-import/ocr/adaptive-reader.servi
       // When a class's words change, its summary is queued (once per class).
       useFactory: (prisma: PrismaService, storage: StorageProvider, jobs: AiJobService) =>
         new LiveTranscribeHandler(prisma, storage, undefined, undefined, ({ sessionId }) =>
-          queueLiveSummary(prisma, jobs as unknown as SummaryJobs, sessionId, { reason: 'transcript' }).then(() => undefined),
+          queueLiveSummary(prisma, jobs as unknown as SummaryJobs, sessionId, {
+            reason: 'transcript',
+          }).then(() => undefined),
         ),
       inject: [PrismaService, StorageProvider, AiJobService],
     },

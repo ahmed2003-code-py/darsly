@@ -35,7 +35,11 @@ export default function UnmatchedTransfersPanel() {
   const events = useQuery({
     queryKey: ['admin-transfers', filter],
     queryFn: async () =>
-      (await api.get('/admin/payment-events', { params: filter === 'ALL' ? {} : { status: filter } })).data,
+      (
+        await api.get('/admin/payment-events', {
+          params: filter === 'ALL' ? {} : { status: filter },
+        })
+      ).data,
   });
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['admin-transfers'] });
@@ -44,7 +48,8 @@ export default function UnmatchedTransfersPanel() {
     qc.invalidateQueries({ queryKey: ['admin-payments'] });
   };
   const act = useMutation({
-    mutationFn: async ({ path, body }: { path: string; body?: unknown }) => (await api.post(path, body ?? {})).data,
+    mutationFn: async ({ path, body }: { path: string; body?: unknown }) =>
+      (await api.post(path, body ?? {})).data,
     onSettled: () => {
       busy.current = false;
       refresh();
@@ -66,7 +71,9 @@ export default function UnmatchedTransfersPanel() {
             role="tab"
             aria-selected={filter === f}
             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              filter === f ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant text-on-surface-variant'
+              filter === f
+                ? 'border-primary bg-primary text-on-primary'
+                : 'border-outline-variant text-on-surface-variant'
             }`}
             onClick={() => setFilter(f)}
           >
@@ -88,9 +95,12 @@ export default function UnmatchedTransfersPanel() {
             <div key={e.id} className="card space-y-2" data-event={e.id}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-heading text-xl font-bold tabular-nums">{egp(e.amountCents)}</p>
+                  <p className="font-heading text-xl font-bold tabular-nums">
+                    {egp(e.amountCents)}
+                  </p>
                   <p className="text-sm text-on-surface-variant">
-                    {paymentMethodLabel(e.provider)} · {new Date(e.occurredAt).toLocaleString('ar-EG')}
+                    {paymentMethodLabel(e.provider)} ·{' '}
+                    {new Date(e.occurredAt).toLocaleString('ar-EG')}
                   </p>
                 </div>
                 <Badge tone={e.status === 'MATCHED' ? 'teal' : open ? 'warn' : 'neutral'}>
@@ -107,7 +117,9 @@ export default function UnmatchedTransfersPanel() {
                 {e.referenceMasked && (
                   <div>
                     <dt className="text-xs text-outline">{t('transfers.reference')}</dt>
-                    <dd dir="ltr" className="font-mono" style={{ textAlign: 'start' }}>{e.referenceMasked}</dd>
+                    <dd dir="ltr" className="font-mono" style={{ textAlign: 'start' }}>
+                      {e.referenceMasked}
+                    </dd>
                   </div>
                 )}
                 {e.receivingAccount && (
@@ -119,7 +131,9 @@ export default function UnmatchedTransfersPanel() {
               </dl>
               {e.note && <TransferEventNote note={e.note} />}
               {e.matchedPayment?.title && (
-                <p className="text-sm">{t('transfers.matchedTo', { title: e.matchedPayment.title })}</p>
+                <p className="text-sm">
+                  {t('transfers.matchedTo', { title: e.matchedPayment.title })}
+                </p>
               )}
 
               {open && (
@@ -138,19 +152,24 @@ export default function UnmatchedTransfersPanel() {
                   <p className="font-bold">{t(`transfers.returnStatus.${r.status}`)}</p>
                   <p>
                     {t(`method.${r.destinationMethod}`)} · {r.destinationDetails?.holderName} ·{' '}
-                    <span dir="ltr" className="select-all font-mono">{r.destinationDetails?.handle}</span>
+                    <span dir="ltr" className="select-all font-mono">
+                      {r.destinationDetails?.handle}
+                    </span>
                   </p>
                   <p className="text-xs text-outline">{r.reason}</p>
                   {r.transferReference && (
-                    <p className="text-xs text-outline">{t('adminLive.transferRef', { ref: r.transferReference })}</p>
+                    <p className="text-xs text-outline">
+                      {t('adminLive.transferRef', { ref: r.transferReference })}
+                    </p>
                   )}
                   {r.status === 'REQUESTED' && (
                     <button
                       className="btn-primary"
                       disabled={act.isPending}
                       onClick={async () =>
-                        (await askConfirm(t('transfers.confirmReturn'), { title: t('transfers.approveReturn') })) &&
-                        run(`/admin/transfer-returns/${r.id}/approve`)
+                        (await askConfirm(t('transfers.confirmReturn'), {
+                          title: t('transfers.approveReturn'),
+                        })) && run(`/admin/transfer-returns/${r.id}/approve`)
                       }
                     >
                       {t('transfers.approveReturn')}
@@ -170,9 +189,15 @@ export default function UnmatchedTransfersPanel() {
                         className="btn-primary"
                         disabled={act.isPending || (refs[r.id] ?? '').trim().length < 3}
                         onClick={async () =>
-                          (await askConfirm(t('transfers.confirmComplete', { amount: egp(r.amountCents) }), {
-                            title: t('transfers.completeReturn'),
-                          })) && run(`/admin/transfer-returns/${r.id}/complete`, { transferReference: refs[r.id] })
+                          (await askConfirm(
+                            t('transfers.confirmComplete', { amount: egp(r.amountCents) }),
+                            {
+                              title: t('transfers.completeReturn'),
+                            },
+                          )) &&
+                          run(`/admin/transfer-returns/${r.id}/complete`, {
+                            transferReference: refs[r.id],
+                          })
                         }
                       >
                         {t('transfers.completeReturn')}
@@ -182,7 +207,9 @@ export default function UnmatchedTransfersPanel() {
                   {(r.status === 'REQUESTED' || r.status === 'APPROVED') && (
                     <CancelReturn
                       pending={act.isPending}
-                      onCancel={(reason) => run(`/admin/transfer-returns/${r.id}/cancel`, { reason })}
+                      onCancel={(reason) =>
+                        run(`/admin/transfer-returns/${r.id}/cancel`, { reason })
+                      }
                     />
                   )}
                 </div>
@@ -216,13 +243,22 @@ export default function UnmatchedTransfersPanel() {
   );
 }
 
-function CancelReturn({ pending, onCancel }: { pending: boolean; onCancel: (reason: string) => void }) {
+function CancelReturn({
+  pending,
+  onCancel,
+}: {
+  pending: boolean;
+  onCancel: (reason: string) => void;
+}) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   if (!open)
     return (
-      <button className="text-xs font-bold text-error hover:underline" onClick={() => setOpen(true)}>
+      <button
+        className="text-xs font-bold text-error hover:underline"
+        onClick={() => setOpen(true)}
+      >
         {t('transfers.cancelReturn')}
       </button>
     );
@@ -239,7 +275,8 @@ function CancelReturn({ pending, onCancel }: { pending: boolean; onCancel: (reas
         className="btn-ghost text-error"
         disabled={pending || reason.trim().length < 3}
         onClick={async () =>
-          (await askConfirm(t('transfers.cancelReturn'), { danger: true })) && onCancel(reason.trim())
+          (await askConfirm(t('transfers.cancelReturn'), { danger: true })) &&
+          onCancel(reason.trim())
         }
       >
         {t('transfers.cancelReturn')}
@@ -259,7 +296,15 @@ function TargetBadge({ target }: { target: 'LIVE' | 'COURSE' | 'WALLET_TOPUP' })
 }
 
 /** Choose a pending payment, a Live purchase or a wallet top-up for this transfer, then confirm. */
-function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => void; onDone: () => void }) {
+function DecideModal({
+  event,
+  onClose,
+  onDone,
+}: {
+  event: any;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const [choice, setChoice] = useState<Choice | null>(null);
   const [reason, setReason] = useState('');
@@ -267,15 +312,22 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
   const once = useRef(false);
   const candidates = useQuery({
     queryKey: ['admin-transfer-candidates', event.id],
-    queryFn: async () => (await api.get(`/admin/live-commerce/transfers/${event.id}/candidates`)).data,
+    queryFn: async () =>
+      (await api.get(`/admin/live-commerce/transfers/${event.id}/candidates`)).data,
   });
   const submit = useMutation({
     mutationFn: async () => {
       const body = { reason: reason.trim() };
-      if (choice!.kind === 'payment') return (await api.post(`/admin/payment-events/${event.id}/match/${choice!.id}`, body)).data;
-      if (choice!.kind === 'topup') return (await api.post(`/admin/payment-events/${event.id}/match-topup/${choice!.id}`, body)).data;
-      if (choice!.kind === 'verified') return (await api.post(`/admin/payment-events/${event.id}/link/${choice!.id}`, body)).data;
-      return (await api.post(`/admin/live-commerce/transfers/${event.id}/attach/${choice!.id}`, body)).data;
+      if (choice!.kind === 'payment')
+        return (await api.post(`/admin/payment-events/${event.id}/match/${choice!.id}`, body)).data;
+      if (choice!.kind === 'topup')
+        return (await api.post(`/admin/payment-events/${event.id}/match-topup/${choice!.id}`, body))
+          .data;
+      if (choice!.kind === 'verified')
+        return (await api.post(`/admin/payment-events/${event.id}/link/${choice!.id}`, body)).data;
+      return (
+        await api.post(`/admin/live-commerce/transfers/${event.id}/attach/${choice!.id}`, body)
+      ).data;
     },
     onSuccess: onDone,
     onSettled: () => {
@@ -292,7 +344,9 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
     <Modal open onClose={onClose} title={t('transfers.candidatesTitle')} wide>
       <div className="mb-3 flex items-center justify-between rounded-xl bg-surface-container-low p-3 text-sm">
         <span>{t('transfers.incoming')}</span>
-        <span className="font-heading text-lg font-bold tabular-nums">{egp(event.amountCents)}</span>
+        <span className="font-heading text-lg font-bold tabular-nums">
+          {egp(event.amountCents)}
+        </span>
       </div>
       {candidates.isLoading ? (
         <Spinner />
@@ -306,7 +360,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
               <legend className="mb-2 text-sm font-bold">{t('transfers.paymentsHeading')}</legend>
               <div className="space-y-2">
                 {payments.map((p) => (
-                  <label key={p.paymentId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.paymentId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                  <label
+                    key={p.paymentId}
+                    className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.paymentId ? 'border-primary' : 'border-outline-variant/60'}`}
+                  >
                     <input
                       type="radio"
                       name="transfer-target"
@@ -344,7 +401,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
               <legend className="mb-2 text-sm font-bold">{t('transfers.purchasesHeading')}</legend>
               <div className="space-y-2">
                 {purchases.map((p) => (
-                  <label key={p.purchaseId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.purchaseId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                  <label
+                    key={p.purchaseId}
+                    className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.purchaseId ? 'border-primary' : 'border-outline-variant/60'}`}
+                  >
                     <input
                       type="radio"
                       name="transfer-target"
@@ -359,12 +419,16 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                       </span>
                       <span className="block text-on-surface-variant">
                         {p.buyerName ?? '—'}
-                        {p.guest && ` (${t('transfers.guest')})`} · {new Date(p.session.startsAt).toLocaleString('ar-EG')}
+                        {p.guest && ` (${t('transfers.guest')})`} ·{' '}
+                        {new Date(p.session.startsAt).toLocaleString('ar-EG')}
                       </span>
                       <span className="block text-xs text-outline">
-                        {t(`adminLive.status.${p.status}`)} · {t('transfers.expected')}: {egp(p.studentPaysCents)}
+                        {t(`adminLive.status.${p.status}`)} · {t('transfers.expected')}:{' '}
+                        {egp(p.studentPaysCents)}
                       </span>
-                      {p.session.over && <span className="block text-xs text-error">{t('transfers.classOver')}</span>}
+                      {p.session.over && (
+                        <span className="block text-xs text-error">{t('transfers.classOver')}</span>
+                      )}
                     </span>
                   </label>
                 ))}
@@ -376,7 +440,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
               <legend className="mb-2 text-sm font-bold">{t('transfers.topupsHeading')}</legend>
               <div className="space-y-2">
                 {topups.map((p) => (
-                  <label key={p.topupId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.topupId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                  <label
+                    key={p.topupId}
+                    className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.topupId ? 'border-primary' : 'border-outline-variant/60'}`}
+                  >
                     <input
                       type="radio"
                       name="transfer-target"
@@ -415,7 +482,10 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
               <p className="mb-2 text-xs text-outline">{t('transfers.verifiedHint')}</p>
               <div className="space-y-2">
                 {verified.map((p) => (
-                  <label key={p.paymentId} className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.paymentId ? 'border-primary' : 'border-outline-variant/60'}`}>
+                  <label
+                    key={p.paymentId}
+                    className={`flex cursor-pointer gap-2 rounded-xl border p-3 text-sm ${choice?.id === p.paymentId ? 'border-primary' : 'border-outline-variant/60'}`}
+                  >
                     <input
                       type="radio"
                       name="transfer-target"
@@ -430,7 +500,9 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                       </span>
                       {p.paidAt && (
                         <span className="block text-xs text-outline">
-                          {t('transfers.confirmedAt', { time: new Date(p.paidAt).toLocaleString('ar-EG') })}
+                          {t('transfers.confirmedAt', {
+                            time: new Date(p.paidAt).toLocaleString('ar-EG'),
+                          })}
                         </span>
                       )}
                     </span>
@@ -440,9 +512,19 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
             </fieldset>
           )}
           <Field label={t('transfers.reason')} id="transfer-reason">
-            <input id="transfer-reason" className="input" maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} />
+            <input
+              id="transfer-reason"
+              className="input"
+              maxLength={300}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
           </Field>
-          <button className="btn-primary w-full" disabled={!choice || reason.trim().length < 3} onClick={() => setConfirming(true)}>
+          <button
+            className="btn-primary w-full"
+            disabled={!choice || reason.trim().length < 3}
+            onClick={() => setConfirming(true)}
+          >
             {t('common.next')}
           </button>
         </div>
@@ -461,7 +543,13 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
             </dd>
             <dt className="text-outline">{t('transfers.expected')}</dt>
             <dd className="tabular-nums">
-              {egp(choice!.kind === 'payment' || choice!.kind === 'topup' ? row?.expectedCents : choice!.kind === 'verified' ? row?.amountCents : row?.studentPaysCents)}
+              {egp(
+                choice!.kind === 'payment' || choice!.kind === 'topup'
+                  ? row?.expectedCents
+                  : choice!.kind === 'verified'
+                    ? row?.amountCents
+                    : row?.studentPaysCents,
+              )}
             </dd>
             <dt className="text-outline">{t('transfers.incoming')}</dt>
             <dd className="tabular-nums">{egp(event.amountCents)}</dd>
@@ -478,15 +566,17 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
                   : t(`adminLive.status.${row?.status}`)}
             </dd>
           </dl>
-          {choice!.kind === 'purchase' && row?.session.over && <p className="text-error">{t('transfers.classOver')}</p>}
+          {choice!.kind === 'purchase' && row?.session.over && (
+            <p className="text-error">{t('transfers.classOver')}</p>
+          )}
           <p className="rounded-xl bg-error-container/50 p-3 text-on-error-container">
             {choice!.kind === 'topup'
               ? t('transfers.confirmTopup')
               : choice!.kind === 'payment'
-              ? t('transfers.confirmMatch')
-              : choice!.kind === 'verified'
-                ? t('transfers.confirmLink')
-                : t('transfers.confirmAttach')}
+                ? t('transfers.confirmMatch')
+                : choice!.kind === 'verified'
+                  ? t('transfers.confirmLink')
+                  : t('transfers.confirmAttach')}
           </p>
           <ErrorNote error={submit.error} />
           <div className="flex gap-2">
@@ -513,7 +603,15 @@ function DecideModal({ event, onClose, onDone }: { event: any; onClose: () => vo
 }
 
 /** Open a tracked manual return: destination, reason, then an explicit confirmation. */
-function ReturnModal({ event, onClose, onDone }: { event: any; onClose: () => void; onDone: () => void }) {
+function ReturnModal({
+  event,
+  onClose,
+  onDone,
+}: {
+  event: any;
+  onClose: () => void;
+  onDone: () => void;
+}) {
   const { t } = useTranslation();
   const [method, setMethod] = useState<string>('VODAFONE_CASH');
   const [holderName, setHolderName] = useState('');
@@ -522,18 +620,35 @@ function ReturnModal({ event, onClose, onDone }: { event: any; onClose: () => vo
   const once = useRef(false);
   const submit = useMutation({
     mutationFn: async () =>
-      (await api.post(`/admin/payment-events/${event.id}/return`, { method, holderName: holderName.trim(), handle: handle.trim(), reason: reason.trim() })).data,
+      (
+        await api.post(`/admin/payment-events/${event.id}/return`, {
+          method,
+          holderName: holderName.trim(),
+          handle: handle.trim(),
+          reason: reason.trim(),
+        })
+      ).data,
     onSuccess: onDone,
     onSettled: () => {
       once.current = false;
     },
   });
-  const ok = holderName.trim().length >= 2 && handle.trim().length >= 4 && reason.trim().length >= 3;
+  const ok =
+    holderName.trim().length >= 2 && handle.trim().length >= 4 && reason.trim().length >= 3;
   return (
-    <Modal open onClose={onClose} title={t('transfers.returnTitle', { amount: egp(event.amountCents) })}>
+    <Modal
+      open
+      onClose={onClose}
+      title={t('transfers.returnTitle', { amount: egp(event.amountCents) })}
+    >
       <div className="space-y-3">
         <Field label={t('transfers.returnMethod')} id="return-method">
-          <select id="return-method" className="input" value={method} onChange={(e) => setMethod(e.target.value)}>
+          <select
+            id="return-method"
+            className="input"
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+          >
             {RETURN_METHODS.map((m) => (
               <option key={m} value={m}>
                 {t(`method.${m}`)}
@@ -542,22 +657,49 @@ function ReturnModal({ event, onClose, onDone }: { event: any; onClose: () => vo
           </select>
         </Field>
         <Field label={t('transfers.returnHolder')} id="return-holder">
-          <input id="return-holder" className="input" dir="auto" maxLength={80} value={holderName} onChange={(e) => setHolderName(e.target.value)} />
+          <input
+            id="return-holder"
+            className="input"
+            dir="auto"
+            maxLength={80}
+            value={holderName}
+            onChange={(e) => setHolderName(e.target.value)}
+          />
         </Field>
         <Field label={t('transfers.returnHandle')} id="return-handle">
-          <input id="return-handle" className="input" dir="ltr" maxLength={64} value={handle} onChange={(e) => setHandle(e.target.value)} />
+          <input
+            id="return-handle"
+            className="input"
+            dir="ltr"
+            maxLength={64}
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+          />
         </Field>
         <Field label={t('transfers.reason')} id="return-reason">
-          <input id="return-reason" className="input" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
+          <input
+            id="return-reason"
+            className="input"
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
         </Field>
-        <p className="rounded-xl bg-error-container/50 p-3 text-sm text-on-error-container">{t('transfers.confirmReturn')}</p>
+        <p className="rounded-xl bg-error-container/50 p-3 text-sm text-on-error-container">
+          {t('transfers.confirmReturn')}
+        </p>
         <ErrorNote error={submit.error} />
         <button
           className="btn-primary w-full"
           disabled={!ok || submit.isPending}
           onClick={async () => {
             if (once.current) return;
-            if (!(await askConfirm(t('transfers.confirmReturn'), { title: t('transfers.returnTitle', { amount: egp(event.amountCents) }) }))) return;
+            if (
+              !(await askConfirm(t('transfers.confirmReturn'), {
+                title: t('transfers.returnTitle', { amount: egp(event.amountCents) }),
+              }))
+            )
+              return;
             once.current = true;
             submit.mutate();
           }}

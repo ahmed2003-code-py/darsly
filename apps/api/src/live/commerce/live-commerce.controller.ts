@@ -20,7 +20,9 @@ export class LiveCommerceController {
 
   @Get('live/:id/offer')
   @Roles(Role.STUDENT)
-  @ApiOperation({ summary: '[student] What a seat costs, seats left, the rules — and my purchase if any' })
+  @ApiOperation({
+    summary: '[student] What a seat costs, seats left, the rules — and my purchase if any',
+  })
   offer(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Query('coupon') coupon?: string) {
     return this.commerce.quote(id, u.sub, coupon?.slice(0, 24));
   }
@@ -36,7 +38,9 @@ export class LiveCommerceController {
   @Post('live/:id/purchase/wallet')
   @Roles(Role.STUDENT)
   @HttpCode(200)
-  @ApiOperation({ summary: '[student] Buy a seat from the Darsly Wallet — reserved, paid and confirmed at once' })
+  @ApiOperation({
+    summary: '[student] Buy a seat from the Darsly Wallet — reserved, paid and confirmed at once',
+  })
   payWithWallet(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: CouponDto) {
     return this.commerce.payWithWallet(u.sub, id, dto?.couponCode);
   }
@@ -44,8 +48,15 @@ export class LiveCommerceController {
   @Post('live/purchases/:purchaseId/declare')
   @Roles(Role.STUDENT)
   @HttpCode(200)
-  @ApiOperation({ summary: '[student] Before transferring: say where the money comes from (creates the PENDING payment)' })
-  declare(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string, @Body() dto: DeclareTransferDto) {
+  @ApiOperation({
+    summary:
+      '[student] Before transferring: say where the money comes from (creates the PENDING payment)',
+  })
+  declare(
+    @CurrentUser() u: JwtPayload,
+    @Param('purchaseId') purchaseId: string,
+    @Body() dto: DeclareTransferDto,
+  ) {
     return this.commerce.declareTransfer(u.sub, purchaseId, dto);
   }
 
@@ -53,14 +64,20 @@ export class LiveCommerceController {
   @Roles(Role.STUDENT)
   @HttpCode(200)
   @ApiOperation({ summary: '[student] Send the transfer proof for a held seat' })
-  transfer(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string, @Body() dto: TransferClaimBodyDto) {
+  transfer(
+    @CurrentUser() u: JwtPayload,
+    @Param('purchaseId') purchaseId: string,
+    @Body() dto: TransferClaimBodyDto,
+  ) {
     return this.commerce.submitTransfer(u.sub, purchaseId, dto);
   }
 
   @Post('live/purchases/:purchaseId/cancel')
   @Roles(Role.STUDENT)
   @HttpCode(200)
-  @ApiOperation({ summary: '[student] Give a seat back; the refund follows the policy stored with the purchase' })
+  @ApiOperation({
+    summary: '[student] Give a seat back; the refund follows the policy stored with the purchase',
+  })
   cancel(@CurrentUser() u: JwtPayload, @Param('purchaseId') purchaseId: string) {
     return this.commerce.cancelByStudent(u.sub, purchaseId);
   }

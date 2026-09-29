@@ -24,7 +24,12 @@ import { ContentGenerationService } from './content-generation.service';
 import { questionProvenance, transcriptChunks, type QuestionProvenance } from './live-sources';
 import { normalizeSpec, specProblems } from './exam-spec';
 import { ExamBuilderService } from './exam-builder.service';
-import { DraftQuestion, DraftWarning, ExamDraft, partialTranscriptWarning } from './extraction.schema';
+import {
+  DraftQuestion,
+  DraftWarning,
+  ExamDraft,
+  partialTranscriptWarning,
+} from './extraction.schema';
 import { PAPER_IMAGE_MIME, PAPER_PDF_MIME, PagePreparerService } from './page-preparer.service';
 import { PaperImportConfig } from './paper-import.config';
 
@@ -187,11 +192,17 @@ export class PaperImportService {
         });
       }
       if (opts.live) {
-        const transcriptKey = opts.live.segments?.length ? `${this.prefix(record.id)}/live-transcript.json` : undefined;
+        const transcriptKey = opts.live.segments?.length
+          ? `${this.prefix(record.id)}/live-transcript.json`
+          : undefined;
         if (transcriptKey) {
           await this.storage.put(
             transcriptKey,
-            Buffer.from(JSON.stringify(opts.live.segments.map((s) => ({ startSec: s.startSec, text: s.text })))),
+            Buffer.from(
+              JSON.stringify(
+                opts.live.segments.map((s) => ({ startSec: s.startSec, text: s.text })),
+              ),
+            ),
             { contentType: 'application/json' },
           );
         }
@@ -201,7 +212,11 @@ export class PaperImportService {
             sourceMeta: {
               liveSessionId: opts.live.liveSessionId,
               ...(transcriptKey
-                ? { transcriptKey, transcriptRevision: opts.live.transcriptRevision, partial: opts.live.partial }
+                ? {
+                    transcriptKey,
+                    transcriptRevision: opts.live.transcriptRevision,
+                    partial: opts.live.partial,
+                  }
                 : { transcript: false }),
             },
           },
@@ -249,7 +264,9 @@ export class PaperImportService {
         sourceKind,
         files: files.length,
         pages: pageCount,
-        ...(opts.live ? { liveSessionId: opts.live.liveSessionId, transcript: !!opts.live.segments?.length } : {}),
+        ...(opts.live
+          ? { liveSessionId: opts.live.liveSessionId, transcript: !!opts.live.segments?.length }
+          : {}),
       },
     });
 
@@ -523,7 +540,10 @@ export class PaperImportService {
     // The teaching in it, not the "can you hear me" (live-sources.ts).
     const chunks = transcriptChunks(input.segments);
     if (!chunks.length) {
-      throw new BadRequestException({ message: 'The transcript has nothing to write an exam from', code: 'NO_SOURCE_TEXT' });
+      throw new BadRequestException({
+        message: 'The transcript has nothing to write an exam from',
+        code: 'NO_SOURCE_TEXT',
+      });
     }
     const warnings: DraftWarning[] = input.partial ? [partialTranscriptWarning()] : [];
     const record = await this.prisma.paperImport.create({
@@ -562,7 +582,13 @@ export class PaperImportService {
       action: 'paper-import.create',
       entity: 'PaperImport',
       entityId: record.id,
-      meta: { kind: 'CONTENT', sourceKind: 'TRANSCRIPT', liveSessionId: input.liveSessionId, chunks: chunks.length, partial: input.partial },
+      meta: {
+        kind: 'CONTENT',
+        sourceKind: 'TRANSCRIPT',
+        liveSessionId: input.liveSessionId,
+        chunks: chunks.length,
+        partial: input.partial,
+      },
     });
     return record;
   }
@@ -647,21 +673,33 @@ export class PaperImportService {
    * so an edited question never carries a stale label, and nothing of it is
    * ever written into the exam students take.
    */
-  private async liveSources(record: { id: string; sourceLiveSessionId: string | null; draft: unknown }) {
+  private async liveSources(record: {
+    id: string;
+    sourceLiveSessionId: string | null;
+    draft: unknown;
+  }) {
     if (!record.sourceLiveSessionId) return {};
     const chunks = (
-      await this.prisma.examSourceChunk.findMany({ where: { importId: record.id }, orderBy: { index: 'asc' } })
+      await this.prisma.examSourceChunk.findMany({
+        where: { importId: record.id },
+        orderBy: { index: 'asc' },
+      })
     ).map((r) => ({
       index: r.index,
       text: r.text,
       sourceFile: r.sourceFile,
       page: r.page,
       tokensApprox: r.tokensApprox,
-      sourceKind: r.sourceKind === 'LIVE_TRANSCRIPT' ? ('LIVE_TRANSCRIPT' as const) : ('DOCUMENT' as const),
+      sourceKind:
+        r.sourceKind === 'LIVE_TRANSCRIPT' ? ('LIVE_TRANSCRIPT' as const) : ('DOCUMENT' as const),
     }));
     const provenance: Record<string, QuestionProvenance> = {};
-    for (const q of ((record.draft as ExamDraft | null)?.sections ?? []).flatMap((s) => s.questions ?? [])) {
-      const p = questionProvenance(q as never, chunks, { liveSessionId: record.sourceLiveSessionId });
+    for (const q of ((record.draft as ExamDraft | null)?.sections ?? []).flatMap(
+      (s) => s.questions ?? [],
+    )) {
+      const p = questionProvenance(q as never, chunks, {
+        liveSessionId: record.sourceLiveSessionId,
+      });
       if (p) provenance[q.id] = p;
     }
     return {
@@ -819,7 +857,9 @@ export class PaperImportService {
         select: { id: true },
       });
       if (video && this.courses) {
-        await this.courses.placeExamAfter(scope, built.lessonId, video.id, null).catch(() => undefined);
+        await this.courses
+          .placeExamAfter(scope, built.lessonId, video.id, null)
+          .catch(() => undefined);
       }
     }
     await this.audit.log({

@@ -42,7 +42,10 @@ export class AdminLiveCommerceController {
   ) {}
 
   @Get('transfers/:eventId/candidates')
-  @ApiOperation({ summary: '[admin] Where an unmatched transfer could go: pending payments, and Live purchases with no payment' })
+  @ApiOperation({
+    summary:
+      '[admin] Where an unmatched transfer could go: pending payments, and Live purchases with no payment',
+  })
   async transferCandidates(@Param('eventId') eventId: string) {
     const e = await this.transfers.event(eventId);
     const [payments, purchases, verified, topups] = await Promise.all([
@@ -51,12 +54,23 @@ export class AdminLiveCommerceController {
       this.transfers.verifiedCandidates(eventId),
       this.transfers.topupCandidates(eventId),
     ]);
-    return { amountCents: e.amountCents, provider: e.provider, status: e.status, payments, purchases, verified, topups };
+    return {
+      amountCents: e.amountCents,
+      provider: e.provider,
+      status: e.status,
+      payments,
+      purchases,
+      verified,
+      topups,
+    };
   }
 
   @Post('transfers/:eventId/attach/:purchaseId')
   @HttpCode(200)
-  @ApiOperation({ summary: '[admin] Recovery: turn an unmatched transfer into this purchase’s payment, then verify normally' })
+  @ApiOperation({
+    summary:
+      '[admin] Recovery: turn an unmatched transfer into this purchase’s payment, then verify normally',
+  })
   attach(
     @CurrentUser() u: JwtPayload,
     @Param('eventId') eventId: string,
@@ -67,7 +81,9 @@ export class AdminLiveCommerceController {
   }
 
   @Get('purchases')
-  @ApiOperation({ summary: '[admin] Live purchases with their frozen split (filter by status/session)' })
+  @ApiOperation({
+    summary: '[admin] Live purchases with their frozen split (filter by status/session)',
+  })
   async purchases(@Query('status') status?: string, @Query('sessionId') sessionId?: string) {
     const rows = await this.prisma.livePurchase.findMany({
       where: {
@@ -79,10 +95,28 @@ export class AdminLiveCommerceController {
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
-        session: { select: { title: true, startsAt: true, durationMin: true, status: true, startedAt: true, endedAt: true } },
+        session: {
+          select: {
+            title: true,
+            startsAt: true,
+            durationMin: true,
+            status: true,
+            startedAt: true,
+            endedAt: true,
+          },
+        },
         student: { select: { user: { select: { fullName: true, phone: true } } } },
         guestBuyer: { select: { displayName: true } },
-        payment: { select: { id: true, status: true, method: true, paidAt: true, claimedAt: true, walletCents: true } },
+        payment: {
+          select: {
+            id: true,
+            status: true,
+            method: true,
+            paidAt: true,
+            claimedAt: true,
+            walletCents: true,
+          },
+        },
         refunds: true,
       },
     });
@@ -126,10 +160,14 @@ export class AdminLiveCommerceController {
   }
 
   @Get('summary')
-  @ApiOperation({ summary: '[admin] What needs a person: pending Live payments, reviews, refund requests' })
+  @ApiOperation({
+    summary: '[admin] What needs a person: pending Live payments, reviews, refund requests',
+  })
   async summary() {
     const [pendingPayments, review, refundRequests] = await Promise.all([
-      this.prisma.payment.count({ where: { status: 'PENDING', livePurchaseId: { not: null }, claimedAt: { not: null } } }),
+      this.prisma.payment.count({
+        where: { status: 'PENDING', livePurchaseId: { not: null }, claimedAt: { not: null } },
+      }),
       this.prisma.livePurchase.count({ where: { status: 'NEEDS_REVIEW' } }),
       this.prisma.refund.count({ where: { status: { in: ['REQUESTED', 'APPROVED'] } } }),
     ]);
@@ -147,7 +185,10 @@ export class AdminLiveCommerceController {
   @ApiOperation({ summary: '[admin] Refunds (manual ones carry the destination the buyer gave)' })
   async refunds(@Query('status') status?: string) {
     const rows = await this.prisma.refund.findMany({
-      where: status && ['REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED'].includes(status) ? { status: status as never } : {},
+      where:
+        status && ['REQUESTED', 'APPROVED', 'COMPLETED', 'REJECTED'].includes(status)
+          ? { status: status as never }
+          : {},
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
@@ -165,7 +206,8 @@ export class AdminLiveCommerceController {
     });
     return rows.map((r) => ({
       ...r,
-      buyerName: r.livePurchase.student?.user.fullName ?? r.livePurchase.guestBuyer?.displayName ?? null,
+      buyerName:
+        r.livePurchase.student?.user.fullName ?? r.livePurchase.guestBuyer?.displayName ?? null,
       guest: !!r.livePurchase.guestBuyer,
     }));
   }
@@ -179,7 +221,9 @@ export class AdminLiveCommerceController {
 
   @Post('refunds/:id/complete')
   @HttpCode(200)
-  @ApiOperation({ summary: '[admin] Mark an approved manual refund as transferred (books the ledger, once)' })
+  @ApiOperation({
+    summary: '[admin] Mark an approved manual refund as transferred (books the ledger, once)',
+  })
   complete(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: CompleteRefundDto) {
     return this.commerce.completeRefund(id, u.sub, dto.transferReference);
   }

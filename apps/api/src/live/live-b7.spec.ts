@@ -92,11 +92,17 @@ describe('transcript and summary are separate stages', () => {
     // It comes from the lesson's own audio: a recording still packaging says
     // nothing about the words.
     const on = { ...base, provider: 'CLOUDFLARE' as const, transcriptionOn: true };
-    expect(pipelineStages({ ...on, recordingStage: 'PROCESSING', classRunning: true }).transcript).toEqual({
+    expect(
+      pipelineStages({ ...on, recordingStage: 'PROCESSING', classRunning: true }).transcript,
+    ).toEqual({
       stage: 'WAITING_FOR_CLASS_END',
       reason: null,
     });
-    const busy = pipelineStages({ ...on, recordingStage: 'PROCESSING', transcriptStatus: 'PROCESSING' });
+    const busy = pipelineStages({
+      ...on,
+      recordingStage: 'PROCESSING',
+      transcriptStatus: 'PROCESSING',
+    });
     expect(busy.transcript.stage).toBe('TRANSCRIBING');
     expect(busy.summary).toEqual({ stage: 'WAITING_FOR_TRANSCRIPT', canGenerate: false });
   });
@@ -110,9 +116,19 @@ describe('transcript and summary are separate stages', () => {
     });
     expect(off.transcript).toEqual({ stage: 'UNAVAILABLE', reason: 'TRANSCRIPTION_OFF' });
     expect(off.summary).toEqual({ stage: 'UNAVAILABLE', canGenerate: false });
-    const none = pipelineStages({ ...base, provider: 'CLOUDFLARE', transcriptionOn: true, recordingStage: 'READY' });
+    const none = pipelineStages({
+      ...base,
+      provider: 'CLOUDFLARE',
+      transcriptionOn: true,
+      recordingStage: 'READY',
+    });
     expect(none.transcript).toEqual({ stage: 'UNAVAILABLE', reason: 'NOTHING_CAPTURED' });
-    const failed = pipelineStages({ ...base, provider: 'CLOUDFLARE', transcriptionOn: true, transcriptStatus: 'FAILED' });
+    const failed = pipelineStages({
+      ...base,
+      provider: 'CLOUDFLARE',
+      transcriptionOn: true,
+      transcriptStatus: 'FAILED',
+    });
     expect(failed.transcript.stage).toBe('FAILED');
     expect(failed.summary.stage).toBe('UNAVAILABLE');
   });

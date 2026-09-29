@@ -20,7 +20,8 @@ import { accountBalance, commerceStack, commerceWorld } from './testing';
 const prisma = new PrismaService();
 let available = true;
 let S: ReturnType<typeof commerceStack>;
-process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'test-access-secret-for-guest-tokens-0123456789';
+process.env.JWT_ACCESS_SECRET =
+  process.env.JWT_ACCESS_SECRET || 'test-access-secret-for-guest-tokens-0123456789';
 
 beforeAll(async () => {
   try {
@@ -42,14 +43,24 @@ const guard = () => {
 let seq = Math.floor(Math.random() * 1e7);
 const phone = () => `011${String(++seq).padStart(8, '0')}`;
 const sms = (amountCents: number, reference: string) =>
-  S.matching.ingest({ provider: 'VODAFONE_CASH', amountCents, reference, externalId: randomUUID(), identities: [reference] });
+  S.matching.ingest({
+    provider: 'VODAFONE_CASH',
+    amountCents,
+    reference,
+    externalId: randomUUID(),
+    identities: [reference],
+  });
 
 /** A guest who bought a seat and whose transfer the listener verified. */
 async function confirmedGuest(opts: Parameters<typeof commerceWorld>[1] = {}) {
   const w = await commerceWorld(prisma, { students: 0, ...opts });
   const { accessToken } = await S.commerce.guestHold(w.session.id, 'زائر تجريبي');
   const ref = phone();
-  await S.commerce.guestSubmitTransfer(accessToken, { method: 'VODAFONE_CASH', reference: ref, proofImageUrl: 'data:x' });
+  await S.commerce.guestSubmitTransfer(accessToken, {
+    method: 'VODAFONE_CASH',
+    reference: ref,
+    proofImageUrl: 'data:x',
+  });
   expect((await sms(12_000, ref)).status).toBe('MATCHED');
   const status = await S.commerce.guestStatus(accessToken);
   return { w, token: accessToken, status };
@@ -76,11 +87,21 @@ describe('Commerce E on Postgres: a guest buys a seat', () => {
     const w = await commerceWorld(prisma, { students: 0 });
     const { accessToken, purchase } = await S.commerce.guestHold(w.session.id, '  أحمد  ');
     expect(accessToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    const row = await prisma.livePurchase.findUniqueOrThrow({ where: { id: purchase.id }, include: { guestBuyer: { include: { user: true } } } });
+    const row = await prisma.livePurchase.findUniqueOrThrow({
+      where: { id: purchase.id },
+      include: { guestBuyer: { include: { user: true } } },
+    });
     expect(row.accessTokenHash).toBe(LiveCommerceService.hashToken(accessToken));
     expect(JSON.stringify(row)).not.toContain(accessToken);
     // The guest can never sign in: no handle, no password.
-    expect(row.guestBuyer?.user).toMatchObject({ role: 'GUEST', email: null, phone: null, username: null, passwordHash: null, fullName: 'أحمد' });
+    expect(row.guestBuyer?.user).toMatchObject({
+      role: 'GUEST',
+      email: null,
+      phone: null,
+      username: null,
+      passwordHash: null,
+      fullName: 'أحمد',
+    });
     expect(row.studentId).toBeNull();
     expect(purchase.status).toBe('HELD');
   });
@@ -91,7 +112,9 @@ describe('Commerce E on Postgres: a guest buys a seat', () => {
     const { accessToken } = await S.commerce.guestHold(w.session.id, 'Guest');
     const tampered = accessToken.slice(0, -1) + (accessToken.endsWith('A') ? 'B' : 'A');
     for (const bad of [tampered, 'x'.repeat(43), 'short', '../../etc', '']) {
-      await expect(S.commerce.guestStatus(bad)).rejects.toMatchObject({ response: { code: 'ACCESS_NOT_FOUND' } });
+      await expect(S.commerce.guestStatus(bad)).rejects.toMatchObject({
+        response: { code: 'ACCESS_NOT_FOUND' },
+      });
     }
   });
 
@@ -103,7 +126,9 @@ describe('Commerce E on Postgres: a guest buys a seat', () => {
     expect(pay.studentId).toBeNull();
     expect(await accountBalance(prisma, `purchase:${status.id}:held`)).toBe(12_000);
     // A guest's seat has no LiveBooking, but it is still a taken seat.
-    await expect(S.commerce.hold(w.students[0].user.id, w.session.id)).rejects.toMatchObject({ response: { code: 'SESSION_FULL' } });
+    await expect(S.commerce.hold(w.students[0].user.id, w.session.id)).rejects.toMatchObject({
+      response: { code: 'SESSION_FULL' },
+    });
   });
 
   it('a classroom token for one session: that classroom’s chat, nothing else anywhere', async () => {
@@ -114,17 +139,25 @@ describe('Commerce E on Postgres: a guest buys a seat', () => {
     expect(t.liveSessionId).toBe(w.session.id);
     const guestUserId = t.user.id;
     // Its seat lets it in, and it can talk in the room.
-    await expect(S.live.assertInSession(guestUserId, w.session.id)).resolves.toMatchObject({ role: 'STUDENT' });
+    await expect(S.live.assertInSession(guestUserId, w.session.id)).resolves.toMatchObject({
+      role: 'STUDENT',
+    });
     await expect(S.live.sendChat(guestUserId, w.session.id, 'السلام عليكم')).resolves.toBeDefined();
     // Not another class, even a paid one it could guess the id of.
     await expect(S.live.assertInSession(guestUserId, other.session.id)).rejects.toThrow();
     // The real guards: allowed route + its own session → through.
     await expect(runGuards(t.accessToken, { id: w.session.id }, true)).resolves.toBe(true);
     // Its token against another session's classroom route → refused.
-    await expect(runGuards(t.accessToken, { id: other.session.id }, true)).rejects.toMatchObject({ response: { code: 'GUEST_SCOPE' } });
+    await expect(runGuards(t.accessToken, { id: other.session.id }, true)).rejects.toMatchObject({
+      response: { code: 'GUEST_SCOPE' },
+    });
     // Any route not opened to guests (profile, courses, wallet…) → refused.
-    await expect(runGuards(t.accessToken, { id: w.session.id }, false)).rejects.toMatchObject({ response: { code: 'GUEST_SCOPE' } });
-    await expect(runGuards(t.accessToken, {}, false)).rejects.toMatchObject({ response: { code: 'GUEST_SCOPE' } });
+    await expect(runGuards(t.accessToken, { id: w.session.id }, false)).rejects.toMatchObject({
+      response: { code: 'GUEST_SCOPE' },
+    });
+    await expect(runGuards(t.accessToken, {}, false)).rejects.toMatchObject({
+      response: { code: 'GUEST_SCOPE' },
+    });
     // And it is never a course buyer.
     expect(await prisma.enrollment.count({ where: { student: { userId: guestUserId } } })).toBe(0);
   });
@@ -133,22 +166,43 @@ describe('Commerce E on Postgres: a guest buys a seat', () => {
     if (!guard()) return;
     const w = await commerceWorld(prisma, { students: 0 });
     const { accessToken } = await S.commerce.guestHold(w.session.id, 'Guest');
-    await expect(S.commerce.guestClassroomToken(accessToken)).rejects.toMatchObject({ response: { code: 'SEAT_NOT_ACTIVE' } });
+    await expect(S.commerce.guestClassroomToken(accessToken)).rejects.toMatchObject({
+      response: { code: 'SEAT_NOT_ACTIVE' },
+    });
   });
 
   it('a guest cancels in time: a refund request with their account, access revoked at once, token useless', async () => {
     if (!guard()) return;
-    const { w, token } = await confirmedGuest({ startsInMs: 3 * 86_400_000, refundPolicy: 'STANDARD' });
+    const { w, token } = await confirmedGuest({
+      startsInMs: 3 * 86_400_000,
+      refundPolicy: 'STANDARD',
+    });
     const t = await S.commerce.guestClassroomToken(token);
     await expect(runGuards(t.accessToken, { id: w.session.id }, true)).resolves.toBe(true);
     // A refund is owed, so it must say where to send it.
-    await expect(S.commerce.guestCancel(token, {})).rejects.toMatchObject({ response: { code: 'REFUND_METHOD_INVALID' } });
-    const after = await S.commerce.guestCancel(token, { method: 'VODAFONE_CASH', holderName: 'أحمد', handle: '01012345678' });
+    await expect(S.commerce.guestCancel(token, {})).rejects.toMatchObject({
+      response: { code: 'REFUND_METHOD_INVALID' },
+    });
+    const after = await S.commerce.guestCancel(token, {
+      method: 'VODAFONE_CASH',
+      holderName: 'أحمد',
+      handle: '01012345678',
+    });
     expect(after.status).toBe('CANCELLED_BY_STUDENT');
-    expect(after.refunds).toEqual([expect.objectContaining({ status: 'REQUESTED', amountCents: 10_000, needsDestination: false })]);
+    expect(after.refunds).toEqual([
+      expect.objectContaining({
+        status: 'REQUESTED',
+        amountCents: 10_000,
+        needsDestination: false,
+      }),
+    ]);
     // The old classroom token dies with the seat, and no new one is issued.
-    await expect(runGuards(t.accessToken, { id: w.session.id }, true)).rejects.toThrow('Session revoked');
-    await expect(S.commerce.guestClassroomToken(token)).rejects.toMatchObject({ response: { code: 'SEAT_NOT_ACTIVE' } });
+    await expect(runGuards(t.accessToken, { id: w.session.id }, true)).rejects.toThrow(
+      'Session revoked',
+    );
+    await expect(S.commerce.guestClassroomToken(token)).rejects.toMatchObject({
+      response: { code: 'SEAT_NOT_ACTIVE' },
+    });
     await expect(S.live.assertInSession(t.user.id, w.session.id)).rejects.toThrow();
   });
 });
@@ -162,12 +216,26 @@ describe('Commerce E on Postgres: refunds sent by hand', () => {
     let g = await S.commerce.guestStatus(token);
     expect(g.status).toBe('CANCELLED_BY_TEACHER');
     const r = g.refunds[0];
-    expect(r).toMatchObject({ reason: 'TEACHER_CANCEL', status: 'REQUESTED', amountCents: 12_000, needsDestination: true });
+    expect(r).toMatchObject({
+      reason: 'TEACHER_CANCEL',
+      status: 'REQUESTED',
+      amountCents: 12_000,
+      needsDestination: true,
+    });
     // Finance cannot approve a refund with nowhere to send it.
-    await expect(S.commerce.approveRefund(r.id, 'admin')).rejects.toMatchObject({ response: { code: 'REFUND_NO_DESTINATION' } });
-    g = await S.commerce.guestRefundDestination(token, r.id, { method: 'INSTAPAY', holderName: 'Ahmed', handle: 'ahmed@instapay' });
+    await expect(S.commerce.approveRefund(r.id, 'admin')).rejects.toMatchObject({
+      response: { code: 'REFUND_NO_DESTINATION' },
+    });
+    g = await S.commerce.guestRefundDestination(token, r.id, {
+      method: 'INSTAPAY',
+      holderName: 'Ahmed',
+      handle: 'ahmed@instapay',
+    });
     expect(g.refunds[0].needsDestination).toBe(false);
-    await Promise.all([S.commerce.approveRefund(r.id, 'admin'), S.commerce.approveRefund(r.id, 'admin')]);
+    await Promise.all([
+      S.commerce.approveRefund(r.id, 'admin'),
+      S.commerce.approveRefund(r.id, 'admin'),
+    ]);
     // Held until the money actually leaves.
     expect(await accountBalance(prisma, `purchase:${status.id}:held`)).toBe(12_000);
     const cashBefore = await accountBalance(prisma, 'platform:cash');
@@ -178,7 +246,9 @@ describe('Commerce E on Postgres: refunds sent by hand', () => {
     expect(await accountBalance(prisma, `purchase:${status.id}:held`)).toBe(0);
     // platform:cash is an asset debited on the way in, credited on the way out.
     expect((await accountBalance(prisma, 'platform:cash')) - cashBefore).toBe(12_000);
-    expect(await prisma.ledgerTransaction.count({ where: { idempotencyKey: `refund:${r.id}` } })).toBe(1);
+    expect(
+      await prisma.ledgerTransaction.count({ where: { idempotencyKey: `refund:${r.id}` } }),
+    ).toBe(1);
     expect((await S.commerce.guestStatus(token)).refunds[0].status).toBe('COMPLETED');
   });
 
@@ -186,7 +256,10 @@ describe('Commerce E on Postgres: refunds sent by hand', () => {
     if (!guard()) return;
     const { status } = await confirmedGuest({ startsInMs: 3 * 86_400_000 });
     await S.commerce.adminRefund(status.id, 'admin');
-    const p = await prisma.livePurchase.findUniqueOrThrow({ where: { id: status.id }, include: { refunds: true } });
+    const p = await prisma.livePurchase.findUniqueOrThrow({
+      where: { id: status.id },
+      include: { refunds: true },
+    });
     expect(p.status).toBe('REFUND_PENDING');
     await S.commerce.rejectRefund(p.refunds[0].id, 'admin', 'duplicate claim');
     const parts = await prisma.$transaction((tx) => S.commerce.remainingParts(tx, p));
@@ -220,8 +293,12 @@ describe('Commerce E on Postgres: guest replay', () => {
         },
       });
       const claims = { sid: r.id, wm: r.watermarkId, uid: t.user.id, aid: r.videoAssetId } as any;
-      if (allowed) await expect(assertLiveReplayKey(prisma as any, claims)).resolves.toBeUndefined();
-      else await expect(assertLiveReplayKey(prisma as any, claims)).rejects.toThrow(/replay not included/);
+      if (allowed)
+        await expect(assertLiveReplayKey(prisma as any, claims)).resolves.toBeUndefined();
+      else
+        await expect(assertLiveReplayKey(prisma as any, claims)).rejects.toThrow(
+          /replay not included/,
+        );
     }
   });
 });
@@ -241,8 +318,16 @@ describe('Listener hardening on Postgres', () => {
       const ref = phone();
       const a = await S.commerce.hold(w1.students[0].user.id, w1.session.id);
       const b = await S.commerce.hold(w2.students[0].user.id, w2.session.id);
-      await S.commerce.submitTransfer(w1.students[0].user.id, a.id, { method: 'VODAFONE_CASH', reference: ref, proofImageUrl: 'data:x' });
-      await S.commerce.submitTransfer(w2.students[0].user.id, b.id, { method: 'VODAFONE_CASH', reference: ref, proofImageUrl: 'data:x' });
+      await S.commerce.submitTransfer(w1.students[0].user.id, a.id, {
+        method: 'VODAFONE_CASH',
+        reference: ref,
+        proofImageUrl: 'data:x',
+      });
+      await S.commerce.submitTransfer(w2.students[0].user.id, b.id, {
+        method: 'VODAFONE_CASH',
+        reference: ref,
+        proofImageUrl: 'data:x',
+      });
       const ev = await prisma.paymentEvent.create({
         data: {
           provider: 'VODAFONE_CASH',
@@ -258,7 +343,9 @@ describe('Listener hardening on Postgres', () => {
         prisma.payment.findFirstOrThrow({ where: { livePurchaseId: b.id } }),
       ]);
       await Promise.all([S.matching.reconcilePayment(pa.id), S.matching.reconcilePayment(pb.id)]);
-      const paid = await prisma.payment.count({ where: { id: { in: [pa.id, pb.id] }, status: 'PAID' } });
+      const paid = await prisma.payment.count({
+        where: { id: { in: [pa.id, pb.id] }, status: 'PAID' },
+      });
       // One transfer can never verify two payments. With two buyers declaring
       // the same sending wallet it is not even given to one of them: the
       // policy refuses to guess, and the transfer waits for a person.

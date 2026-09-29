@@ -116,13 +116,20 @@ export function priceLiveSeat(input: {
   const { basePriceCents, terms, split } = input;
   const discountCents = input.discountCents ?? 0;
   if (!isWhole(basePriceCents) || basePriceCents <= 0 || basePriceCents > MAX_PRICE_CENTS)
-    throw new PricingError('PRICE_INVALID', 'The price must be a whole number of piasters above zero');
+    throw new PricingError(
+      'PRICE_INVALID',
+      'The price must be a whole number of piasters above zero',
+    );
   if (!isWhole(discountCents) || discountCents < 0 || discountCents > basePriceCents)
     throw new PricingError('DISCOUNT_INVALID', 'The discount must be between zero and the price');
   assertTerms(terms);
   let teacherSharePercent: number | null = null;
   if (split.kind === 'CENTER') {
-    if (!isWhole(split.teacherSharePercent) || split.teacherSharePercent < 0 || split.teacherSharePercent > 100)
+    if (
+      !isWhole(split.teacherSharePercent) ||
+      split.teacherSharePercent < 0 ||
+      split.teacherSharePercent > 100
+    )
       throw new PricingError('SPLIT_INVALID', 'The teacher share must be 0–100%');
     teacherSharePercent = split.teacherSharePercent;
   }

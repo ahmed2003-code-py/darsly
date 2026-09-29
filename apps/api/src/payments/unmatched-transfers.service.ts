@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PayoutMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { methodsFor } from './payment-matching.service';
@@ -30,7 +35,11 @@ const OPEN_EVENT = ['UNMATCHED', 'AMBIGUOUS'] as const;
 export class UnmatchedTransfersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async accountFor(provider: string, raw: string, handles: { method: string; label: string; handle: string }[]) {
+  private async accountFor(
+    provider: string,
+    raw: string,
+    handles: { method: string; label: string; handle: string }[],
+  ) {
     const digits = raw.replace(/\D/g, '');
     const byNumber = handles.find((a) => {
       const d = a.handle.replace(/\D/g, '');
@@ -55,7 +64,9 @@ export class UnmatchedTransfersService {
         take: 100,
         include: { transferReturn: true },
       }),
-      this.prisma.platformPaymentAccount.findMany({ select: { method: true, label: true, handle: true } }),
+      this.prisma.platformPaymentAccount.findMany({
+        select: { method: true, label: true, handle: true },
+      }),
     ]);
     const paymentIds = rows.map((r) => r.matchedPaymentId).filter((x): x is string => !!x);
     const payments = paymentIds.length
@@ -85,7 +96,11 @@ export class UnmatchedTransfersService {
           referenceMasked: maskTail(e.reference),
           receivingAccount: await this.accountFor(e.provider, e.rawMessage ?? '', accounts),
           matchedPayment: p
-            ? { id: p.id, status: p.status, title: p.course?.title ?? p.livePurchase?.session.title ?? null }
+            ? {
+                id: p.id,
+                status: p.status,
+                title: p.course?.title ?? p.livePurchase?.session.title ?? null,
+              }
             : null,
           matchedTopupId: e.matchedTopupId,
           transferReturn: e.transferReturn
@@ -126,7 +141,11 @@ export class UnmatchedTransfersService {
         student: { select: { user: { select: { fullName: true } } } },
         course: { select: { title: true } },
         livePurchase: {
-          select: { status: true, session: { select: { title: true, startsAt: true } }, guestBuyer: { select: { displayName: true } } },
+          select: {
+            status: true,
+            session: { select: { title: true, startsAt: true } },
+            guestBuyer: { select: { displayName: true } },
+          },
         },
       },
     });
@@ -174,14 +193,23 @@ export class UnmatchedTransfersService {
         gateway: 'manual',
         status: 'PAID',
         method: { in: ['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER', 'OTHER'] as any[] },
-        createdAt: { gte: new Date(e.occurredAt.getTime() - week), lte: new Date(e.occurredAt.getTime() + week) },
+        createdAt: {
+          gte: new Date(e.occurredAt.getTime() - week),
+          lte: new Date(e.occurredAt.getTime() + week),
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
       include: {
         student: { select: { user: { select: { fullName: true } } } },
         course: { select: { title: true } },
-        livePurchase: { select: { status: true, session: { select: { title: true } }, guestBuyer: { select: { displayName: true } } } },
+        livePurchase: {
+          select: {
+            status: true,
+            session: { select: { title: true } },
+            guestBuyer: { select: { displayName: true } },
+          },
+        },
       },
     });
     const due = rows.filter((p) => p.amountCents - (p.walletCents ?? 0) === e.amountCents);
@@ -214,7 +242,11 @@ export class UnmatchedTransfersService {
   async topupCandidates(eventId: string) {
     const e = await this.event(eventId);
     const rows = await this.prisma.walletTopup.findMany({
-      where: { status: 'PENDING', amountCents: e.amountCents, method: { in: methodsFor(e.provider) as any[] } },
+      where: {
+        status: 'PENDING',
+        amountCents: e.amountCents,
+        method: { in: methodsFor(e.provider) as any[] },
+      },
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: { student: { select: { user: { select: { fullName: true } } } } },
@@ -250,22 +282,38 @@ export class UnmatchedTransfersService {
     return e;
   }
 
-  private async audit(actorUserId: string, action: string, entityId: string, meta: Record<string, unknown>) {
+  private async audit(
+    actorUserId: string,
+    action: string,
+    entityId: string,
+    meta: Record<string, unknown>,
+  ) {
     await this.prisma.auditLog
-      .create({ data: { actorUserId, action, entity: 'PaymentEvent', entityId, meta: meta as never } })
+      .create({
+        data: { actorUserId, action, entity: 'PaymentEvent', entityId, meta: meta as never },
+      })
       .catch(() => undefined);
   }
 
   private destination(dto: { method?: string; holderName?: string; handle?: string }) {
     const method = dto.method as PayoutMethod;
     if (!['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER'].includes(method))
-      throw new BadRequestException({ message: 'Choose how the money goes back', code: 'RETURN_METHOD_INVALID' });
+      throw new BadRequestException({
+        message: 'Choose how the money goes back',
+        code: 'RETURN_METHOD_INVALID',
+      });
     const holderName = (dto.holderName ?? '').trim().slice(0, 80);
     const handle = (dto.handle ?? '').replace(/\s+/g, '').slice(0, 64);
     if (holderName.length < 2 || handle.length < 4)
-      throw new BadRequestException({ message: 'Enter the account name and number', code: 'RETURN_DESTINATION_INVALID' });
+      throw new BadRequestException({
+        message: 'Enter the account name and number',
+        code: 'RETURN_DESTINATION_INVALID',
+      });
     if (method === 'VODAFONE_CASH' && !/^01[0125]\d{8}$/.test(handle.replace(/^\+?20/, '0')))
-      throw new BadRequestException({ message: 'Enter the wallet number (01xxxxxxxxx)', code: 'RETURN_DESTINATION_INVALID' });
+      throw new BadRequestException({
+        message: 'Enter the wallet number (01xxxxxxxxx)',
+        code: 'RETURN_DESTINATION_INVALID',
+      });
     return { method, details: { holderName, handle } };
   }
 
@@ -281,16 +329,25 @@ export class UnmatchedTransfersService {
     dto: { method?: string; holderName?: string; handle?: string; reason?: string },
   ) {
     const reason = (dto.reason ?? '').trim().slice(0, 500);
-    if (reason.length < 3) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
+    if (reason.length < 3)
+      throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
     const d = this.destination(dto);
     const e = await this.event(eventId);
     const row = await this.prisma.$transaction(async (tx) => {
       const claim = await tx.paymentEvent.updateMany({
-        where: { id: eventId, status: { in: [...OPEN_EVENT] as any[] }, matchedPaymentId: null, matchedTopupId: null },
+        where: {
+          id: eventId,
+          status: { in: [...OPEN_EVENT] as any[] },
+          matchedPaymentId: null,
+          matchedTopupId: null,
+        },
         data: { status: 'RETURNED' },
       });
       if (claim.count === 0) {
-        throw new ConflictException({ message: 'This transfer is already claimed', code: 'EVENT_ALREADY_CLAIMED' });
+        throw new ConflictException({
+          message: 'This transfer is already claimed',
+          code: 'EVENT_ALREADY_CLAIMED',
+        });
       }
       const prior = await tx.transferReturn.findUnique({ where: { paymentEventId: eventId } });
       const data = {
@@ -312,13 +369,20 @@ export class UnmatchedTransfersService {
       // A return cancelled earlier is reopened (one row per transfer).
       if (prior) {
         if (prior.status !== 'CANCELLED') {
-          throw new ConflictException({ message: 'A return is already open', code: 'RETURN_ALREADY_OPEN' });
+          throw new ConflictException({
+            message: 'A return is already open',
+            code: 'RETURN_ALREADY_OPEN',
+          });
         }
         return tx.transferReturn.update({ where: { id: prior.id }, data });
       }
       return tx.transferReturn.create({ data: { paymentEventId: eventId, ...data } });
     });
-    await this.audit(adminId, 'transfer.return.request', eventId, { returnId: row.id, amountCents: row.amountCents, reason });
+    await this.audit(adminId, 'transfer.return.request', eventId, {
+      returnId: row.id,
+      amountCents: row.amountCents,
+      reason,
+    });
     return row;
   }
 
@@ -330,42 +394,71 @@ export class UnmatchedTransfersService {
     const row = await this.prisma.transferReturn.findUnique({ where: { id: returnId } });
     if (!row) throw new NotFoundException('Return not found');
     if (r.count === 0 && row.status !== 'APPROVED') {
-      throw new ConflictException({ message: 'This return is not waiting for approval', code: 'RETURN_STATE_CONFLICT' });
+      throw new ConflictException({
+        message: 'This return is not waiting for approval',
+        code: 'RETURN_STATE_CONFLICT',
+      });
     }
-    if (r.count) await this.audit(adminId, 'transfer.return.approve', row.paymentEventId, { returnId });
+    if (r.count)
+      await this.audit(adminId, 'transfer.return.approve', row.paymentEventId, { returnId });
     return row;
   }
 
   /** Finance sent the money back. Once: a second press finds it COMPLETED. */
   async completeReturn(returnId: string, adminId: string, transferReference: string) {
     const ref = (transferReference ?? '').trim().slice(0, 120);
-    if (ref.length < 3) throw new BadRequestException({ message: 'Enter the transfer reference', code: 'TRANSFER_REFERENCE_REQUIRED' });
+    if (ref.length < 3)
+      throw new BadRequestException({
+        message: 'Enter the transfer reference',
+        code: 'TRANSFER_REFERENCE_REQUIRED',
+      });
     const r = await this.prisma.transferReturn.updateMany({
       where: { id: returnId, status: 'APPROVED' },
-      data: { status: 'COMPLETED', completedById: adminId, completedAt: new Date(), transferReference: ref },
+      data: {
+        status: 'COMPLETED',
+        completedById: adminId,
+        completedAt: new Date(),
+        transferReference: ref,
+      },
     });
     const row = await this.prisma.transferReturn.findUnique({ where: { id: returnId } });
     if (!row) throw new NotFoundException('Return not found');
     if (r.count === 0 && row.status !== 'COMPLETED') {
-      throw new ConflictException({ message: 'Approve the return first', code: 'RETURN_STATE_CONFLICT' });
+      throw new ConflictException({
+        message: 'Approve the return first',
+        code: 'RETURN_STATE_CONFLICT',
+      });
     }
-    if (r.count) await this.audit(adminId, 'transfer.return.complete', row.paymentEventId, { returnId, transferReference: ref });
+    if (r.count)
+      await this.audit(adminId, 'transfer.return.complete', row.paymentEventId, {
+        returnId,
+        transferReference: ref,
+      });
     return row;
   }
 
   /** Called off before the money left: the transfer is open again (match / attach / a new return). */
   async cancelReturn(returnId: string, adminId: string, reason: string) {
     const why = (reason ?? '').trim().slice(0, 500);
-    if (why.length < 3) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
+    if (why.length < 3)
+      throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
     const row = await this.prisma.$transaction(async (tx) => {
       const r = await tx.transferReturn.updateMany({
         where: { id: returnId, status: { in: ['REQUESTED', 'APPROVED'] } },
-        data: { status: 'CANCELLED', cancelledById: adminId, cancelledAt: new Date(), cancelReason: why },
+        data: {
+          status: 'CANCELLED',
+          cancelledById: adminId,
+          cancelledAt: new Date(),
+          cancelReason: why,
+        },
       });
       const cur = await tx.transferReturn.findUnique({ where: { id: returnId } });
       if (!cur) throw new NotFoundException('Return not found');
       if (r.count === 0) {
-        throw new ConflictException({ message: 'Only an open return can be cancelled', code: 'RETURN_STATE_CONFLICT' });
+        throw new ConflictException({
+          message: 'Only an open return can be cancelled',
+          code: 'RETURN_STATE_CONFLICT',
+        });
       }
       await tx.paymentEvent.updateMany({
         where: { id: cur.paymentEventId, status: 'RETURNED' },
@@ -373,7 +466,10 @@ export class UnmatchedTransfersService {
       });
       return cur;
     });
-    await this.audit(adminId, 'transfer.return.cancel', row.paymentEventId, { returnId, reason: why });
+    await this.audit(adminId, 'transfer.return.cancel', row.paymentEventId, {
+      returnId,
+      reason: why,
+    });
     return row;
   }
 }

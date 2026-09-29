@@ -34,7 +34,8 @@ export function matchingFake(init: {
   }));
   const inRange = (d: Date, r?: { gte?: Date; lte?: Date }) =>
     !r || ((!r.gte || d >= r.gte) && (!r.lte || d <= r.lte));
-  const oneOf = (v: any, f: any) => (f == null ? true : typeof f === 'object' && 'in' in f ? f.in.includes(v) : v === f);
+  const oneOf = (v: any, f: any) =>
+    f == null ? true : typeof f === 'object' && 'in' in f ? f.in.includes(v) : v === f;
   const eventWhere = (e: any, w: any) =>
     (!w.id || (typeof w.id === 'object' ? e.id !== w.id.not : e.id === w.id)) &&
     oneOf(e.status, w.status) &&
@@ -48,11 +49,16 @@ export function matchingFake(init: {
     inRange(e.occurredAt, w.occurredAt);
   const prisma: any = {
     platformPaymentAccount: {
-      findMany: jest.fn(async () => (init.receiving ?? ['01002589923']).map((handle) => ({ handle }))),
+      findMany: jest.fn(async () =>
+        (init.receiving ?? ['01002589923']).map((handle) => ({ handle })),
+      ),
     },
     paymentEvent: {
-      findUnique: jest.fn(async ({ where }: any) =>
-        events.find((e) => (where.dedupeKey ? e.dedupeKey === where.dedupeKey : e.id === where.id)) ?? null,
+      findUnique: jest.fn(
+        async ({ where }: any) =>
+          events.find((e) =>
+            where.dedupeKey ? e.dedupeKey === where.dedupeKey : e.id === where.id,
+          ) ?? null,
       ),
       findMany: jest.fn(async ({ where }: any) => events.filter((e) => eventWhere(e, where))),
       count: jest.fn(async ({ where }: any) => events.filter((e) => eventWhere(e, where)).length),
@@ -73,10 +79,17 @@ export function matchingFake(init: {
           (p) =>
             oneOf(p.method, where.method) &&
             inRange(p.createdAt, where.createdAt) &&
-            (!where.OR || where.OR.some((o: any) => p.status === o.status && (o.settledAt === undefined || p.settledAt === o.settledAt))),
+            (!where.OR ||
+              where.OR.some(
+                (o: any) =>
+                  p.status === o.status &&
+                  (o.settledAt === undefined || p.settledAt === o.settledAt),
+              )),
         ),
       ),
-      findUnique: jest.fn(async ({ where }: any) => payments.find((p) => p.id === where.id) ?? null),
+      findUnique: jest.fn(
+        async ({ where }: any) => payments.find((p) => p.id === where.id) ?? null,
+      ),
     },
     walletTopup: {
       findMany: jest.fn(async ({ where }: any) =>

@@ -29,7 +29,11 @@ import { checkProofAgainstClaim } from '../../payments/proof-check';
 import { ProofReaderService } from '../../payments/proof-reader.service';
 import { ProofStorageService } from '../../storage/proof-storage.service';
 import { NotificationsService } from '../../notifications/notifications.service';
-import { CommercialTermsService, pricingRefusal, toSnapshot } from '../../commerce/commercial-terms.service';
+import {
+  CommercialTermsService,
+  pricingRefusal,
+  toSnapshot,
+} from '../../commerce/commercial-terms.service';
 import { PriceBreakdown, priceLiveSeat, PricingError } from '../../commerce/pricing';
 import { LIVE_REFUND_WINDOW_HOURS } from '@darsly/shared-types';
 import { livePendingEarnings } from './pending-earnings';
@@ -102,14 +106,23 @@ export function deliveryVerdict(s: {
   if (!s.startedAt) return { delivered: false, reason: 'never started' };
   const ranMs = s.endedAt.getTime() - s.startedAt.getTime();
   if (ranMs < deliveryMinRatio() * s.durationMin * 60_000)
-    return { delivered: false, reason: `ran ${Math.max(0, Math.round(ranMs / 60_000))} of ${s.durationMin} minutes` };
+    return {
+      delivered: false,
+      reason: `ran ${Math.max(0, Math.round(ranMs / 60_000))} of ${s.durationMin} minutes`,
+    };
   return { delivered: true };
 }
 
 /** The states that hold a seat while unexpired. */
 const HOLDING: LivePurchaseStatus[] = ['HELD', 'PAYMENT_PENDING'];
 /** The states the one-active-purchase index covers (see the migration). */
-export const ACTIVE: LivePurchaseStatus[] = ['HELD', 'PAYMENT_PENDING', 'CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'];
+export const ACTIVE: LivePurchaseStatus[] = [
+  'HELD',
+  'PAYMENT_PENDING',
+  'CONFIRMED',
+  'DELIVERED',
+  'NEEDS_REVIEW',
+];
 
 /**
  * Every allowed move of a purchase, and nothing else. A transition not listed
@@ -117,12 +130,26 @@ export const ACTIVE: LivePurchaseStatus[] = ['HELD', 'PAYMENT_PENDING', 'CONFIRM
  */
 const TRANSITIONS: Record<LivePurchaseStatus, LivePurchaseStatus[]> = {
   // HELD → PAYMENT_REJECTED: a declared transfer Darsly refused before it was claimed.
-  HELD: ['PAYMENT_PENDING', 'CONFIRMED', 'EXPIRED', 'CANCELLED_BY_STUDENT', 'CANCELLED_BY_TEACHER', 'PAYMENT_REJECTED'],
+  HELD: [
+    'PAYMENT_PENDING',
+    'CONFIRMED',
+    'EXPIRED',
+    'CANCELLED_BY_STUDENT',
+    'CANCELLED_BY_TEACHER',
+    'PAYMENT_REJECTED',
+  ],
   PAYMENT_PENDING: ['CONFIRMED', 'PAYMENT_REJECTED', 'OVERSOLD', 'CANCELLED_BY_TEACHER'],
   // A declared payment outlives its hold: money that lands late still gets a
   // seat if one is free and the class is ahead, and is refunded if not.
   EXPIRED: ['PAYMENT_PENDING', 'CONFIRMED', 'OVERSOLD'],
-  CONFIRMED: ['DELIVERED', 'CANCELLED_BY_STUDENT', 'CANCELLED_BY_TEACHER', 'NEEDS_REVIEW', 'REFUNDED', 'REFUND_PENDING'],
+  CONFIRMED: [
+    'DELIVERED',
+    'CANCELLED_BY_STUDENT',
+    'CANCELLED_BY_TEACHER',
+    'NEEDS_REVIEW',
+    'REFUNDED',
+    'REFUND_PENDING',
+  ],
   NEEDS_REVIEW: ['DELIVERED', 'REFUNDED', 'REFUND_PENDING'],
   REFUND_PENDING: ['REFUNDED'],
   PAYMENT_REJECTED: [],
@@ -207,7 +234,9 @@ export async function seatsTaken(
     tx.liveBooking.count({ where: { sessionId } }),
     // A guest's confirmed seat has no LiveBooking (that is a student's row);
     // it is counted from the purchase instead.
-    tx.livePurchase.count({ where: { sessionId, guestBuyerId: { not: null }, status: 'CONFIRMED' } }),
+    tx.livePurchase.count({
+      where: { sessionId, guestBuyerId: { not: null }, status: 'CONFIRMED' },
+    }),
     tx.livePurchase.count({
       where: {
         sessionId,
@@ -254,7 +283,11 @@ export class LiveCommerceService implements OnModuleInit {
   // ── Pricing ─────────────────────────────────────────────────────────────
 
   /** Price a seat of this session now, under its academy's current terms. */
-  private async price(session: LockedSession, db: Tx | PrismaService, discountCents = 0): Promise<{
+  private async price(
+    session: LockedSession,
+    db: Tx | PrismaService,
+    discountCents = 0,
+  ): Promise<{
     breakdown: PriceBreakdown;
     feeRefundable: boolean;
   }> {
@@ -284,8 +317,15 @@ export class LiveCommerceService implements OnModuleInit {
    * A FREE session's seat: every amount zero. The terms version is recorded
    * only because every seat names one; no fee applies and none is owed.
    */
-  private async freeSeat(session: LockedSession, db: Tx | PrismaService): Promise<{ breakdown: PriceBreakdown; feeRefundable: boolean }> {
-    const terms = await this.terms.effectiveFor(session.academyId ?? session.tenantId, new Date(), db);
+  private async freeSeat(
+    session: LockedSession,
+    db: Tx | PrismaService,
+  ): Promise<{ breakdown: PriceBreakdown; feeRefundable: boolean }> {
+    const terms = await this.terms.effectiveFor(
+      session.academyId ?? session.tenantId,
+      new Date(),
+      db,
+    );
     return {
       breakdown: {
         basePriceCents: 0,
@@ -313,22 +353,32 @@ export class LiveCommerceService implements OnModuleInit {
    * per-student limit. The discount comes off the seller's price. A code that
    * fails any of it is refused with a reason, never silently ignored.
    */
-  private async resolveLiveCoupon(db: Tx | PrismaService, s: LockedSession, code: string, studentId: string | null) {
+  private async resolveLiveCoupon(
+    db: Tx | PrismaService,
+    s: LockedSession,
+    code: string,
+    studentId: string | null,
+  ) {
     const coupon = await db.coupon.findFirst({
       where: { tenantId: s.tenantId, code: code.trim().toUpperCase(), deletedAt: null },
     });
     const refuse = (message: string, why: string) => {
       throw new BadRequestException({ message, code: 'COUPON_INVALID', reason: why });
     };
-    if (!coupon || !coupon.isActive || coupon.scope === 'COURSE' || coupon.courseId) refuse('This code is not valid for this session', 'not-found');
-    if (coupon!.liveSessionId && coupon!.liveSessionId !== s.id) refuse('This code is for another session', 'other-session');
-    if (coupon!.expiresAt && coupon!.expiresAt <= new Date()) refuse('This code has expired', 'expired');
-    if (coupon!.maxUses != null && coupon!.usedCount >= coupon!.maxUses) refuse('This code has been used up', 'used-up');
+    if (!coupon || !coupon.isActive || coupon.scope === 'COURSE' || coupon.courseId)
+      refuse('This code is not valid for this session', 'not-found');
+    if (coupon!.liveSessionId && coupon!.liveSessionId !== s.id)
+      refuse('This code is for another session', 'other-session');
+    if (coupon!.expiresAt && coupon!.expiresAt <= new Date())
+      refuse('This code has expired', 'expired');
+    if (coupon!.maxUses != null && coupon!.usedCount >= coupon!.maxUses)
+      refuse('This code has been used up', 'used-up');
     if (coupon!.maxUsesPerStudent != null && studentId) {
       const mine = await db.livePurchase.count({
         where: { couponId: coupon!.id, studentId, status: { in: ACTIVE } },
       });
-      if (mine >= coupon!.maxUsesPerStudent) refuse('You have already used this code', 'per-student');
+      if (mine >= coupon!.maxUsesPerStudent)
+        refuse('You have already used this code', 'per-student');
     }
     const base = s.priceCents as number;
     const discountCents = coupon!.percentOff
@@ -338,7 +388,12 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /** Price with a coupon, where a coupon that breaks the terms is the coupon's fault. */
-  private async priceWithCoupon(db: Tx | PrismaService, s: LockedSession, code: string | undefined, studentId: string | null) {
+  private async priceWithCoupon(
+    db: Tx | PrismaService,
+    s: LockedSession,
+    code: string | undefined,
+    studentId: string | null,
+  ) {
     if (!code?.trim()) return { ...(await this.price(s, db)), coupon: null };
     const coupon = await this.resolveLiveCoupon(db, s, code, studentId);
     try {
@@ -387,7 +442,9 @@ export class LiveCommerceService implements OnModuleInit {
     };
     let mine: (ReturnType<LiveCommerceService['view']> & { paymentStage: string }) | null = null;
     if (studentUserId) {
-      const student = await this.prisma.studentProfile.findUnique({ where: { userId: studentUserId } });
+      const student = await this.prisma.studentProfile.findUnique({
+        where: { userId: studentUserId },
+      });
       const p = student
         ? await this.prisma.livePurchase.findFirst({
             where: { sessionId, studentId: student.id },
@@ -399,10 +456,16 @@ export class LiveCommerceService implements OnModuleInit {
     }
     if (session.accessMode !== 'PAID') return { ...base, studentPaysCents: 0, purchase: mine };
     const { breakdown } = await this.price(session, this.prisma);
-    if (!couponCode?.trim()) return { ...base, studentPaysCents: breakdown.studentPaysCents, purchase: mine };
+    if (!couponCode?.trim())
+      return { ...base, studentPaysCents: breakdown.studentPaysCents, purchase: mine };
     // A preview only: the code is checked, nothing is reserved.
     const studentId = studentUserId
-      ? (await this.prisma.studentProfile.findUnique({ where: { userId: studentUserId }, select: { id: true } }))?.id ?? null
+      ? ((
+          await this.prisma.studentProfile.findUnique({
+            where: { userId: studentUserId },
+            select: { id: true },
+          })
+        )?.id ?? null)
       : null;
     const withCoupon = await this.priceWithCoupon(this.prisma, session, couponCode, studentId);
     return {
@@ -421,15 +484,28 @@ export class LiveCommerceService implements OnModuleInit {
       where: { userId },
       include: { user: { select: { fullName: true } } },
     });
-    if (!s) throw new ForbiddenException({ message: 'Only a student can buy a seat', code: 'NOT_A_STUDENT' });
+    if (!s)
+      throw new ForbiddenException({
+        message: 'Only a student can buy a seat',
+        code: 'NOT_A_STUDENT',
+      });
     return s;
   }
 
   /** Whether this session can be sold to this buyer at all, right now. */
-  private async assertBuyable(tx: Tx, s: LockedSession | null, studentId: string | null, now: Date, allowFree = false) {
+  private async assertBuyable(
+    tx: Tx,
+    s: LockedSession | null,
+    studentId: string | null,
+    now: Date,
+    allowFree = false,
+  ) {
     if (!s || s.deletedAt || s.cancelledAt) throw new NotFoundException('Session not found');
     if (s.accessMode !== 'PAID' && !allowFree)
-      throw new BadRequestException({ message: 'This session is free — book it instead', code: 'SESSION_IS_FREE' });
+      throw new BadRequestException({
+        message: 'This session is free — book it instead',
+        code: 'SESSION_IS_FREE',
+      });
     if (s.status === 'ENDED' || now.getTime() >= closesAtMs(s))
       throw new ConflictException({ message: 'This session has ended', code: 'SESSION_ENDED' });
     // A group's class is sold to that group only. A paid seat on an
@@ -440,7 +516,10 @@ export class LiveCommerceService implements OnModuleInit {
         select: { id: true },
       });
       if (!member)
-        throw new ForbiddenException({ message: 'This session is for a group you are not in', code: 'NOT_IN_GROUP' });
+        throw new ForbiddenException({
+          message: 'This session is for a group you are not in',
+          code: 'NOT_IN_GROUP',
+        });
     }
   }
 
@@ -511,12 +590,16 @@ export class LiveCommerceService implements OnModuleInit {
           ? { status: 'CONFIRMED' as const, confirmedAt: now, holdExpiresAt: null }
           : {
               status: 'HELD' as const,
-              holdExpiresAt: new Date(Math.min(holdUntilMs ?? now.getTime() + holdMinutes() * 60_000, closesAtMs(s))),
+              holdExpiresAt: new Date(
+                Math.min(holdUntilMs ?? now.getTime() + holdMinutes() * 60_000, closesAtMs(s)),
+              ),
             }),
       },
     });
     if (free && 'studentId' in buyer) {
-      await tx.liveBooking.create({ data: { sessionId: s.id, studentId: buyer.studentId, purchaseId: p.id } });
+      await tx.liveBooking.create({
+        data: { sessionId: s.id, studentId: buyer.studentId, purchaseId: p.id },
+      });
     }
     return p;
   }
@@ -543,8 +626,21 @@ export class LiveCommerceService implements OnModuleInit {
         await this.assertBuyable(tx, s, student.id, now);
         await this.assertSeatFree(tx, s!, now);
         await this.supersedeStaleDeclarations(tx, sessionId, student.id);
-        const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, student.id);
-        return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { studentId: student.id }, now);
+        const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(
+          tx,
+          s!,
+          couponCode,
+          student.id,
+        );
+        return this.createPurchase(
+          tx,
+          s!,
+          breakdown,
+          feeRefundable,
+          coupon,
+          { studentId: student.id },
+          now,
+        );
       });
       return this.byId(purchase.id);
     } catch (e) {
@@ -577,11 +673,17 @@ export class LiveCommerceService implements OnModuleInit {
       select: { id: true },
     });
     for (const p of stale) {
-      const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: p.id }, select: { id: true } });
+      const matched = await tx.paymentEvent.findFirst({
+        where: { matchedPaymentId: p.id },
+        select: { id: true },
+      });
       if (matched) continue;
       await tx.payment.updateMany({
         where: { id: p.id, status: 'PENDING', claimedAt: null },
-        data: { status: 'REJECTED', rejectedReason: 'superseded by a new checkout before any transfer was claimed' },
+        data: {
+          status: 'REJECTED',
+          rejectedReason: 'superseded by a new checkout before any transfer was claimed',
+        },
       });
     }
   }
@@ -593,9 +695,15 @@ export class LiveCommerceService implements OnModuleInit {
    * unmatched and goes to finance (match elsewhere, or return it).
    */
   private async closeDeclaration(tx: Tx, purchaseId: string, why: string) {
-    const d = await tx.payment.findUnique({ where: { livePurchaseId: purchaseId }, select: { id: true, status: true, claimedAt: true } });
+    const d = await tx.payment.findUnique({
+      where: { livePurchaseId: purchaseId },
+      select: { id: true, status: true, claimedAt: true },
+    });
     if (!d || d.status !== 'PENDING' || d.claimedAt) return;
-    const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: d.id }, select: { id: true } });
+    const matched = await tx.paymentEvent.findFirst({
+      where: { matchedPaymentId: d.id },
+      select: { id: true },
+    });
     if (matched) return;
     await tx.payment.updateMany({
       where: { id: d.id, status: 'PENDING', claimedAt: null },
@@ -633,7 +741,10 @@ export class LiveCommerceService implements OnModuleInit {
 
   private async declareFor(pre: LivePurchase, studentId: string | null, dto: DeclareDto) {
     if (!TRANSFER_METHODS.includes(dto.method as never)) {
-      throw new BadRequestException({ message: 'Choose which Darsly account you are sending to', code: 'METHOD_INVALID' });
+      throw new BadRequestException({
+        message: 'Choose which Darsly account you are sending to',
+        code: 'METHOD_INVALID',
+      });
     }
     const declared = normalizeDeclaration(dto, await this.receivingHandles());
     const paymentId = await this.prisma.$transaction(async (tx) => {
@@ -642,13 +753,23 @@ export class LiveCommerceService implements OnModuleInit {
       const p = await lockPurchase(tx, pre.id);
       if (!p) throw new NotFoundException('Purchase not found');
       if (!s || s.deletedAt || s.cancelledAt) throw new NotFoundException('Session not found');
-      if (p.status === 'EXPIRED' || (p.status === 'HELD' && p.holdExpiresAt && p.holdExpiresAt <= now)) {
+      if (
+        p.status === 'EXPIRED' ||
+        (p.status === 'HELD' && p.holdExpiresAt && p.holdExpiresAt <= now)
+      ) {
         // Before any money moves, a lapsed hold is a new checkout, not a
         // declaration against a seat that is no longer theirs.
-        throw new ConflictException({ message: 'Your hold has expired — start again', code: 'HOLD_EXPIRED' });
+        throw new ConflictException({
+          message: 'Your hold has expired — start again',
+          code: 'HOLD_EXPIRED',
+        });
       }
       if (p.status !== 'HELD') {
-        throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED', status: p.status });
+        throw new ConflictException({
+          message: 'A payment for this seat was already sent',
+          code: 'PAYMENT_ALREADY_SUBMITTED',
+          status: p.status,
+        });
       }
       const existing = await tx.payment.findUnique({ where: { livePurchaseId: p.id } });
       const fields = {
@@ -658,9 +779,15 @@ export class LiveCommerceService implements OnModuleInit {
         payerName: declared.payerName,
       };
       if (existing) {
-        const matched = await tx.paymentEvent.findFirst({ where: { matchedPaymentId: existing.id }, select: { id: true } });
+        const matched = await tx.paymentEvent.findFirst({
+          where: { matchedPaymentId: existing.id },
+          select: { id: true },
+        });
         if (existing.status !== 'PENDING' || existing.claimedAt || matched) {
-          throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+          throw new ConflictException({
+            message: 'A payment for this seat was already sent',
+            code: 'PAYMENT_ALREADY_SUBMITTED',
+          });
         }
         await tx.payment.update({ where: { id: existing.id }, data: fields });
         return existing.id;
@@ -684,9 +811,11 @@ export class LiveCommerceService implements OnModuleInit {
     });
     // They may have transferred before declaring: an SMS already here is
     // decided now, by the same policy as one that arrives later.
-    await this.matching.reconcilePayment(paymentId).catch((e) =>
-      this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
-    );
+    await this.matching
+      .reconcilePayment(paymentId)
+      .catch((e) =>
+        this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
+      );
   }
 
   /**
@@ -705,23 +834,45 @@ export class LiveCommerceService implements OnModuleInit {
   }
 
   /** Shared by students and guests. */
-  private async submitTransferFor(pre: LivePurchase, studentId: string | null, dto: TransferClaimDto) {
+  private async submitTransferFor(
+    pre: LivePurchase,
+    studentId: string | null,
+    dto: TransferClaimDto,
+  ) {
     const purchaseId = pre.id;
     const handles = await this.receivingHandles();
-    const declared = await this.prisma.payment.findUnique({ where: { livePurchaseId: purchaseId } });
+    const declared = await this.prisma.payment.findUnique({
+      where: { livePurchaseId: purchaseId },
+    });
     if (declared && declared.status === 'PAID') return; // the SMS beat the proof: already confirmed
     if (declared && (declared.status !== 'PENDING' || declared.claimedAt)) {
-      throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+      throw new ConflictException({
+        message: 'A payment for this seat was already sent',
+        code: 'PAYMENT_ALREADY_SUBMITTED',
+      });
     }
     // Without a declaration (an older client), the identity comes with the proof.
-    let identity: { method: string; transferSource: 'WALLET' | 'BANK' | null; reference: string; payerName: string | null } | null = null;
+    let identity: {
+      method: string;
+      transferSource: 'WALLET' | 'BANK' | null;
+      reference: string;
+      payerName: string | null;
+    } | null = null;
     if (!declared) {
       if (!TRANSFER_METHODS.includes(dto.method as never)) {
-        throw new BadRequestException({ message: 'Choose how you transferred', code: 'METHOD_INVALID' });
+        throw new BadRequestException({
+          message: 'Choose how you transferred',
+          code: 'METHOD_INVALID',
+        });
       }
       if (dto.source) {
         const d = normalizeDeclaration({ ...dto, source: dto.source }, handles);
-        identity = { method: dto.method as string, transferSource: d.source, reference: d.reference, payerName: d.payerName };
+        identity = {
+          method: dto.method as string,
+          transferSource: d.source,
+          reference: d.reference,
+          payerName: d.payerName,
+        };
       } else {
         const reference = normalizePayerReference(dto.method as never, dto.reference, handles);
         identity = {
@@ -735,7 +886,11 @@ export class LiveCommerceService implements OnModuleInit {
     const reading = await this.proofReader.read(dto.proofImageUrl ?? '');
     const check = checkProofAgainstClaim(reading, { amountCents: pre.studentPaysCents }, handles);
     if (check.verdict === 'DISAGREES') {
-      throw new BadRequestException({ message: check.problems.join(' '), code: 'PROOF_DISAGREES', problems: check.problems });
+      throw new BadRequestException({
+        message: check.problems.join(' '),
+        code: 'PROOF_DISAGREES',
+        problems: check.problems,
+      });
     }
     const proofKey = await this.proofs.store('payments', dto.proofImageUrl ?? '', PROOF_MAX_BYTES);
     const now = new Date();
@@ -746,10 +901,17 @@ export class LiveCommerceService implements OnModuleInit {
         const p = await lockPurchase(tx, purchaseId);
         if (!p) throw new NotFoundException('Purchase not found');
         if (p.status === 'PAYMENT_PENDING' || p.status === 'CONFIRMED') {
-          throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+          throw new ConflictException({
+            message: 'A payment for this seat was already sent',
+            code: 'PAYMENT_ALREADY_SUBMITTED',
+          });
         }
         if (p.status !== 'HELD' && p.status !== 'EXPIRED') {
-          throw new ConflictException({ message: 'This purchase is closed', code: 'PURCHASE_CLOSED', status: p.status });
+          throw new ConflictException({
+            message: 'This purchase is closed',
+            code: 'PURCHASE_CLOSED',
+            status: p.status,
+          });
         }
         if (!s || s.deletedAt || s.cancelledAt) throw new NotFoundException('Session not found');
         if (p.status === 'EXPIRED' && studentId) {
@@ -760,7 +922,10 @@ export class LiveCommerceService implements OnModuleInit {
             where: { sessionId: p.sessionId, studentId, status: { in: ACTIVE }, id: { not: p.id } },
           });
           if (other)
-            throw new ConflictException({ message: 'You have another purchase for this session', code: 'ANOTHER_PURCHASE_ACTIVE' });
+            throw new ConflictException({
+              message: 'You have another purchase for this session',
+              code: 'ANOTHER_PURCHASE_ACTIVE',
+            });
         }
         // Keep (or retake) the seat until the class ends while the payment is
         // verified. If the class has filled meanwhile, the payment is still
@@ -777,10 +942,17 @@ export class LiveCommerceService implements OnModuleInit {
           // Claimed exactly once: only a still-open, still-unclaimed declaration flips.
           const flip = await tx.payment.updateMany({
             where: { id: declared.id, status: 'PENDING', claimedAt: null },
-            data: { proofImageUrl: proofKey, proofReading: (reading ?? undefined) as never, claimedAt: now },
+            data: {
+              proofImageUrl: proofKey,
+              proofReading: (reading ?? undefined) as never,
+              claimedAt: now,
+            },
           });
           if (flip.count === 0) {
-            throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+            throw new ConflictException({
+              message: 'A payment for this seat was already sent',
+              code: 'PAYMENT_ALREADY_SUBMITTED',
+            });
           }
           id = declared.id;
         } else {
@@ -816,15 +988,20 @@ export class LiveCommerceService implements OnModuleInit {
     } catch (e) {
       await this.proofs.discard(proofKey).catch(() => undefined);
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({ message: 'A payment for this seat was already sent', code: 'PAYMENT_ALREADY_SUBMITTED' });
+        throw new ConflictException({
+          message: 'A payment for this seat was already sent',
+          code: 'PAYMENT_ALREADY_SUBMITTED',
+        });
       }
       throw e;
     }
     // Buyers often transfer first and fill the form after: an SMS that is
     // already here is decided now instead of waiting for a human.
-    await this.matching.reconcilePayment(paymentId).catch((e) =>
-      this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
-    );
+    await this.matching
+      .reconcilePayment(paymentId)
+      .catch((e) =>
+        this.logger.warn(`live.reconcile payment=${paymentId} failed: ${(e as Error).message}`),
+      );
   }
 
   private receivingHandles(): Promise<string[]> {
@@ -853,23 +1030,47 @@ export class LiveCommerceService implements OnModuleInit {
             });
             if (p && p.status !== 'HELD') {
               if (p.status === 'PAYMENT_PENDING')
-                throw new ConflictException({ message: 'A transfer for this seat is being verified', code: 'PAYMENT_ALREADY_SUBMITTED' });
+                throw new ConflictException({
+                  message: 'A transfer for this seat is being verified',
+                  code: 'PAYMENT_ALREADY_SUBMITTED',
+                });
               return { purchaseId: p.id, already: true };
             }
             await this.assertBuyable(tx, s, student.id, now);
             if (p) {
               // A transfer already declared for this seat may be on its way:
               // paying again from the wallet could take the money twice.
-              const declared = await tx.payment.findUnique({ where: { livePurchaseId: p.id }, select: { id: true } });
+              const declared = await tx.payment.findUnique({
+                where: { livePurchaseId: p.id },
+                select: { id: true },
+              });
               if (declared)
-                throw new ConflictException({ message: 'You already started a transfer for this seat', code: 'TRANSFER_ALREADY_STARTED' });
+                throw new ConflictException({
+                  message: 'You already started a transfer for this seat',
+                  code: 'TRANSFER_ALREADY_STARTED',
+                });
               // They held a seat for a transfer, then chose the wallet: the
               // same purchase and the same frozen price, paid differently.
-              if (!p.holdExpiresAt || p.holdExpiresAt <= now) await this.assertSeatFree(tx, s!, now, p.id);
+              if (!p.holdExpiresAt || p.holdExpiresAt <= now)
+                await this.assertSeatFree(tx, s!, now, p.id);
             } else {
               await this.assertSeatFree(tx, s!, now);
-              const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(tx, s!, couponCode, student.id);
-              p = await this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { studentId: student.id }, now, closesAtMs(s!));
+              const { breakdown, feeRefundable, coupon } = await this.priceWithCoupon(
+                tx,
+                s!,
+                couponCode,
+                student.id,
+              );
+              p = await this.createPurchase(
+                tx,
+                s!,
+                breakdown,
+                feeRefundable,
+                coupon,
+                { studentId: student.id },
+                now,
+                closesAtMs(s!),
+              );
               // A 100%-off seat is already confirmed: nothing to pay.
               if (p.status === 'CONFIRMED') return { purchaseId: p.id, already: false };
             }
@@ -901,16 +1102,27 @@ export class LiveCommerceService implements OnModuleInit {
             await this.settleAndSeat(tx, s!, p, payment.id, 'wallet', now);
             return { purchaseId: p.id, paymentId: payment.id, already: false };
           },
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 20_000, maxWait: 10_000 },
+          {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+            timeout: 20_000,
+            maxWait: 10_000,
+          },
         );
         if (out.paymentId) await this.afterConfirmed(out.purchaseId, out.paymentId);
         return this.byId(out.purchaseId);
       } catch (e) {
-        if (e instanceof Prisma.PrismaClientKnownRequestError && (e.code === 'P2034' || e.code === 'P2002') && attempt < 4) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          (e.code === 'P2034' || e.code === 'P2002') &&
+          attempt < 4
+        ) {
           continue;
         }
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
-          throw new ConflictException({ message: 'Busy — please try again', code: 'WALLET_CONCURRENT_WRITE' });
+          throw new ConflictException({
+            message: 'Busy — please try again',
+            code: 'WALLET_CONCURRENT_WRITE',
+          });
         }
         throw e;
       }
@@ -946,7 +1158,12 @@ export class LiveCommerceService implements OnModuleInit {
       assertTransition(p.status, 'CANCELLED_BY_TEACHER');
       await tx.livePurchase.update({
         where: { id: p.id },
-        data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, holdExpiresAt: null, cancelReason: 'session cancelled' },
+        data: {
+          status: 'CANCELLED_BY_TEACHER',
+          cancelledAt: now,
+          holdExpiresAt: null,
+          cancelReason: 'session cancelled',
+        },
       });
       await this.fullRefund(tx, p.id, 'TEACHER_CANCEL', verifierId);
       return 'CANCELLED_BY_TEACHER';
@@ -960,7 +1177,11 @@ export class LiveCommerceService implements OnModuleInit {
       assertTransition(p.status, 'OVERSOLD');
       await tx.livePurchase.update({
         where: { id: p.id },
-        data: { status: 'OVERSOLD', holdExpiresAt: null, reviewReason: over ? 'class already over' : 'class full' },
+        data: {
+          status: 'OVERSOLD',
+          holdExpiresAt: null,
+          reviewReason: over ? 'class already over' : 'class full',
+        },
       });
       await releaseCouponUse(tx, p.couponId);
       await this.fullRefund(tx, p.id, 'OVERSOLD', verifierId);
@@ -974,15 +1195,25 @@ export class LiveCommerceService implements OnModuleInit {
     // A student's seat is their LiveBooking; a guest's is the confirmed
     // purchase itself (counted by seatsTaken, checked by guestSeat).
     if (p.studentId) {
-      await tx.liveBooking.create({ data: { sessionId: s.id, studentId: p.studentId, purchaseId: p.id } });
+      await tx.liveBooking.create({
+        data: { sessionId: s.id, studentId: p.studentId, purchaseId: p.id },
+      });
     }
     return 'CONFIRMED';
   }
 
-  async onPaymentVerified(paymentId: string, verifierId: string): Promise<{ ok: true; alreadyHandled?: boolean }> {
+  async onPaymentVerified(
+    paymentId: string,
+    verifierId: string,
+  ): Promise<{ ok: true; alreadyHandled?: boolean }> {
     const pay = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      select: { id: true, status: true, livePurchaseId: true, livePurchase: { select: { sessionId: true } } },
+      select: {
+        id: true,
+        status: true,
+        livePurchaseId: true,
+        livePurchase: { select: { sessionId: true } },
+      },
     });
     if (!pay?.livePurchaseId || !pay.livePurchase) throw new NotFoundException('Payment not found');
     if (pay.status !== 'PENDING') return { ok: true, alreadyHandled: true };
@@ -1003,7 +1234,11 @@ export class LiveCommerceService implements OnModuleInit {
     return { ok: true };
   }
 
-  async onPaymentRejected(paymentId: string, actorId: string, reason?: string): Promise<{ ok: true }> {
+  async onPaymentRejected(
+    paymentId: string,
+    actorId: string,
+    reason?: string,
+  ): Promise<{ ok: true }> {
     const pay = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       select: { livePurchaseId: true, livePurchase: { select: { sessionId: true } } },
@@ -1017,11 +1252,16 @@ export class LiveCommerceService implements OnModuleInit {
         where: { id: paymentId, status: 'PENDING' },
         data: { status: 'REJECTED', rejectedReason: reason?.trim() || null, verifiedById: actorId },
       });
-      if (flip.count === 0) throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
+      if (flip.count === 0)
+        throw new BadRequestException({ message: 'Payment is not pending', code: 'NOT_PENDING' });
       if (p && (p.status === 'PAYMENT_PENDING' || p.status === 'HELD')) {
         await tx.livePurchase.update({
           where: { id: p.id },
-          data: { status: 'PAYMENT_REJECTED', holdExpiresAt: null, reviewReason: reason?.trim() || null },
+          data: {
+            status: 'PAYMENT_REJECTED',
+            holdExpiresAt: null,
+            reviewReason: reason?.trim() || null,
+          },
         });
         await releaseCouponUse(tx, p.couponId);
       }
@@ -1064,7 +1304,10 @@ export class LiveCommerceService implements OnModuleInit {
    * ledger transaction and the wallet line are written together.
    */
   async fullRefund(tx: Tx, purchaseId: string, reason: RefundReason, actorId: string | null) {
-    const p = await tx.livePurchase.findUniqueOrThrow({ where: { id: purchaseId }, include: { payment: true } });
+    const p = await tx.livePurchase.findUniqueOrThrow({
+      where: { id: purchaseId },
+      include: { payment: true },
+    });
     const parts = await this.remainingParts(tx, p);
     return this.refundParts(tx, p, reason, parts, actorId);
   }
@@ -1082,7 +1325,9 @@ export class LiveCommerceService implements OnModuleInit {
     // Nothing was paid (a free seat of a paid session) or nothing is left:
     // there is nothing to return, and a zero refund is not a record.
     if (amount <= 0 || !p.payment || p.payment.status !== 'PAID') return null;
-    const existing = await tx.refund.findUnique({ where: { livePurchaseId_reason: { livePurchaseId: p.id, reason } } });
+    const existing = await tx.refund.findUnique({
+      where: { livePurchaseId_reason: { livePurchaseId: p.id, reason } },
+    });
     if (existing) return existing;
     if (!p.studentId) {
       // A guest has no wallet: the refund is owed, and Darsly finance sends it
@@ -1102,7 +1347,12 @@ export class LiveCommerceService implements OnModuleInit {
           teacherRefundCents: parts.teacher,
           centerRefundCents: parts.center,
           requestedById: actorId,
-          ...(destination ? { destinationMethod: destination.method, destinationDetails: destination.details as never } : {}),
+          ...(destination
+            ? {
+                destinationMethod: destination.method,
+                destinationDetails: destination.details as never,
+              }
+            : {}),
         },
       });
     }
@@ -1204,11 +1454,19 @@ export class LiveCommerceService implements OnModuleInit {
           { status: 'CONFIRMED', session: { status: 'ENDED', cancelledAt: null } },
           // A late cancellation's retained part — unless it is already waiting
           // for a person (below), so it never occupies the sweep for ever.
-          { status: 'CANCELLED_BY_STUDENT', reviewReason: null, session: { status: 'ENDED', cancelledAt: null } },
+          {
+            status: 'CANCELLED_BY_STUDENT',
+            reviewReason: null,
+            session: { status: 'ENDED', cancelledAt: null },
+          },
           // Never started, and well past its end: a no-show to be reviewed.
           {
             status: 'CONFIRMED',
-            session: { status: 'SCHEDULED', startedAt: null, startsAt: { lt: new Date(now.getTime() - NO_SHOW_GRACE_MS) } },
+            session: {
+              status: 'SCHEDULED',
+              startedAt: null,
+              startsAt: { lt: new Date(now.getTime() - NO_SHOW_GRACE_MS) },
+            },
           },
         ],
       },
@@ -1226,9 +1484,13 @@ export class LiveCommerceService implements OnModuleInit {
         // A cancelled class is never paid out: its refunds are the cancellation's.
         if (s.cancelledAt || s.deletedAt) return null;
         if (s.status === 'SCHEDULED' && !s.startedAt) {
-          if (p.status !== 'CONFIRMED' || closesAtMs(s) + NO_SHOW_GRACE_MS > now.getTime()) return null;
+          if (p.status !== 'CONFIRMED' || closesAtMs(s) + NO_SHOW_GRACE_MS > now.getTime())
+            return null;
           assertTransition(p.status, 'NEEDS_REVIEW');
-          await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'NEEDS_REVIEW', reviewReason: 'never started' } });
+          await tx.livePurchase.update({
+            where: { id: p.id },
+            data: { status: 'NEEDS_REVIEW', reviewReason: 'never started' },
+          });
           return 'review' as const;
         }
         const verdict = deliveryVerdict(s);
@@ -1238,13 +1500,19 @@ export class LiveCommerceService implements OnModuleInit {
         }
         if (p.status === 'CONFIRMED') {
           assertTransition(p.status, 'NEEDS_REVIEW');
-          await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'NEEDS_REVIEW', reviewReason: verdict.reason } });
+          await tx.livePurchase.update({
+            where: { id: p.id },
+            data: { status: 'NEEDS_REVIEW', reviewReason: verdict.reason },
+          });
           return 'review' as const;
         }
         if (p.status === 'CANCELLED_BY_STUDENT') {
           // What a late canceller did not get back, for a class that was not
           // really delivered: a person decides (release or refund it).
-          await tx.livePurchase.update({ where: { id: p.id }, data: { reviewReason: verdict.reason } });
+          await tx.livePurchase.update({
+            where: { id: p.id },
+            data: { reviewReason: verdict.reason },
+          });
           return 'review' as const;
         }
         return null;
@@ -1264,9 +1532,13 @@ export class LiveCommerceService implements OnModuleInit {
       const p = await lockPurchase(tx, purchaseId);
       if (!p) throw new NotFoundException('Purchase not found');
       if (p.releasedAt) return;
-      const underReview = p.status === 'NEEDS_REVIEW' || (p.status === 'CANCELLED_BY_STUDENT' && p.reviewReason);
+      const underReview =
+        p.status === 'NEEDS_REVIEW' || (p.status === 'CANCELLED_BY_STUDENT' && p.reviewReason);
       if (!underReview)
-        throw new ConflictException({ message: 'Only a purchase under review is released by hand', code: 'PURCHASE_STATE_CONFLICT' });
+        throw new ConflictException({
+          message: 'Only a purchase under review is released by hand',
+          code: 'PURCHASE_STATE_CONFLICT',
+        });
       await this.releaseInTx(tx, p, new Date());
     });
     await this.audit(adminId, 'live.purchase.release', purchaseId, {});
@@ -1286,21 +1558,33 @@ export class LiveCommerceService implements OnModuleInit {
       if (!p) throw new NotFoundException('Purchase not found');
       if (p.status === 'REFUNDED' || p.status === 'REFUND_PENDING') return;
       if (p.releasedAt)
-        throw new ConflictException({ message: 'Earnings were already released for this purchase', code: 'ALREADY_RELEASED' });
+        throw new ConflictException({
+          message: 'Earnings were already released for this purchase',
+          code: 'ALREADY_RELEASED',
+        });
       if (p.status === 'CANCELLED_BY_STUDENT' && p.reviewReason) {
         // The retained part of a late cancellation, returned after all.
         await this.fullRefund(tx, p.id, 'ADMIN', adminId);
-        await tx.livePurchase.update({ where: { id: p.id }, data: { reviewReason: `${p.reviewReason}; refunded` } });
+        await tx.livePurchase.update({
+          where: { id: p.id },
+          data: { reviewReason: `${p.reviewReason}; refunded` },
+        });
         return;
       }
       if (p.status !== 'NEEDS_REVIEW' && p.status !== 'CONFIRMED')
-        throw new ConflictException({ message: 'This purchase cannot be refunded by hand', code: 'PURCHASE_STATE_CONFLICT' });
+        throw new ConflictException({
+          message: 'This purchase cannot be refunded by hand',
+          code: 'PURCHASE_STATE_CONFLICT',
+        });
       await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
       // A guest's refund is sent by hand, so it is pending until finance
       // marks the transfer done; a student's lands in the wallet now.
       const to = p.guestBuyerId ? 'REFUND_PENDING' : 'REFUNDED';
       assertTransition(p.status, to);
-      await tx.livePurchase.update({ where: { id: p.id }, data: { status: to, cancelledAt: new Date(), cancelReason: reason } });
+      await tx.livePurchase.update({
+        where: { id: p.id },
+        data: { status: to, cancelledAt: new Date(), cancelReason: reason },
+      });
       await this.fullRefund(tx, p.id, reason, adminId);
     });
     await this.audit(adminId, 'live.purchase.refund', purchaseId, { reason });
@@ -1311,9 +1595,16 @@ export class LiveCommerceService implements OnModuleInit {
     return livePendingEarnings(this.prisma, where, side);
   }
 
-  private async audit(actorUserId: string, action: string, entityId: string, meta: Record<string, unknown>) {
+  private async audit(
+    actorUserId: string,
+    action: string,
+    entityId: string,
+    meta: Record<string, unknown>,
+  ) {
     await this.prisma.auditLog
-      .create({ data: { actorUserId, action, entity: 'LivePurchase', entityId, meta: meta as never } })
+      .create({
+        data: { actorUserId, action, entity: 'LivePurchase', entityId, meta: meta as never },
+      })
       .catch(() => undefined);
   }
 
@@ -1357,21 +1648,42 @@ export class LiveCommerceService implements OnModuleInit {
       const now = new Date();
       const s = await lockSession(tx, pre.sessionId);
       await lockPurchase(tx, purchaseId);
-      const p = await tx.livePurchase.findUniqueOrThrow({ where: { id: purchaseId }, include: { payment: true } });
+      const p = await tx.livePurchase.findUniqueOrThrow({
+        where: { id: purchaseId },
+        include: { payment: true },
+      });
       if (p.status === 'CANCELLED_BY_STUDENT') return;
       if (p.status === 'PAYMENT_PENDING')
-        throw new ConflictException({ message: 'Your payment is being verified — it cannot be cancelled now', code: 'PAYMENT_UNDER_REVIEW' });
+        throw new ConflictException({
+          message: 'Your payment is being verified — it cannot be cancelled now',
+          code: 'PAYMENT_UNDER_REVIEW',
+        });
       if (p.status !== 'HELD' && p.status !== 'CONFIRMED')
-        throw new ConflictException({ message: 'This purchase cannot be cancelled', code: 'PURCHASE_STATE_CONFLICT', status: p.status });
+        throw new ConflictException({
+          message: 'This purchase cannot be cancelled',
+          code: 'PURCHASE_STATE_CONFLICT',
+          status: p.status,
+        });
       if (!s) throw new NotFoundException('Session not found');
-      if (p.status === 'CONFIRMED' && (s.status !== 'SCHEDULED' || now.getTime() >= s.startsAt.getTime())) {
-        throw new ConflictException({ message: 'لا يمكن إلغاء الحجز بعد بدء الحصة', code: 'CANCEL_WINDOW_CLOSED' });
+      if (
+        p.status === 'CONFIRMED' &&
+        (s.status !== 'SCHEDULED' || now.getTime() >= s.startsAt.getTime())
+      ) {
+        throw new ConflictException({
+          message: 'لا يمكن إلغاء الحجز بعد بدء الحصة',
+          code: 'CANCEL_WINDOW_CLOSED',
+        });
       }
       assertTransition(p.status, 'CANCELLED_BY_STUDENT');
       await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
       await tx.livePurchase.update({
         where: { id: p.id },
-        data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'student' },
+        data: {
+          status: 'CANCELLED_BY_STUDENT',
+          cancelledAt: now,
+          holdExpiresAt: null,
+          cancelReason: 'student',
+        },
       });
       if (p.status === 'HELD') {
         await releaseCouponUse(tx, p.couponId);
@@ -1395,7 +1707,10 @@ export class LiveCommerceService implements OnModuleInit {
    * transaction under the locks; the refund is unique per purchase and
    * reason, so running this again (a retry, the sweep) changes nothing.
    */
-  async onSessionCancelled(sessionId: string, actorId: string | null): Promise<{ refunded: number }> {
+  async onSessionCancelled(
+    sessionId: string,
+    actorId: string | null,
+  ): Promise<{ refunded: number }> {
     const rows = await this.prisma.livePurchase.findMany({
       where: {
         sessionId,
@@ -1415,17 +1730,30 @@ export class LiveCommerceService implements OnModuleInit {
         if (p.status === 'HELD') {
           await tx.livePurchase.update({
             where: { id: p.id },
-            data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, holdExpiresAt: null, cancelReason: 'session cancelled' },
+            data: {
+              status: 'CANCELLED_BY_TEACHER',
+              cancelledAt: now,
+              holdExpiresAt: null,
+              cancelReason: 'session cancelled',
+            },
           });
           await releaseCouponUse(tx, p.couponId);
-          await this.closeDeclaration(tx, p.id, 'the session was cancelled before a transfer was claimed');
+          await this.closeDeclaration(
+            tx,
+            p.id,
+            'the session was cancelled before a transfer was claimed',
+          );
           return false;
         }
         if (p.status === 'CONFIRMED' || p.status === 'NEEDS_REVIEW') {
           await tx.liveBooking.deleteMany({ where: { purchaseId: p.id } });
           await tx.livePurchase.update({
             where: { id: p.id },
-            data: { status: 'CANCELLED_BY_TEACHER', cancelledAt: now, cancelReason: 'session cancelled' },
+            data: {
+              status: 'CANCELLED_BY_TEACHER',
+              cancelledAt: now,
+              cancelReason: 'session cancelled',
+            },
           });
         } else if (p.status !== 'CANCELLED_BY_STUDENT') {
           return false;
@@ -1479,8 +1807,12 @@ export class LiveCommerceService implements OnModuleInit {
       const done = await this.prisma.$transaction(async (tx) => {
         await lockSession(tx, d.sessionId);
         const p = await lockPurchase(tx, d.id);
-        if (!p || p.status !== 'HELD' || !p.holdExpiresAt || p.holdExpiresAt > new Date()) return false;
-        await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'EXPIRED', holdExpiresAt: null } });
+        if (!p || p.status !== 'HELD' || !p.holdExpiresAt || p.holdExpiresAt > new Date())
+          return false;
+        await tx.livePurchase.update({
+          where: { id: p.id },
+          data: { status: 'EXPIRED', holdExpiresAt: null },
+        });
         // The seat was never paid for: its coupon use goes back.
         await releaseCouponUse(tx, p.couponId);
         return true;
@@ -1510,7 +1842,8 @@ export class LiveCommerceService implements OnModuleInit {
           include: { payment: true, refunds: true, guestBuyer: true },
         })
       : null;
-    if (!p || !p.guestBuyer) throw new NotFoundException({ message: 'Not found', code: 'ACCESS_NOT_FOUND' });
+    if (!p || !p.guestBuyer)
+      throw new NotFoundException({ message: 'Not found', code: 'ACCESS_NOT_FOUND' });
     return p as typeof p & { guestBuyer: NonNullable<typeof p.guestBuyer> };
   }
 
@@ -1521,7 +1854,9 @@ export class LiveCommerceService implements OnModuleInit {
    * doors are open, whether the teacher has started, whether it is over.
    */
   async publicOffer(sessionId: string) {
-    const [s] = await this.prisma.$queryRaw<(LockedSession & { description: string; teacherName: string })[]>`
+    const [s] = await this.prisma.$queryRaw<
+      (LockedSession & { description: string; teacherName: string })[]
+    >`
       SELECT s.id, s."tenantId", s."academyId", s."groupId", s.title, s.description, s.status::text AS status,
              s."startsAt", s."durationMin", s.capacity, s."accessMode"::text AS "accessMode", s."priceCents",
              s.currency, s."refundPolicy"::text AS "refundPolicy", s."replayPolicy"::text AS "replayPolicy",
@@ -1560,7 +1895,10 @@ export class LiveCommerceService implements OnModuleInit {
   async guestHold(sessionId: string, displayName: string, couponCode?: string) {
     const name = (displayName ?? '').replace(/\s+/g, ' ').trim();
     if (name.length < 2 || name.length > 60) {
-      throw new BadRequestException({ message: 'Enter your name (2–60 characters)', code: 'GUEST_NAME_INVALID' });
+      throw new BadRequestException({
+        message: 'Enter your name (2–60 characters)',
+        code: 'GUEST_NAME_INVALID',
+      });
     }
     await this.publicOffer(sessionId);
     const raw = randomBytes(32).toString('base64url');
@@ -1577,9 +1915,19 @@ export class LiveCommerceService implements OnModuleInit {
           : { ...(await this.freeSeat(s!, tx)), coupon: null };
       const user = await tx.user.create({ data: { role: 'GUEST', fullName: name } });
       const guest = await tx.guestBuyer.create({ data: { userId: user.id, displayName: name } });
-      return this.createPurchase(tx, s!, breakdown, feeRefundable, coupon, { guestBuyerId: guest.id }, now, undefined, {
-        accessTokenHash: LiveCommerceService.hashToken(raw),
-      });
+      return this.createPurchase(
+        tx,
+        s!,
+        breakdown,
+        feeRefundable,
+        coupon,
+        { guestBuyerId: guest.id },
+        now,
+        undefined,
+        {
+          accessTokenHash: LiveCommerceService.hashToken(raw),
+        },
+      );
     });
     return { accessToken: raw, purchase: await this.byId(purchase.id) };
   }
@@ -1655,8 +2003,12 @@ export class LiveCommerceService implements OnModuleInit {
     if (!['CONFIRMED', 'DELIVERED', 'NEEDS_REVIEW'].includes(p.status)) {
       throw new ForbiddenException({ message: 'This seat is not active', code: 'SEAT_NOT_ACTIVE' });
     }
-    const s = await this.prisma.liveSession.findUnique({ where: { id: p.sessionId }, select: { id: true } });
-    if (!s) throw new ForbiddenException({ message: 'This seat is not active', code: 'SEAT_NOT_ACTIVE' });
+    const s = await this.prisma.liveSession.findUnique({
+      where: { id: p.sessionId },
+      select: { id: true },
+    });
+    if (!s)
+      throw new ForbiddenException({ message: 'This seat is not active', code: 'SEAT_NOT_ACTIVE' });
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: p.guestBuyer.userId } });
     const device = await this.prisma.deviceSession.create({
       data: {
@@ -1682,7 +2034,10 @@ export class LiveCommerceService implements OnModuleInit {
   /** Every classroom token a guest holds stops working (refund, cancellation). */
   private async revokeGuestAccess(tx: Tx, p: Pick<LivePurchase, 'guestBuyerId'>) {
     if (!p.guestBuyerId) return;
-    const g = await tx.guestBuyer.findUnique({ where: { id: p.guestBuyerId }, select: { userId: true } });
+    const g = await tx.guestBuyer.findUnique({
+      where: { id: p.guestBuyerId },
+      select: { userId: true },
+    });
     if (!g) return;
     await tx.deviceSession.updateMany({
       where: { userId: g.userId, revokedAt: null },
@@ -1693,13 +2048,22 @@ export class LiveCommerceService implements OnModuleInit {
   private refundDestination(dto: { method?: string; holderName?: string; handle?: string }) {
     const method = dto.method as PayoutMethod;
     if (!['INSTAPAY', 'VODAFONE_CASH', 'BANK_TRANSFER'].includes(method))
-      throw new BadRequestException({ message: 'Choose how to receive the refund', code: 'REFUND_METHOD_INVALID' });
+      throw new BadRequestException({
+        message: 'Choose how to receive the refund',
+        code: 'REFUND_METHOD_INVALID',
+      });
     const holderName = (dto.holderName ?? '').trim().slice(0, 80);
     const handle = (dto.handle ?? '').replace(/\s+/g, '').slice(0, 64);
     if (holderName.length < 2 || handle.length < 4)
-      throw new BadRequestException({ message: 'Enter the account name and number', code: 'REFUND_DESTINATION_INVALID' });
+      throw new BadRequestException({
+        message: 'Enter the account name and number',
+        code: 'REFUND_DESTINATION_INVALID',
+      });
     if (method === 'VODAFONE_CASH' && !/^01[0125]\d{8}$/.test(handle.replace(/^\+?20/, '0')))
-      throw new BadRequestException({ message: 'Enter the wallet number (01xxxxxxxxx)', code: 'REFUND_DESTINATION_INVALID' });
+      throw new BadRequestException({
+        message: 'Enter the wallet number (01xxxxxxxxx)',
+        code: 'REFUND_DESTINATION_INVALID',
+      });
     return { method, details: { holderName, handle } };
   }
 
@@ -1714,15 +2078,31 @@ export class LiveCommerceService implements OnModuleInit {
       const now = new Date();
       const s = await lockSession(tx, pre.sessionId);
       await lockPurchase(tx, pre.id);
-      const p = await tx.livePurchase.findUniqueOrThrow({ where: { id: pre.id }, include: { payment: true } });
+      const p = await tx.livePurchase.findUniqueOrThrow({
+        where: { id: pre.id },
+        include: { payment: true },
+      });
       if (p.status === 'CANCELLED_BY_STUDENT') return;
       if (p.status === 'PAYMENT_PENDING')
-        throw new ConflictException({ message: 'Your payment is being verified — it cannot be cancelled now', code: 'PAYMENT_UNDER_REVIEW' });
+        throw new ConflictException({
+          message: 'Your payment is being verified — it cannot be cancelled now',
+          code: 'PAYMENT_UNDER_REVIEW',
+        });
       if (p.status !== 'HELD' && p.status !== 'CONFIRMED')
-        throw new ConflictException({ message: 'This purchase cannot be cancelled', code: 'PURCHASE_STATE_CONFLICT', status: p.status });
+        throw new ConflictException({
+          message: 'This purchase cannot be cancelled',
+          code: 'PURCHASE_STATE_CONFLICT',
+          status: p.status,
+        });
       if (!s) throw new NotFoundException('Session not found');
-      if (p.status === 'CONFIRMED' && (s.status !== 'SCHEDULED' || now.getTime() >= s.startsAt.getTime()))
-        throw new ConflictException({ message: 'لا يمكن إلغاء الحجز بعد بدء الحصة', code: 'CANCEL_WINDOW_CLOSED' });
+      if (
+        p.status === 'CONFIRMED' &&
+        (s.status !== 'SCHEDULED' || now.getTime() >= s.startsAt.getTime())
+      )
+        throw new ConflictException({
+          message: 'لا يمكن إلغاء الحجز بعد بدء الحصة',
+          code: 'CANCEL_WINDOW_CLOSED',
+        });
       let destination: ReturnType<LiveCommerceService['refundDestination']> | undefined;
       let parts = { fee: 0, teacher: 0, center: 0 };
       if (p.status === 'CONFIRMED') {
@@ -1735,27 +2115,38 @@ export class LiveCommerceService implements OnModuleInit {
       assertTransition(p.status, 'CANCELLED_BY_STUDENT');
       await tx.livePurchase.update({
         where: { id: p.id },
-        data: { status: 'CANCELLED_BY_STUDENT', cancelledAt: now, holdExpiresAt: null, cancelReason: 'guest' },
+        data: {
+          status: 'CANCELLED_BY_STUDENT',
+          cancelledAt: now,
+          holdExpiresAt: null,
+          cancelReason: 'guest',
+        },
       });
       await this.revokeGuestAccess(tx, p);
       if (p.status === 'HELD') {
         await releaseCouponUse(tx, p.couponId);
         await this.closeDeclaration(tx, p.id, 'the buyer cancelled before claiming a transfer');
       }
-      if (p.status === 'CONFIRMED') await this.refundParts(tx, p, 'STUDENT_CANCEL', parts, null, destination);
+      if (p.status === 'CONFIRMED')
+        await this.refundParts(tx, p, 'STUDENT_CANCEL', parts, null, destination);
     });
     return this.guestStatus(raw);
   }
 
   /** Where a guest wants an owed refund sent (a teacher's cancellation, an oversold seat). */
-  async guestRefundDestination(raw: string, refundId: string, dto: { method?: string; holderName?: string; handle?: string }) {
+  async guestRefundDestination(
+    raw: string,
+    refundId: string,
+    dto: { method?: string; holderName?: string; handle?: string },
+  ) {
     const p = await this.guestPurchase(raw);
     const d = this.refundDestination(dto);
     const r = await this.prisma.refund.updateMany({
       where: { id: refundId, livePurchaseId: p.id, status: 'REQUESTED' },
       data: { destinationMethod: d.method, destinationDetails: d.details as never },
     });
-    if (r.count === 0) throw new NotFoundException({ message: 'Not found', code: 'REFUND_NOT_FOUND' });
+    if (r.count === 0)
+      throw new NotFoundException({ message: 'Not found', code: 'REFUND_NOT_FOUND' });
     return this.guestStatus(raw);
   }
 
@@ -1768,11 +2159,24 @@ export class LiveCommerceService implements OnModuleInit {
    */
   async recoveryCandidates(amountCents: number) {
     const rows = await this.prisma.livePurchase.findMany({
-      where: { status: { in: ['HELD', 'EXPIRED'] }, studentPaysCents: amountCents, payment: { is: null } },
+      where: {
+        status: { in: ['HELD', 'EXPIRED'] },
+        studentPaysCents: amountCents,
+        payment: { is: null },
+      },
       orderBy: { createdAt: 'desc' },
       take: 50,
       include: {
-        session: { select: { id: true, title: true, startsAt: true, durationMin: true, status: true, cancelledAt: true } },
+        session: {
+          select: {
+            id: true,
+            title: true,
+            startsAt: true,
+            durationMin: true,
+            status: true,
+            cancelledAt: true,
+          },
+        },
         student: { select: { user: { select: { fullName: true } } } },
         guestBuyer: { select: { displayName: true } },
       },
@@ -1817,18 +2221,30 @@ export class LiveCommerceService implements OnModuleInit {
    */
   async adminAttachTransfer(eventId: string, purchaseId: string, adminId: string, reason: string) {
     const why = (reason ?? '').trim().slice(0, 300);
-    if (why.length < 3) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
-    const pre = await this.prisma.livePurchase.findUnique({ where: { id: purchaseId }, include: { payment: true } });
+    if (why.length < 3)
+      throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
+    const pre = await this.prisma.livePurchase.findUnique({
+      where: { id: purchaseId },
+      include: { payment: true },
+    });
     if (!pre) throw new NotFoundException('Purchase not found');
     const event = await this.prisma.paymentEvent.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException('Event not found');
     if (pre.payment) {
       // Idempotent retry: this transfer already became this purchase's payment.
-      if (event.matchedPaymentId === pre.payment.id) return { ...(await this.byId(purchaseId)), already: true };
-      throw new ConflictException({ message: 'This purchase already has a payment', code: 'PURCHASE_HAS_PAYMENT' });
+      if (event.matchedPaymentId === pre.payment.id)
+        return { ...(await this.byId(purchaseId)), already: true };
+      throw new ConflictException({
+        message: 'This purchase already has a payment',
+        code: 'PURCHASE_HAS_PAYMENT',
+      });
     }
     if (event.status !== 'UNMATCHED' && event.status !== 'AMBIGUOUS') {
-      throw new ConflictException({ message: 'This transfer is already claimed', code: 'EVENT_ALREADY_CLAIMED', status: event.status });
+      throw new ConflictException({
+        message: 'This transfer is already claimed',
+        code: 'EVENT_ALREADY_CLAIMED',
+        status: event.status,
+      });
     }
     if (!TRANSFER_METHODS.includes(event.provider as never)) {
       throw new BadRequestException({ message: 'Not a transfer', code: 'METHOD_INVALID' });
@@ -1845,10 +2261,17 @@ export class LiveCommerceService implements OnModuleInit {
       const p = await lockPurchase(tx, purchaseId);
       if (!p || !s) throw new NotFoundException('Purchase not found');
       if (p.status !== 'HELD' && p.status !== 'EXPIRED') {
-        throw new ConflictException({ message: 'This purchase cannot take a payment', code: 'PURCHASE_STATE_CONFLICT', status: p.status });
+        throw new ConflictException({
+          message: 'This purchase cannot take a payment',
+          code: 'PURCHASE_STATE_CONFLICT',
+          status: p.status,
+        });
       }
       if (await tx.payment.findUnique({ where: { livePurchaseId: p.id }, select: { id: true } })) {
-        throw new ConflictException({ message: 'This purchase already has a payment', code: 'PURCHASE_HAS_PAYMENT' });
+        throw new ConflictException({
+          message: 'This purchase already has a payment',
+          code: 'PURCHASE_HAS_PAYMENT',
+        });
       }
       const payment = await tx.payment.create({
         data: {
@@ -1871,23 +2294,45 @@ export class LiveCommerceService implements OnModuleInit {
         },
       });
       const claim = await tx.paymentEvent.updateMany({
-        where: { id: eventId, status: { in: ['UNMATCHED', 'AMBIGUOUS'] }, matchedPaymentId: null, matchedTopupId: null },
-        data: { status: 'MATCHED', matchedPaymentId: payment.id, note: `attached by admin ${adminId}: ${why}`.slice(0, 500) },
+        where: {
+          id: eventId,
+          status: { in: ['UNMATCHED', 'AMBIGUOUS'] },
+          matchedPaymentId: null,
+          matchedTopupId: null,
+        },
+        data: {
+          status: 'MATCHED',
+          matchedPaymentId: payment.id,
+          note: `attached by admin ${adminId}: ${why}`.slice(0, 500),
+        },
       });
       if (claim.count === 0) {
-        throw new ConflictException({ message: 'This transfer is already claimed', code: 'EVENT_ALREADY_CLAIMED' });
+        throw new ConflictException({
+          message: 'This transfer is already claimed',
+          code: 'EVENT_ALREADY_CLAIMED',
+        });
       }
       // The same shape a buyer's claim produces; verification decides the seat.
-      const keepable = !s.deletedAt && !s.cancelledAt && now.getTime() < closesAtMs(s) &&
+      const keepable =
+        !s.deletedAt &&
+        !s.cancelledAt &&
+        now.getTime() < closesAtMs(s) &&
         (s.capacity == null || (await seatsTaken(tx, s.id, now, p.id)) < s.capacity);
       assertTransition(p.status, 'PAYMENT_PENDING');
       await tx.livePurchase.update({
         where: { id: p.id },
-        data: { status: 'PAYMENT_PENDING', holdExpiresAt: keepable ? new Date(closesAtMs(s)) : null },
+        data: {
+          status: 'PAYMENT_PENDING',
+          holdExpiresAt: keepable ? new Date(closesAtMs(s)) : null,
+        },
       });
       return payment.id;
     });
-    await this.audit(adminId, 'live.transfer.attach', purchaseId, { eventId, paymentId, reason: why });
+    await this.audit(adminId, 'live.transfer.attach', purchaseId, {
+      eventId,
+      paymentId,
+      reason: why,
+    });
     // The ordinary admin verification: Live handler, capacity, oversold refund, ledger.
     await this.matching.verifyByAdmin(adminId, paymentId);
     return { ...(await this.byId(purchaseId)), already: false };
@@ -1900,8 +2345,13 @@ export class LiveCommerceService implements OnModuleInit {
     const r = await this.prisma.refund.findUnique({ where: { id: refundId } });
     if (!r) throw new NotFoundException('Refund not found');
     if (r.status === 'APPROVED' || r.status === 'COMPLETED') return r;
-    if (r.status !== 'REQUESTED') throw new ConflictException({ message: 'Refund is not open', code: 'REFUND_STATE_CONFLICT' });
-    if (!r.destinationMethod) throw new ConflictException({ message: 'The buyer has not said where to send it', code: 'REFUND_NO_DESTINATION' });
+    if (r.status !== 'REQUESTED')
+      throw new ConflictException({ message: 'Refund is not open', code: 'REFUND_STATE_CONFLICT' });
+    if (!r.destinationMethod)
+      throw new ConflictException({
+        message: 'The buyer has not said where to send it',
+        code: 'REFUND_NO_DESTINATION',
+      });
     await this.prisma.refund.updateMany({
       where: { id: refundId, status: 'REQUESTED' },
       data: { status: 'APPROVED', decidedById: adminId, decidedAt: new Date() },
@@ -1917,15 +2367,26 @@ export class LiveCommerceService implements OnModuleInit {
    */
   async completeRefund(refundId: string, adminId: string, transferReference: string) {
     const ref = (transferReference ?? '').trim().slice(0, 120);
-    if (ref.length < 3) throw new BadRequestException({ message: 'Enter the transfer reference', code: 'TRANSFER_REFERENCE_REQUIRED' });
-    const pre = await this.prisma.refund.findUnique({ where: { id: refundId }, include: { livePurchase: true } });
+    if (ref.length < 3)
+      throw new BadRequestException({
+        message: 'Enter the transfer reference',
+        code: 'TRANSFER_REFERENCE_REQUIRED',
+      });
+    const pre = await this.prisma.refund.findUnique({
+      where: { id: refundId },
+      include: { livePurchase: true },
+    });
     if (!pre) throw new NotFoundException('Refund not found');
     await this.prisma.$transaction(async (tx) => {
       await lockSession(tx, pre.livePurchase.sessionId);
       const p = await lockPurchase(tx, pre.livePurchaseId);
       const r = await tx.refund.findUniqueOrThrow({ where: { id: refundId } });
       if (r.status === 'COMPLETED') return;
-      if (r.status !== 'APPROVED') throw new ConflictException({ message: 'Approve the refund first', code: 'REFUND_STATE_CONFLICT' });
+      if (r.status !== 'APPROVED')
+        throw new ConflictException({
+          message: 'Approve the refund first',
+          code: 'REFUND_STATE_CONFLICT',
+        });
       const txnId = await this.ledger.bookLiveRefund(
         {
           refundId: r.id,
@@ -1939,13 +2400,21 @@ export class LiveCommerceService implements OnModuleInit {
       );
       await tx.refund.update({
         where: { id: r.id },
-        data: { status: 'COMPLETED', completedAt: new Date(), transferReference: ref, ledgerTxnId: txnId },
+        data: {
+          status: 'COMPLETED',
+          completedAt: new Date(),
+          transferReference: ref,
+          ledgerTxnId: txnId,
+        },
       });
       if (p?.status === 'REFUND_PENDING') {
         await tx.livePurchase.update({ where: { id: p.id }, data: { status: 'REFUNDED' } });
       }
     });
-    await this.audit(adminId, 'live.refund.complete', pre.livePurchaseId, { refundId, transferReference: ref });
+    await this.audit(adminId, 'live.refund.complete', pre.livePurchaseId, {
+      refundId,
+      transferReference: ref,
+    });
     return this.prisma.refund.findUniqueOrThrow({ where: { id: refundId } });
   }
 
@@ -1955,7 +2424,12 @@ export class LiveCommerceService implements OnModuleInit {
     if (!why) throw new BadRequestException({ message: 'Say why', code: 'REASON_REQUIRED' });
     const r = await this.prisma.refund.updateMany({
       where: { id: refundId, status: { in: ['REQUESTED', 'APPROVED'] } },
-      data: { status: 'REJECTED', rejectedReason: why, decidedById: adminId, decidedAt: new Date() },
+      data: {
+        status: 'REJECTED',
+        rejectedReason: why,
+        decidedById: adminId,
+        decidedAt: new Date(),
+      },
     });
     const row = await this.prisma.refund.findUnique({ where: { id: refundId } });
     if (!row) throw new NotFoundException('Refund not found');
@@ -1981,7 +2455,16 @@ export class LiveCommerceService implements OnModuleInit {
    * Only the existence of such a transfer is said, never whose it is.
    */
   /** Where the buyer's money stands — the shared answer (see payments/payment-stage.ts). */
-  paymentStage(p: { payment: { status: string; claimedAt: Date | null; method: string | null; amountCents: number; walletCents: number; createdAt: Date } | null }) {
+  paymentStage(p: {
+    payment: {
+      status: string;
+      claimedAt: Date | null;
+      method: string | null;
+      amountCents: number;
+      walletCents: number;
+      createdAt: Date;
+    } | null;
+  }) {
     return paymentStage(this.prisma, p.payment ? paymentRow(p.payment) : null);
   }
 
@@ -2040,7 +2523,11 @@ export class LiveCommerceService implements OnModuleInit {
       where: { studentId: student.id },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      include: { payment: true, refunds: true, session: { select: { title: true, startsAt: true, durationMin: true } } },
+      include: {
+        payment: true,
+        refunds: true,
+        session: { select: { title: true, startsAt: true, durationMin: true } },
+      },
     });
     return rows.map((p) => ({ ...this.view(p), session: p.session }));
   }
@@ -2048,19 +2535,29 @@ export class LiveCommerceService implements OnModuleInit {
   // ── After the fact (outside the money transaction) ──────────────────────
 
   private async afterConfirmed(purchaseId: string, paymentId: string) {
-    await this.ledger.ensureInvoice(paymentId).catch((e) =>
-      this.logger.warn(`live.invoice payment=${paymentId} failed: ${(e as Error).message}`),
-    );
+    await this.ledger
+      .ensureInvoice(paymentId)
+      .catch((e) =>
+        this.logger.warn(`live.invoice payment=${paymentId} failed: ${(e as Error).message}`),
+      );
     const p = await this.prisma.livePurchase.findUnique({
       where: { id: purchaseId },
       include: { session: { select: { title: true, tenantId: true } } },
     });
     if (!p) return;
     if (p.studentId)
-      await this.notifyStudent(p.studentId, 'تم تأكيد حجزك ✅', `مكانك في «${p.session.title}» اتأكد. هتلاقيها في جلساتك المباشرة.`, {
-        sessionId: p.sessionId,
-      });
-    const teacher = await this.prisma.teacherProfile.findUnique({ where: { id: p.session.tenantId }, select: { userId: true } });
+      await this.notifyStudent(
+        p.studentId,
+        'تم تأكيد حجزك ✅',
+        `مكانك في «${p.session.title}» اتأكد. هتلاقيها في جلساتك المباشرة.`,
+        {
+          sessionId: p.sessionId,
+        },
+      );
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id: p.session.tenantId },
+      select: { userId: true },
+    });
     if (teacher)
       await this.notifications
         .create({
@@ -2089,8 +2586,16 @@ export class LiveCommerceService implements OnModuleInit {
     );
   }
 
-  private async notifyStudent(studentId: string, title: string, body: string, meta: Record<string, unknown> = {}) {
-    const s = await this.prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } });
+  private async notifyStudent(
+    studentId: string,
+    title: string,
+    body: string,
+    meta: Record<string, unknown> = {},
+  ) {
+    const s = await this.prisma.studentProfile.findUnique({
+      where: { id: studentId },
+      select: { userId: true },
+    });
     if (s)
       await this.notifications
         .create({ userId: s.userId, type: 'LIVE_SESSION_REMINDER', title, body, meta })

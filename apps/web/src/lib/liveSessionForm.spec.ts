@@ -93,14 +93,19 @@ describe('the new-session form', () => {
   });
 
   it('leaves errors that belong to no field to the banner', () => {
-    expect(serverErrors({ response: { data: { code: 'TEACHER_CONFLICT', message: 'x' } } })).toEqual({});
+    expect(
+      serverErrors({ response: { data: { code: 'TEACHER_CONFLICT', message: 'x' } } }),
+    ).toEqual({});
     expect(serverErrors(new Error('Network Error'))).toEqual({});
   });
 
   it('offers sensible times: the next half hour, a 12-hour clock', () => {
     const at = new Date(2026, 8, 26, 19, 7).getTime(); // 19:07 local
     expect(localTime(nextSlot(at))).toBe('19:30');
-    expect(splitStart(combine('2026-09-26', '19:30'))).toEqual({ date: '2026-09-26', time: '19:30' });
+    expect(splitStart(combine('2026-09-26', '19:30'))).toEqual({
+      date: '2026-09-26',
+      time: '19:30',
+    });
     expect(formatTime12('19:30', 'ar')).toBe('7:30 م');
     expect(formatTime12('21:37', 'ar')).toBe('9:37 م');
     expect(formatTime12('00:15', 'en')).toBe('12:15 AM');
@@ -122,33 +127,41 @@ describe('the new-session form', () => {
 
   it('refuses a time already gone, but not the current minute', () => {
     const now = new Date(2026, 8, 26, 21, 37, 40).getTime(); // 21:37:40 local
-    expect(clientErrors({ ...ok, startsAt: combine('2026-09-26', '21:37') }, now).startsAt).toBeUndefined();
-    expect(clientErrors({ ...ok, startsAt: combine('2026-09-26', '21:36') }, now).startsAt?.code).toBe(
-      'STARTS_AT_PAST',
-    );
-    expect(clientErrors({ ...ok, startsAt: combine('2026-09-25', '23:59') }, now).startsAt?.code).toBe(
-      'STARTS_AT_PAST',
-    );
+    expect(
+      clientErrors({ ...ok, startsAt: combine('2026-09-26', '21:37') }, now).startsAt,
+    ).toBeUndefined();
+    expect(
+      clientErrors({ ...ok, startsAt: combine('2026-09-26', '21:36') }, now).startsAt?.code,
+    ).toBe('STARTS_AT_PAST');
+    expect(
+      clientErrors({ ...ok, startsAt: combine('2026-09-25', '23:59') }, now).startsAt?.code,
+    ).toBe('STARTS_AT_PAST');
   });
 
   it('refuses whitespace titles and rejects bad numbers instead of fixing them', () => {
     expect(clientErrors({ ...ok, title: '   ' }, NOW).title?.code).toBe('TITLE_REQUIRED');
     expect(clientErrors({ ...ok, title: ' a ' }, NOW).title?.code).toBe('TITLE_TOO_SHORT');
-    expect(clientErrors({ ...ok, durationMin: '1.5' }, NOW).durationMin?.code).toBe('DURATION_INVALID');
-    expect(clientErrors({ ...ok, durationMin: '721' }, NOW).durationMin?.code).toBe('DURATION_TOO_LONG');
+    expect(clientErrors({ ...ok, durationMin: '1.5' }, NOW).durationMin?.code).toBe(
+      'DURATION_INVALID',
+    );
+    expect(clientErrors({ ...ok, durationMin: '721' }, NOW).durationMin?.code).toBe(
+      'DURATION_TOO_LONG',
+    );
     expect(clientErrors({ ...ok, durationMin: '720' }, NOW).durationMin).toBeUndefined();
     expect(clientErrors({ ...ok, durationMin: '70' }, NOW).durationMin).toBeUndefined();
     expect(clientErrors({ ...ok, capacity: '0' }, NOW).capacity?.code).toBe('CAPACITY_TOO_SMALL');
     expect(clientErrors({ ...ok, capacity: '-3' }, NOW).capacity?.code).toBe('CAPACITY_INVALID');
     expect(clientErrors({ ...ok, capacity: '2.5' }, NOW).capacity?.code).toBe('CAPACITY_INVALID');
-    expect(clientErrors({ ...ok, capacity: '100001' }, NOW).capacity?.code).toBe('CAPACITY_TOO_LARGE');
+    expect(clientErrors({ ...ok, capacity: '100001' }, NOW).capacity?.code).toBe(
+      'CAPACITY_TOO_LARGE',
+    );
     expect(clientErrors({ ...ok, capacity: '100000' }, NOW).capacity).toBeUndefined();
   });
 
   it('asks for a number when "limit" is chosen but left empty', () => {
-    expect(clientErrors({ ...ok, capacity: '' }, NOW, { capacityRequired: true }).capacity?.code).toBe(
-      'CAPACITY_REQUIRED',
-    );
+    expect(
+      clientErrors({ ...ok, capacity: '' }, NOW, { capacityRequired: true }).capacity?.code,
+    ).toBe('CAPACITY_REQUIRED');
     expect(clientErrors({ ...ok, capacity: '' }, NOW).capacity).toBeUndefined();
   });
 
@@ -198,8 +211,14 @@ describe('the new-session form', () => {
     for (const bad of ['abc', '1.005', '-5', '1e3', '12.', '1,000']) {
       expect(commerceErrors({ ...base, price: bad }).priceCents?.code).toBe('PRICE_INVALID');
     }
-    expect(commerceErrors({ ...base, price: '0' }).priceCents).toEqual({ code: 'PRICE_TOO_LOW', params: { min: 1 } });
-    expect(commerceErrors({ ...base, price: '1000001' }).priceCents).toEqual({ code: 'PRICE_TOO_HIGH', params: { max: 1_000_000 } });
+    expect(commerceErrors({ ...base, price: '0' }).priceCents).toEqual({
+      code: 'PRICE_TOO_LOW',
+      params: { min: 1 },
+    });
+    expect(commerceErrors({ ...base, price: '1000001' }).priceCents).toEqual({
+      code: 'PRICE_TOO_HIGH',
+      params: { max: 1_000_000 },
+    });
     for (const good of ['50', '75', '100', '149.50', '149.5', '٧٥']) {
       expect(commerceErrors({ ...base, price: good }).priceCents).toBeUndefined();
     }
@@ -209,14 +228,27 @@ describe('the new-session form', () => {
 
   it('checks replay days only when replay is limited to days', () => {
     const base = { paid: true, price: '100' };
-    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '0' }).replayDays?.code).toBe('REPLAY_DAYS_INVALID');
-    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '2.5' }).replayDays?.code).toBe('REPLAY_DAYS_INVALID');
-    expect(commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '7' }).replayDays).toBeUndefined();
-    expect(commerceErrors({ ...base, replayPolicy: 'NONE', replayDays: 'x' }).replayDays).toBeUndefined();
+    expect(
+      commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '0' }).replayDays?.code,
+    ).toBe('REPLAY_DAYS_INVALID');
+    expect(
+      commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '2.5' }).replayDays
+        ?.code,
+    ).toBe('REPLAY_DAYS_INVALID');
+    expect(
+      commerceErrors({ ...base, replayPolicy: 'INCLUDED_DAYS', replayDays: '7' }).replayDays,
+    ).toBeUndefined();
+    expect(
+      commerceErrors({ ...base, replayPolicy: 'NONE', replayDays: 'x' }).replayDays,
+    ).toBeUndefined();
   });
 
   it('shows the server’s price bounds in EGP, not piasters', () => {
-    const err = { response: { data: { fields: [{ field: 'priceCents', code: 'PRICE_TOO_LOW', params: { min: 100 } }] } } };
+    const err = {
+      response: {
+        data: { fields: [{ field: 'priceCents', code: 'PRICE_TOO_LOW', params: { min: 100 } }] },
+      },
+    };
     expect(serverErrors(err).priceCents).toEqual({ code: 'PRICE_TOO_LOW', params: { min: 1 } });
   });
 });

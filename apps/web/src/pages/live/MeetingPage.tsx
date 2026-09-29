@@ -33,7 +33,10 @@ function StateScreen({
   busy?: boolean;
 }) {
   return (
-    <div className="grid min-h-dvh place-items-center bg-surface px-6" aria-busy={busy || undefined}>
+    <div
+      className="grid min-h-dvh place-items-center bg-surface px-6"
+      aria-busy={busy || undefined}
+    >
       <div className="w-full max-w-sm text-center">
         <span
           aria-hidden
@@ -109,7 +112,9 @@ export default function MeetingPage() {
     mutationFn: async (startIt: boolean) => {
       if (startIt) {
         const rid = await meeting.startRecording();
-        return (await api.post(`/teacher/live/${id}/recording/start`, { recordingId: rid ?? undefined })).data;
+        return (
+          await api.post(`/teacher/live/${id}/recording/start`, { recordingId: rid ?? undefined })
+        ).data;
       }
       await meeting.stopRecording();
       return (await api.post(`/teacher/live/${id}/recording/stop`)).data;
@@ -214,7 +219,12 @@ export default function MeetingPage() {
       if (meeting.provider === 'cloudflare') {
         await meeting.join(m, { mic: o.mic, cam: o.cam, owner: amOwner });
       } else {
-        await meeting.join(m.url, m.token, { mic: o.mic, cam: o.cam, owner: amOwner, language: m.language });
+        await meeting.join(m.url, m.token, {
+          mic: o.mic,
+          cam: o.cam,
+          owner: amOwner,
+          language: m.language,
+        });
       }
       setInRoom(true);
     } finally {
@@ -239,9 +249,18 @@ export default function MeetingPage() {
   // Not open yet, or open and waiting for the teacher: the lobby, waiting —
   // with the session the server sent along with its refusal.
   const refusal = (entry.error as any)?.response?.data;
-  if (entry.isError && (refusal?.code === 'NOT_OPEN_YET' || refusal?.code === 'NOT_STARTED') && refusal.session) {
-    const serverNow = refusal.session.serverNow ? new Date(refusal.session.serverNow).getTime() : NaN;
-    const skewMs = Number.isFinite(serverNow) && Math.abs(serverNow - receivedAt) > 30_000 ? serverNow - receivedAt : 0;
+  if (
+    entry.isError &&
+    (refusal?.code === 'NOT_OPEN_YET' || refusal?.code === 'NOT_STARTED') &&
+    refusal.session
+  ) {
+    const serverNow = refusal.session.serverNow
+      ? new Date(refusal.session.serverNow).getTime()
+      : NaN;
+    const skewMs =
+      Number.isFinite(serverNow) && Math.abs(serverNow - receivedAt) > 30_000
+        ? serverNow - receivedAt
+        : 0;
     return (
       <Lobby
         session={refusal.session}
@@ -249,7 +268,10 @@ export default function MeetingPage() {
         isTeacher={isTeacher}
         ready={false}
         joining={false}
-        waiting={{ code: refusal.code, opensAt: new Date(refusal.session.startsAt).getTime() - 15 * 60_000 }}
+        waiting={{
+          code: refusal.code,
+          opensAt: new Date(refusal.session.startsAt).getTime() - 15 * 60_000,
+        }}
         skewMs={skewMs}
         onEnter={() => undefined}
         onBack={() => navigate(home)}
@@ -261,7 +283,13 @@ export default function MeetingPage() {
     const known = code && KNOWN_ERRORS.includes(code);
     return (
       <StateScreen
-        icon={code === 'ENDED' ? 'event_busy' : code === 'NOT_STARTED' || code === 'NOT_OPEN_YET' ? 'schedule' : 'videocam_off'}
+        icon={
+          code === 'ENDED'
+            ? 'event_busy'
+            : code === 'NOT_STARTED' || code === 'NOT_OPEN_YET'
+              ? 'schedule'
+              : 'videocam_off'
+        }
         title={known ? t(`meeting.err.${code}`) : t('meeting.err.GENERIC')}
         action={t('meeting.back')}
         onAction={() => navigate(home)}

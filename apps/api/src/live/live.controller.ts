@@ -85,6 +85,8 @@ class CreateLiveDto {
 
 class ClassroomPolicyDto {
   @IsOptional() @IsIn(['RAISE_HAND', 'LISTEN_ONLY']) micPolicy?: 'RAISE_HAND' | 'LISTEN_ONLY';
+  @IsOptional() @IsIn(['SPEAKERS_ONLY', 'OPTIONAL', 'EXPECTED', 'OFF'])
+  cameraPolicy?: 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF';
 }
 
 class TranscriptionDto {
@@ -465,8 +467,9 @@ export class LiveController {
     if (s.status === 'ENDED' || s.deletedAt) {
       throw new ConflictException({ message: 'The class has ended', code: 'ENDED' });
     }
-    const out: Record<string, unknown> = { mic: s.micPolicy };
+    const out: Record<string, unknown> = { mic: s.micPolicy, camera: s.cameraPolicy };
     if (dto.micPolicy) Object.assign(out, await this.rtc.setMicPolicy(id, dto.micPolicy, u.sub));
+    if (dto.cameraPolicy) Object.assign(out, await this.rtc.setCameraPolicy(id, dto.cameraPolicy, u.sub));
     return out;
   }
 

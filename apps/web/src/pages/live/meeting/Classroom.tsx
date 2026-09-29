@@ -255,6 +255,12 @@ export default function Classroom(props: ClassroomProps) {
   const raised = hands.filter((h) => h.hand === 'HAND_RAISED');
   const myHand = cf?.rtc?.me.hand ?? 'IDLE';
   const canRaise = cf?.rtc?.me.policy ? cf.rtc.me.policy.mayRaiseHand : true;
+  // Each device button appears when this person may use it (or it is on).
+  const myPolicy = cf?.rtc?.me.policy;
+  const showMic = !cf || amOwner || !!myPolicy?.publish.AUDIO || meeting.micOn;
+  const showCam = !cf || amOwner || !!myPolicy?.publish.VIDEO || meeting.camOn;
+  const [cameraLater, setCameraLater] = useState(false);
+  const askCamera = !!cf && !amOwner && !!myPolicy?.cameraExpected && !meeting.camOn && (!cameraLater || cf.nudged);
   const canSend = !cf || amOwner || !!cf.rtc?.me.canPublish;
   // Running the class (hands, removals, the panel's controls) is the server's
   // answer for Darsly's classroom, not "I am on the teacher side".
@@ -609,6 +615,60 @@ export default function Classroom(props: ClassroomProps) {
               </m.div>
             )}
 
+            {/* Camera expected (or the teacher's reminder): asked, never switched on. */}
+            {askCamera && myHand !== 'APPROVED_TO_SPEAK' && (
+              <div
+                className="absolute inset-x-0 top-3 mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center justify-center gap-2 rounded-2xl bg-zinc-900/95 px-4 py-2.5 text-zinc-100 shadow-lg ring-1 ring-primary/40"
+                role="status"
+              >
+                <span aria-hidden className="material-symbols-outlined text-[20px] text-primary">
+                  videocam
+                </span>
+                <span className="text-sm font-semibold">
+                  {cf?.nudged ? t('meeting.camera.nudged') : t('meeting.camera.expectedInClass')}
+                </span>
+                <button
+                  type="button"
+                  className="rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-on-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  onClick={meeting.toggleCam}
+                >
+                  {t('meeting.camera.turnOn')}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-white/10"
+                  onClick={() => setCameraLater(true)}
+                >
+                  {t('meeting.later')}
+                </button>
+              </div>
+            )}
+
+            {/* A moderator's page pulls one page of students' cameras at a time. */}
+            {moderator && cf && (cf.hiddenCameras > 0 || cf.cameraPage > 0) && (
+              <div className="absolute bottom-16 start-3 flex items-center gap-1 rounded-full bg-zinc-900/90 px-2 py-1 text-xs text-zinc-100 shadow ring-1 ring-white/10">
+                <button
+                  type="button"
+                  aria-label={t('meeting.camera.prevPage')}
+                  disabled={cf.cameraPage === 0}
+                  onClick={() => cf.setCameraPage(cf.cameraPage - 1)}
+                  className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_left</span>
+                </button>
+                <span className="px-1 tabular-nums">{t('meeting.camera.page', { page: cf.cameraPage + 1 })}</span>
+                <button
+                  type="button"
+                  aria-label={t('meeting.camera.nextPage')}
+                  disabled={cf.hiddenCameras === 0}
+                  onClick={() => cf.setCameraPage(cf.cameraPage + 1)}
+                  className="grid h-7 w-7 place-items-center rounded-full hover:bg-white/10 disabled:opacity-40"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-[18px] rtl:rotate-180">chevron_right</span>
+                </button>
+              </div>
+            )}
+
             {/* A bonus from the teacher: celebrated, then it fades. */}
             <AnimatePresence>
               {cf?.bonusReceived && (
@@ -737,21 +797,21 @@ export default function Classroom(props: ClassroomProps) {
 
           <div className="col-span-3 flex flex-wrap items-center justify-center gap-2 md:col-span-1 md:gap-3">
             <div className="flex items-center gap-2">
-              {canSend && (
-                <>
-                  <Ctl
-                    icon={meeting.micOn ? 'mic' : 'mic_off'}
-                    off={!meeting.micOn}
-                    label={meeting.micOn ? t('meeting.muteMic') : t('meeting.unmuteMic')}
-                    onClick={meeting.toggleMic}
-                  />
-                  <Ctl
-                    icon={meeting.camOn ? 'videocam' : 'videocam_off'}
-                    off={!meeting.camOn}
-                    label={meeting.camOn ? t('meeting.camOff') : t('meeting.camOn')}
-                    onClick={meeting.toggleCam}
-                  />
-                </>
+              {canSend && showMic && (
+                <Ctl
+                  icon={meeting.micOn ? 'mic' : 'mic_off'}
+                  off={!meeting.micOn}
+                  label={meeting.micOn ? t('meeting.muteMic') : t('meeting.unmuteMic')}
+                  onClick={meeting.toggleMic}
+                />
+              )}
+              {canSend && showCam && (
+                <Ctl
+                  icon={meeting.camOn ? 'videocam' : 'videocam_off'}
+                  off={!meeting.camOn}
+                  label={meeting.camOn ? t('meeting.camOff') : t('meeting.camOn')}
+                  onClick={meeting.toggleCam}
+                />
               )}
               {cf && !amOwner && !canRaise && (myHand === 'IDLE' || myHand === 'RELEASED') && (
                 // Listening only, or this microphone is off for the class: said

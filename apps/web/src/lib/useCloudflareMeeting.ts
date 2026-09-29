@@ -55,7 +55,7 @@ export interface RtcState {
   };
   maxSpeakers: number;
   /** The class's policies (explain the controls to everyone). */
-  policies?: { mic: 'RAISE_HAND' | 'LISTEN_ONLY' };
+  policies?: { mic: 'RAISE_HAND' | 'LISTEN_ONLY'; camera?: CameraPolicy };
   recording?: boolean;
   /** The lesson's words are being captured right now (OFF / MANUAL / AUTO, decided by the server). */
   transcribing?: boolean;
@@ -69,8 +69,14 @@ export interface RtcState {
     audio: boolean;
     video: boolean;
     screen: boolean;
-    /** Moderators only: this participant's controls in this run. */
-    controls?: { mic: 'DEFAULT' | 'BLOCKED' };
+    /** Moderators only: this participant's controls in this run (and what their page reported). */
+    controls?: {
+      mic: 'DEFAULT' | 'BLOCKED';
+      camera?: 'DEFAULT' | 'EXEMPT' | 'BLOCKED';
+      cameraReport?: 'DENIED' | 'NO_DEVICE' | 'FAILED' | null;
+    };
+    /** Moderators only: asked to have the camera on (EXPECTED, not exempt). */
+    cameraExpected?: boolean;
     /** Moderators only: bonus points given in this class; a guest has no points. */
     bonus?: number;
     guest?: boolean;
@@ -79,6 +85,11 @@ export interface RtcState {
   /** Moderators only: who holds a seat and is not in the room yet. */
   notJoined?: { userId: string; name: string; guest: boolean }[];
 }
+
+export type CameraPolicy = 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF';
+
+/** A moderator's page pulls at most this many students' cameras at once (a page of them). */
+export const STUDENT_CAMERA_PAGE = 8;
 
 export interface ClassroomPolicy {
   publish: Record<Kind, boolean>;
@@ -154,6 +165,13 @@ export function useCloudflareMeeting(
   const [sharing, setSharing] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(false);
   const [invited, setInvited] = useState(false);
+  /** The teacher reminded me to turn my camera on (a prompt; I turn it on). */
+  const [nudged, setNudged] = useState(false);
+  /** What I last told the server about my camera (so a fix clears it once). */
+  const cameraReported = useRef<string | null>(null);
+  const cameraPageRef = useRef(0);
+  const hiddenCamerasRef = useRef(0);
+  const [cameraPage, setCameraPageState] = useState(0);
   /** A bonus just received (a student's page shows it, then it fades). */
   const [bonusReceived, setBonusReceived] = useState<{
     id: number;
@@ -279,7 +297,28 @@ export function useCloudflareMeeting(
         const s = stateRef.current;
         if (!s || !joinedRef.current) return;
         const me = s.me.userId;
-        const want = new Map(s.tracks.filter((t) => t.userId !== me).map((t) => [t.id, t]));
+        // The server already sends only the cameras this person may see. A
+        // moderator may see every student's — but a phone need not pull twenty
+        // streams: speakers' cameras, then one page of the rest.
+        const speakers = new Set(
+          s.participants
+            .filter((p) => p.hand === 'APPROVED_TO_SPEAK' || p.hand === 'ACTIVE_SPEAKER')
+            .map((p) => p.userId),
+        );
+        const studentCams = s.tracks.filter(
+          (t) => t.userId !== me && t.kind === 'VIDEO' && t.role === 'STUDENT' && !speakers.has(t.userId),
+        );
+        const page = Math.min(cameraPageRef.current, Math.max(0, Math.ceil(studentCams.length / STUDENT_CAMERA_PAGE) - 1));
+        const shownCams = new Set(
+          studentCams.slice(page * STUDENT_CAMERA_PAGE, (page + 1) * STUDENT_CAMERA_PAGE).map((t) => t.id),
+        );
+        hiddenCamerasRef.current = studentCams.length - shownCams.size;
+        const want = new Map(
+          s.tracks
+            .filter((t) => t.userId !== me)
+            .filter((t) => !(t.kind === 'VIDEO' && t.role === 'STUDENT' && !speakers.has(t.userId)) || shownCams.has(t.id))
+            .map((t) => [t.id, t]),
+        );
         const add = [...want.keys()].filter((id) => !pulled.current.has(id));
         const drop = [...pulled.current.keys()].filter((id) => !want.has(id));
         // Opened when there is first something to receive, not at entry:
@@ -751,6 +790,11 @@ export function useCloudflareMeeting(
       setTimeout(() => setBonusReceived((cur) => (cur?.id === id ? null : cur)), 6_000);
       refresh();
     };
+    const onNudge = (p: { sessionId: string; kind: string }) => {
+      if (p?.sessionId !== liveSessionId || p.kind !== 'CAMERA') return;
+      setNudged(true);
+      setTimeout(() => setNudged(false), 20_000);
+    };
     const onRemoved = (p: { sessionId: string }) => {
       if (p?.sessionId !== liveSessionId) return;
       void teardown().then(() => setEnded(true));
@@ -758,6 +802,7 @@ export function useCloudflareMeeting(
     sock?.on('live:rtc-state', onState);
     sock?.on('live:hand', onHand);
     sock?.on('live:bonus', onBonus);
+    sock?.on('live:nudge', onNudge);
     sock?.on('live:removed', onRemoved);
     sock?.on('connect', refresh);
     const poll = setInterval(refresh, STATE_POLL_MS);
@@ -771,6 +816,7 @@ export function useCloudflareMeeting(
       sock?.off('live:rtc-state', onState);
       sock?.off('live:hand', onHand);
       sock?.off('live:bonus', onBonus);
+      sock?.off('live:nudge', onNudge);
       sock?.off('live:removed', onRemoved);
       sock?.off('connect', refresh);
       clearInterval(poll);
@@ -965,14 +1011,38 @@ export function useCloudflareMeeting(
       setNotice('NOT_ALLOWED_TO_SPEAK');
       return;
     }
+    let cam: MediaStreamTrack;
     try {
-      const cam = await getCam(me.role === 'TEACHER');
+      cam = await getCam(me.role === 'TEACHER');
+    } catch (e) {
+      setNotice('CAM_FAILED');
+      // Told to the teacher, as the device reported it (never a reason to remove anyone).
+      const name = (e as { name?: string })?.name;
+      const report =
+        name === 'NotAllowedError' || name === 'SecurityError'
+          ? 'DENIED'
+          : name === 'NotFoundError' || name === 'OverconstrainedError'
+            ? 'NO_DEVICE'
+            : 'FAILED';
+      if (me.role === 'STUDENT' && cameraReported.current !== report) {
+        cameraReported.current = report;
+        void api.post(`${base}/device-report`, { camera: report }).catch(() => undefined);
+      }
+      return;
+    }
+    try {
       await publish('VIDEO', cam);
       setCamOn(true);
+      setNudged(false);
+      if (cameraReported.current) {
+        cameraReported.current = null;
+        void api.post(`${base}/device-report`, { camera: null }).catch(() => undefined);
+      }
     } catch (e) {
+      cam.stop();
       setNotice(errCode(e) === 'NOT_ALLOWED_TO_SPEAK' ? 'NOT_ALLOWED_TO_SPEAK' : 'CAM_FAILED');
     }
-  }, [publish, unpublish]);
+  }, [publish, unpublish, base]);
 
   const canShare =
     typeof navigator !== 'undefined' &&
@@ -1073,9 +1143,43 @@ export function useCloudflareMeeting(
     [liveSessionId, fetchState],
   );
 
+  /** A moderator: the class's camera policy. */
+  const setCameraPolicy = useCallback(
+    async (cameraPolicy: CameraPolicy) => {
+      try {
+        await api.patch(`/teacher/live/${liveSessionId}/classroom`, { cameraPolicy });
+      } catch {
+        setNotice('POLICY_FAILED');
+      }
+      await fetchState();
+    },
+    [liveSessionId, fetchState],
+  );
+
+  /** A moderator: remind a student to turn their camera on. */
+  const nudgeCamera = useCallback(
+    async (userId: string) => {
+      await api.post(`${base}/participants/${userId}/nudge`).catch(() => setNotice('POLICY_FAILED'));
+    },
+    [base],
+  );
+
+  /** A moderator's page: which page of students' cameras to pull. */
+  const setCameraPage = useCallback(
+    (page: number) => {
+      cameraPageRef.current = Math.max(0, page);
+      setCameraPageState(cameraPageRef.current);
+      void reconcile().catch(() => undefined);
+    },
+    [reconcile],
+  );
+
   /** A moderator: one participant's controls for this run. */
   const setControls = useCallback(
-    async (userId: string, controls: { mic?: 'DEFAULT' | 'BLOCKED' }) => {
+    async (
+      userId: string,
+      controls: { mic?: 'DEFAULT' | 'BLOCKED'; camera?: 'DEFAULT' | 'EXEMPT' | 'BLOCKED' },
+    ) => {
       try {
         await api.put(`${base}/participants/${userId}/controls`, controls);
       } catch {
@@ -1192,6 +1296,13 @@ export function useCloudflareMeeting(
     setControls,
     grantBonus,
     bonusReceived,
+    setCameraPolicy,
+    nudgeCamera,
+    nudged,
+    cameraPage,
+    setCameraPage,
+    /** Students' cameras this moderator's page is not pulling (on other pages). */
+    hiddenCameras: hiddenCamerasRef.current,
     /** The teacher invited me to speak (asked on the page, never switched on). */
     invited: invited && state?.me.hand === 'APPROVED_TO_SPEAK',
     audioBlocked,

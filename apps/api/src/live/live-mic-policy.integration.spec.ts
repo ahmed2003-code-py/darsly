@@ -133,7 +133,7 @@ describe('a moderator blocks one microphone (this run only)', () => {
     await c.rtc.hand(w.s[0].id, w.ls.id, 'raise');
     await c.rtc.hand(w.teacher.id, w.ls.id, 'approve', w.s[0].id);
     const { trackName } = await speak(c, w, w.s[0].id);
-    expect(await c.rtc.setControls(w.teacher.id, w.ls.id, w.s[0].id, { mic: 'BLOCKED' })).toEqual({ mic: 'BLOCKED' });
+    expect(await c.rtc.setControls(w.teacher.id, w.ls.id, w.s[0].id, { mic: 'BLOCKED' })).toMatchObject({ mic: 'BLOCKED' });
     expect(c.sfu.active(trackName)).toBe(false);
     const me = (await c.rtc.state(w.s[0].id, w.ls.id)).me;
     expect(me).toMatchObject({ hand: 'RELEASED', canPublish: false });
@@ -144,7 +144,7 @@ describe('a moderator blocks one microphone (this run only)', () => {
     expect(await codeOf(c.rtc.openConnection(w.s[0].id, w.ls.id, 'SEND'))).toBe('NOT_ALLOWED_TO_SPEAK');
     // The moderator sees it on the row.
     const row = (await c.rtc.state(w.teacher.id, w.ls.id)).participants.find((p) => p.userId === w.s[0].id);
-    expect(row?.controls).toEqual({ mic: 'BLOCKED' });
+    expect(row?.controls).toMatchObject({ mic: 'BLOCKED', camera: 'DEFAULT' });
     // Unblocked: allowed to ask again — nothing restored by itself.
     await c.rtc.setControls(w.teacher.id, w.ls.id, w.s[0].id, { mic: 'DEFAULT' });
     expect((await c.rtc.state(w.s[0].id, w.ls.id)).me.hand).toBe('RELEASED');
@@ -162,7 +162,7 @@ describe('a moderator blocks one microphone (this run only)', () => {
     expect(await c.rtc.hand(w.s[0].id, w.ls.id, 'raise')).toEqual({ state: 'HAND_RAISED' });
     // A write in the new run does not revive the old block either.
     await c.rtc.setControls(w.teacher.id, w.ls.id, w.s[1].id, {});
-    expect((await c.rtc.state(w.teacher.id, w.ls.id)).participants.find((p) => p.userId === w.s[0].id)?.controls ?? { mic: 'DEFAULT' }).toEqual({ mic: 'DEFAULT' });
+    expect((await c.rtc.state(w.teacher.id, w.ls.id)).participants.find((p) => p.userId === w.s[0].id)?.controls ?? { mic: 'DEFAULT' }).toMatchObject({ mic: 'DEFAULT' });
   });
 
   it('only a moderator sets controls; only students have them; guests can be blocked too', async () => {
@@ -173,7 +173,7 @@ describe('a moderator blocks one microphone (this run only)', () => {
     expect(await codeOf(c.rtc.setControls(w.s[1].id, w.ls.id, w.s[0].id, { mic: 'BLOCKED' }))).toBe('NOT_ALLOWED_TO_SPEAK');
     expect(await codeOf(c.rtc.setControls(w.teacher.id, w.ls.id, w.outsider.id, { mic: 'BLOCKED' }))).toBe('NOT_A_STUDENT');
     const g = await confirmedGuest(prisma, w, 'ضيف');
-    expect(await c.rtc.setControls(w.teacher.id, w.ls.id, g.id, { mic: 'BLOCKED' })).toEqual({ mic: 'BLOCKED' });
+    expect(await c.rtc.setControls(w.teacher.id, w.ls.id, g.id, { mic: 'BLOCKED' })).toMatchObject({ mic: 'BLOCKED' });
   });
 
   it('race: a block that lands while the student is publishing still holds at the SFU', async () => {

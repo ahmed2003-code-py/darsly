@@ -16,10 +16,25 @@ import { CfSessionDescription, toHttpError } from '../providers/cloudflare-realt
 import { canSpeak, HandAction, nextHandState, STUDENT_ACTIONS, TEACHER_ACTIONS } from './live-hand';
 import {
   effectivePolicy,
+  type CameraControl,
+  type CameraPolicy,
   type EffectivePolicy,
   type MicControl,
   type MicPolicy,
 } from './classroom-policy';
+
+/** What a student's page may report about their camera (never more than this). */
+export const CAMERA_REPORTS = ['DENIED', 'NO_DEVICE', 'FAILED'] as const;
+export type CameraReport = (typeof CAMERA_REPORTS)[number];
+/** A camera reminder to one student at most this often. */
+const NUDGE_EVERY_MS = 60_000;
+
+interface Controls {
+  mic: MicControl;
+  camera: CameraControl;
+  cameraReport: CameraReport | null;
+}
+const DEFAULT_CONTROLS: Controls = { mic: 'DEFAULT', camera: 'DEFAULT', cameraReport: null };
 import { transcriptCaptureState } from '../transcription/capture-state';
 import { bonusTotals } from '../bonus/bonus-totals';
 
@@ -58,6 +73,7 @@ interface Gate {
     durationMin: number;
     teacherUserId: string | null;
     micPolicy: MicPolicy;
+    cameraPolicy: CameraPolicy;
   };
   role: Role;
   /** May run the class (see LiveService.canModerate). Always false for a student. */
@@ -83,7 +99,7 @@ export interface RtcState {
   };
   maxSpeakers: number;
   /** The class's policies (everyone sees them: they explain the controls). */
-  policies: { mic: MicPolicy };
+  policies: { mic: MicPolicy; camera: CameraPolicy };
   /** A recording of this run is being made (the REC badge). */
   recording: boolean;
   /** The lesson's words are being kept for its transcript (everyone is told). */
@@ -98,8 +114,10 @@ export interface RtcState {
     audio: boolean;
     video: boolean;
     screen: boolean;
-    /** Moderators only: this participant's controls in this run. */
-    controls?: { mic: MicControl };
+    /** Moderators only: this participant's controls in this run (and what their page reported). */
+    controls?: { mic: MicControl; camera: CameraControl; cameraReport: CameraReport | null };
+    /** Moderators only: asked to have the camera on (EXPECTED, not exempt, not blocked). */
+    cameraExpected?: boolean;
     /** Moderators only: bonus points given in this class, and whether they are a guest (no points). */
     bonus?: number;
     guest?: boolean;
@@ -167,6 +185,7 @@ export class LiveRtcService {
         deletedAt: true,
         teacherUserId: true,
         micPolicy: true,
+        cameraPolicy: true,
       },
     });
     if (!s || s.deletedAt) throw new NotFoundException('Session not found');
@@ -191,6 +210,7 @@ export class LiveRtcService {
         durationMin: s.durationMin,
         teacherUserId: s.teacherUserId,
         micPolicy: s.micPolicy,
+        cameraPolicy: s.cameraPolicy,
       },
       role,
       moderator,
@@ -198,12 +218,51 @@ export class LiveRtcService {
   }
 
   /** A participant's controls in this run — defaults when none, or when set in an earlier run. */
-  private async controlsOf(sessionId: string, userId: string, run: string): Promise<{ mic: MicControl }> {
+  private async controlsOf(sessionId: string, userId: string, run: string): Promise<Controls> {
     const c = await this.prisma.liveParticipantControl.findUnique({
       where: { sessionId_userId: { sessionId, userId } },
-      select: { roomName: true, mic: true },
+      select: { roomName: true, mic: true, camera: true, cameraReport: true },
     });
-    return c && c.roomName === run ? { mic: c.mic } : { mic: 'DEFAULT' };
+    return c && c.roomName === run
+      ? { mic: c.mic, camera: c.camera, cameraReport: (c.cameraReport as CameraReport | null) ?? null }
+      : { ...DEFAULT_CONTROLS };
+  }
+
+  /**
+   * Everyone's effective policy in a run, at once (the room state, the
+   * subscribe gate and the recorder read it) — the same one function,
+   * applied per student from their hand and their controls.
+   */
+  private async studentPolicies(sessionId: string, run: string) {
+    const [s, hands, controls] = await Promise.all([
+      this.prisma.liveSession.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: { micPolicy: true, cameraPolicy: true },
+      }),
+      this.prisma.liveHand.findMany({ where: { sessionId, roomName: run }, select: { userId: true, state: true } }),
+      this.prisma.liveParticipantControl.findMany({
+        where: { sessionId, roomName: run },
+        select: { userId: true, mic: true, camera: true, cameraReport: true },
+      }),
+    ]);
+    const handOf = new Map(hands.map((h) => [h.userId, h.state]));
+    const ctlOf = new Map(controls.map((c) => [c.userId, c]));
+    return {
+      policies: s,
+      controlsOf: (userId: string): Controls => {
+        const c = ctlOf.get(userId);
+        return c ? { mic: c.mic, camera: c.camera, cameraReport: (c.cameraReport as CameraReport | null) ?? null } : { ...DEFAULT_CONTROLS };
+      },
+      of: (userId: string) =>
+        effectivePolicy({
+          side: 'STUDENT',
+          moderator: false,
+          micPolicy: s.micPolicy,
+          cameraPolicy: s.cameraPolicy,
+          hand: handOf.get(userId) ?? 'IDLE',
+          ...(ctlOf.get(userId) ?? {}),
+        }),
+    };
   }
 
   /** This person's effective policy in this run (the one function; see classroom-policy.ts). */
@@ -213,14 +272,33 @@ export class LiveRtcService {
       this.handOf(g.s.id, userId, g.s.roomName),
       this.controlsOf(g.s.id, userId, g.s.roomName),
     ]);
-    return effectivePolicy({ side: 'STUDENT', moderator: false, micPolicy: g.s.micPolicy, hand, ...controls });
+    return effectivePolicy({
+      side: 'STUDENT',
+      moderator: false,
+      micPolicy: g.s.micPolicy,
+      cameraPolicy: g.s.cameraPolicy,
+      hand,
+      mic: controls.mic,
+      camera: controls.camera,
+    });
   }
 
   /** A student's effective policy, read fresh (for enforcing a change made by someone else). */
   private async studentPolicy(sessionId: string, run: string, userId: string): Promise<EffectivePolicy> {
-    const s = await this.prisma.liveSession.findUniqueOrThrow({ where: { id: sessionId }, select: { micPolicy: true } });
+    const s = await this.prisma.liveSession.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { micPolicy: true, cameraPolicy: true },
+    });
     const [hand, controls] = await Promise.all([this.handOf(sessionId, userId, run), this.controlsOf(sessionId, userId, run)]);
-    return effectivePolicy({ side: 'STUDENT', moderator: false, micPolicy: s.micPolicy, hand, ...controls });
+    return effectivePolicy({
+      side: 'STUDENT',
+      moderator: false,
+      micPolicy: s.micPolicy,
+      cameraPolicy: s.cameraPolicy,
+      hand,
+      mic: controls.mic,
+      camera: controls.camera,
+    });
   }
 
   /**
@@ -466,6 +544,12 @@ export class LiveRtcService {
         })),
       }),
     ]);
+    if (g.role === 'STUDENT' && kinds.includes('VIDEO')) {
+      const cams = await this.prisma.liveRtcTrack.count({
+        where: { sessionId, roomName: g.s.roomName, kind: 'VIDEO', closedAt: null, connection: { role: 'STUDENT', closedAt: null } },
+      });
+      this.logger.log(`live.camera.publish liveSession=${sessionId} user=${userId} openStudentCameras=${cams}`);
+    }
     if (g.role === 'STUDENT') {
       // Revoked (or blocked) while the push was in flight: take back exactly
       // what is no longer allowed.
@@ -516,9 +600,25 @@ export class LiveRtcService {
         id: true,
         kind: true,
         trackName: true,
+        userId: true,
         connection: { select: { cfSessionId: true, role: true } },
       },
     });
+    // Privacy, enforced here and not by hiding a tile: a student's camera
+    // reaches the moderators — and everyone only while that student speaks.
+    if (!g.moderator && tracks.some((t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT')) {
+      const pol = await this.studentPolicies(sessionId, g.s.roomName);
+      const hidden = tracks.filter(
+        (t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT' && pol.of(t.userId).videoAudience !== 'EVERYONE',
+      );
+      if (hidden.length) {
+        throw new ForbiddenException({
+          message: "That camera is the teacher's to see",
+          code: 'RTC_TRACK_DENIED',
+          denied: hidden.map((t) => t.id),
+        });
+      }
+    }
     if (tracks.length !== ids.length) {
       const found = new Set(tracks.map((t) => t.id));
       throw new ConflictException({
@@ -545,6 +645,12 @@ export class LiveRtcService {
         message: 'تعذّر الاستقبال. أعد المحاولة.',
         code: 'LIVE_RTC_REJECTED',
       });
+    }
+    const studentCams = tracks.filter((t) => t.kind === 'VIDEO' && t.connection.role === 'STUDENT').length;
+    if (studentCams) {
+      this.logger.log(
+        `live.camera.pull liveSession=${sessionId} user=${userId} moderator=${g.moderator} studentCameras=${studentCams}`,
+      );
     }
     // Cloudflare answers per track, in the order asked.
     const out = tracks.map((t, i) => {
@@ -720,17 +826,18 @@ export class LiveRtcService {
     const has = (uid: string, kinds: LiveTrackKind[]) =>
       tracks.some((t) => t.userId === uid && kinds.includes(t.kind));
     const myPolicy = await this.policyOf(g, userId);
-    // Moderators see everyone's controls for this run.
-    const controls = g.moderator
-      ? new Map(
-          (
-            await this.prisma.liveParticipantControl.findMany({
-              where: { sessionId, roomName: run },
-              select: { userId: true, mic: true },
-            })
-          ).map((c) => [c.userId, c]),
-        )
-      : null;
+    // Everyone's policy in this run: moderators see the controls; everyone
+    // else sees only the cameras meant for them.
+    const pol = await this.studentPolicies(sessionId, run);
+    const visible = tracks.filter(
+      (t) =>
+        g.moderator ||
+        t.userId === userId ||
+        !(t.kind === 'VIDEO' && t.connection.role === 'STUDENT') ||
+        pol.of(t.userId).videoAudience === 'EVERYONE',
+    );
+    const shown = (uid: string, kinds: LiveTrackKind[]) =>
+      visible.some((t) => t.userId === uid && kinds.includes(t.kind));
     const notJoined = g.moderator ? await this.notJoined(sessionId, new Set(roleOf.keys())) : undefined;
     const bonus = await bonusTotals(this.prisma, sessionId);
     const guests = g.moderator
@@ -757,7 +864,7 @@ export class LiveRtcService {
         ...(g.role === 'STUDENT' ? { bonus: bonus.get(userId) ?? 0 } : {}),
       },
       maxSpeakers: maxSpeakers(),
-      policies: { mic: g.s.micPolicy },
+      policies: { mic: g.s.micPolicy, camera: g.s.cameraPolicy },
       recording: recording > 0,
       transcribing: capture.active,
       transcription:
@@ -768,12 +875,14 @@ export class LiveRtcService {
         role,
         hand: handOf.get(uid) ?? 'IDLE',
         audio: has(uid, ['AUDIO']),
-        video: has(uid, ['VIDEO']),
+        video: shown(uid, ['VIDEO']),
         screen: has(uid, ['SCREEN']),
-        ...(controls ? { controls: { mic: controls.get(uid)?.mic ?? 'DEFAULT' } } : {}),
+        ...(g.moderator && role === 'STUDENT'
+          ? { controls: pol.controlsOf(uid), cameraExpected: pol.of(uid).cameraExpected }
+          : {}),
         ...(g.moderator ? { bonus: bonus.get(uid) ?? 0, guest: guests!.has(uid) } : {}),
       })),
-      tracks: tracks.map((t) => ({
+      tracks: visible.map((t) => ({
         id: t.id,
         userId: t.userId,
         kind: t.kind,
@@ -922,6 +1031,76 @@ export class LiveRtcService {
   // ── The class's policies and a participant's controls ─────────────────────
 
   /**
+   * The class's camera policy, by a moderator (the route checks academy and
+   * ownership). Tightening it takes effect at once: every student camera it
+   * no longer allows is closed at the SFU (OFF: all of them; SPEAKERS_ONLY:
+   * all but the speakers'). Loosening it switches nothing on — students
+   * choose, and under EXPECTED are asked to.
+   */
+  async setCameraPolicy(sessionId: string, cameraPolicy: CameraPolicy, actorId: string) {
+    const s = await this.prisma.liveSession.update({
+      where: { id: sessionId },
+      data: { cameraPolicy },
+      select: { roomName: true, status: true },
+    });
+    if (s.status === 'LIVE' && s.roomName) {
+      const cams = await this.prisma.liveRtcTrack.findMany({
+        where: { sessionId, roomName: s.roomName, kind: 'VIDEO', closedAt: null, connection: { role: 'STUDENT', closedAt: null } },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+      for (const c of cams) await this.enforce(sessionId, s.roomName, c.userId, 'policy');
+      this.changed(sessionId);
+    }
+    this.logger.log(`live.policy liveSession=${sessionId} actor=${actorId} camera=${cameraPolicy}`);
+    return { camera: cameraPolicy };
+  }
+
+  /**
+   * A student's page telling the teacher why their camera is not on (denied,
+   * no camera, failed) — or that it is fine again (null). Informational only:
+   * shown to the teacher as reported by the device, never a reason to remove.
+   */
+  async reportCamera(userId: string, sessionId: string, report: CameraReport | null) {
+    const g = await this.gate(userId, sessionId);
+    if (g.role !== 'STUDENT') return { ok: true };
+    const run = g.s.roomName;
+    const cur = await this.prisma.liveParticipantControl.findUnique({
+      where: { sessionId_userId: { sessionId, userId } },
+    });
+    const fresh = !cur || cur.roomName !== run;
+    if (fresh && report === null) return { ok: true };
+    await this.prisma.liveParticipantControl.upsert({
+      where: { sessionId_userId: { sessionId, userId } },
+      create: { sessionId, userId, roomName: run, cameraReport: report, cameraReportAt: new Date(), updatedBy: userId },
+      update: fresh
+        ? { roomName: run, mic: 'DEFAULT', camera: 'DEFAULT', cameraReport: report, cameraReportAt: new Date(), updatedBy: userId }
+        : { cameraReport: report, cameraReportAt: new Date() },
+    });
+    this.changed(sessionId);
+    return { ok: true };
+  }
+
+  private readonly nudged = new Map<string, number>();
+  /**
+   * A moderator reminds one student to turn their camera on. A prompt on
+   * their page — their click is what turns it on. At most once a minute.
+   */
+  async nudgeCamera(actorId: string, sessionId: string, targetUserId: string) {
+    const g = await this.gate(actorId, sessionId);
+    if (!g.moderator) this.refuseSend(g);
+    const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
+    if (!t || t.role !== 'STUDENT') throw new ForbiddenException({ message: 'Only a student', code: 'NOT_A_STUDENT' });
+    const key = `${sessionId}:${targetUserId}`;
+    const last = this.nudged.get(key) ?? 0;
+    if (Date.now() - last < NUDGE_EVERY_MS) return { sent: false };
+    if (this.nudged.size > 10_000) this.nudged.clear();
+    this.nudged.set(key, Date.now());
+    this.realtime.emitToUser(targetUserId, 'live:nudge', { sessionId, kind: 'CAMERA' });
+    return { sent: true };
+  }
+
+  /**
    * The class's microphone policy, set by a moderator (the route checks the
    * academy and ownership). Switching to LISTEN_ONLY lowers every raised hand
    * of the current run — under the same lock a raise takes — and leaves who is
@@ -954,7 +1133,12 @@ export class LiveRtcService {
    * microphone at the SFU; unblocking restores nothing by itself — they raise
    * a hand, or are invited, again. A new run starts from the defaults.
    */
-  async setControls(actorId: string, sessionId: string, targetUserId: string, dto: { mic?: MicControl }) {
+  async setControls(
+    actorId: string,
+    sessionId: string,
+    targetUserId: string,
+    dto: { mic?: MicControl; camera?: CameraControl },
+  ) {
     const g = await this.gate(actorId, sessionId);
     if (!g.moderator) this.refuseSend(g);
     const t = await this.live.assertInSession(targetUserId, sessionId).catch(() => null);
@@ -968,8 +1152,11 @@ export class LiveRtcService {
         where: { sessionId_userId: { sessionId, userId: targetUserId } },
       });
       // A control from an earlier run does not carry into this one.
-      const base = cur && cur.roomName === run ? { mic: cur.mic } : { mic: 'DEFAULT' as MicControl };
-      const next = { ...base, ...(dto.mic ? { mic: dto.mic } : {}) };
+      const base =
+        cur && cur.roomName === run
+          ? { mic: cur.mic, camera: cur.camera, cameraReport: cur.cameraReport, cameraReportAt: cur.cameraReportAt }
+          : { mic: 'DEFAULT' as MicControl, camera: 'DEFAULT' as CameraControl, cameraReport: null, cameraReportAt: null };
+      const next = { ...base, ...(dto.mic ? { mic: dto.mic } : {}), ...(dto.camera ? { camera: dto.camera } : {}) };
       await tx.liveParticipantControl.upsert({
         where: { sessionId_userId: { sessionId, userId: targetUserId } },
         create: { sessionId, userId: targetUserId, roomName: run, ...next, updatedBy: actorId },
@@ -1056,6 +1243,16 @@ export class LiveRtcService {
     }, BROADCAST_COALESCE_MS);
     h.unref?.();
     this.pendingBroadcast.set(sessionId, h);
+  }
+
+  /**
+   * What the recording may carry: the teacher side (camera, screen, voice)
+   * and the students who may speak — never a student who only has a camera
+   * on. A speaker whose floor is taken back drops out of the picture too.
+   */
+  async recordableTracks(sessionId: string, roomName: string) {
+    const [open, pol] = await Promise.all([this.openTracks(sessionId, roomName), this.studentPolicies(sessionId, roomName)]);
+    return open.filter((t) => t.connection.role !== 'STUDENT' || pol.of(t.userId).speaker);
   }
 
   /** For the recorder and tests: the raw open-track list of a run. */

@@ -362,7 +362,9 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
     if (Date.now() - job.startedAt > LIVE_MAX_DURATION_MIN * 60_000) {
       return { stop: true, reason: 'max-duration', tracks: [] };
     }
-    const tracks = await this.rtc.openTracks(job.rec.sessionId, job.rec.roomName);
+    // Teacher side and speakers only: a student who just has a camera on is
+    // never burned into the recording.
+    const tracks = await this.rtc.recordableTracks(job.rec.sessionId, job.rec.roomName);
     return {
       stop: false,
       tracks: tracks.map((t) => ({
@@ -379,7 +381,7 @@ export class LiveRecorderWorker implements OnModuleInit, OnModuleDestroy {
     const cf = this.cloudflare.client;
     const sid = job.cfSessionId!;
     if (op === 'subscribe') {
-      const open = await this.rtc.openTracks(job.rec.sessionId, job.rec.roomName);
+      const open = await this.rtc.recordableTracks(job.rec.sessionId, job.rec.roomName);
       const want = (args.trackIds as string[])
         .map((id) => open.find((t) => t.id === id))
         .filter((t): t is (typeof open)[number] => !!t);

@@ -3554,7 +3554,38 @@
     "policy": {
       "mic": "Microphone:",
       "RAISE_HAND": "Raise hand",
-      "LISTEN_ONLY": "Listen only"
+      "LISTEN_ONLY": "Listen only",
+      "camera": "Camera:",
+      "cam": {
+        "SPEAKERS_ONLY": "Speakers only",
+        "OPTIONAL": "Optional",
+        "EXPECTED": "Expected",
+        "OFF": "No cameras"
+      }
+    },
+    "camera": {
+      "expectedTitle": "The teacher asks for cameras on in this class",
+      "expectedHint": "Check your camera here, then turn it on in the class yourself. Nobody can turn it on for you.",
+      "checkNow": "Check my camera",
+      "expectedInClass": "Cameras are expected in this class",
+      "nudged": "The teacher asks you to turn your camera on",
+      "turnOn": "Turn camera on",
+      "remind": "Remind to turn camera on",
+      "exemptAction": "Excuse from camera",
+      "unexempt": "Remove the excuse",
+      "exempt": "Excused from camera",
+      "block": "Turn camera off",
+      "unblock": "Allow camera",
+      "blocked": "Camera off (by the teacher)",
+      "expectedOff": "Camera expected, off",
+      "report": {
+        "DENIED": "Camera permission denied on their device",
+        "NO_DEVICE": "No camera on their device",
+        "FAILED": "Their camera couldn't start"
+      },
+      "page": "Student cameras {{page}}",
+      "prevPage": "Previous student cameras",
+      "nextPage": "Next student cameras"
     }
   },
   "summary": {

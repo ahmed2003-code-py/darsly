@@ -220,6 +220,24 @@ export default function People({
       );
     }
     if (!cf) out.push({ key: 'mute', icon: 'mic_off', label: t('meeting.muteOne'), run: () => meeting.muteParticipant(p.sessionId) });
+    if (cf) {
+      const r = rtcOf.get(p.userId);
+      const cam = r?.controls?.camera ?? 'DEFAULT';
+      if (r?.cameraExpected && !r.video)
+        out.push({ key: 'nudge', icon: 'notifications_active', label: t('meeting.camera.remind'), run: () => cf.nudgeCamera(p.userId) });
+      if (cameraPolicy === 'EXPECTED' && cam !== 'BLOCKED')
+        out.push(
+          cam === 'EXEMPT'
+            ? { key: 'unexempt', icon: 'videocam', label: t('meeting.camera.unexempt'), run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }) }
+            : { key: 'exempt', icon: 'videocam_off', label: t('meeting.camera.exemptAction'), run: () => cf.setControls(p.userId, { camera: 'EXEMPT' }) },
+        );
+      if (cameraPolicy !== 'OFF')
+        out.push(
+          cam === 'BLOCKED'
+            ? { key: 'unblockCam', icon: 'photo_camera', label: t('meeting.camera.unblock'), run: () => cf.setControls(p.userId, { camera: 'DEFAULT' }) }
+            : { key: 'blockCam', icon: 'no_photography', label: t('meeting.camera.block'), run: () => cf.setControls(p.userId, { camera: 'BLOCKED' }) },
+        );
+    }
     if (cf && onBonus) {
       const guest = rtcOf.get(p.userId)?.guest;
       out.push({
@@ -236,6 +254,19 @@ export default function People({
     return out;
   };
 
+  /** The camera, as the moderator needs to read it: on / off / exempt / blocked / what the device said. */
+  const cameraIcon = (p: Participant) => {
+    const r = rtcOf.get(p.userId ?? '');
+    const ctl = r?.controls;
+    if (p.video) return <StateIcon icon="videocam" label={t('meeting.camIsOn')} tone="on" />;
+    if (ctl?.camera === 'BLOCKED') return <StateIcon icon="no_photography" label={t('meeting.camera.blocked')} tone="warn" />;
+    if (ctl?.cameraReport)
+      return <StateIcon icon="videocam_alert" label={t(`meeting.camera.report.${ctl.cameraReport}`)} tone="warn" />;
+    if (ctl?.camera === 'EXEMPT') return <StateIcon icon="videocam_off" label={t('meeting.camera.exempt')} />;
+    if (r?.cameraExpected) return <StateIcon icon="videocam_off" label={t('meeting.camera.expectedOff')} tone="warn" />;
+    return <StateIcon icon="videocam_off" label={t('meeting.camIsOff')} tone="off" />;
+  };
+
   const iconsFor = (p: Participant) => (
     <>
       {badges?.(p.userId ?? '')}
@@ -250,11 +281,7 @@ export default function People({
       {handOf.get(p.userId ?? '') === 'HAND_RAISED' && (
         <StateIcon icon="back_hand" label={t('meeting.handUp')} tone="warn" />
       )}
-      <StateIcon
-        icon={p.video ? 'videocam' : 'videocam_off'}
-        label={p.video ? t('meeting.camIsOn') : t('meeting.camIsOff')}
-        tone={p.video ? 'on' : 'off'}
-      />
+      {cameraIcon(p)}
       {p.userId && micBlocked(p.userId) ? (
         <StateIcon icon="mic_off" label={t('meeting.micBlocked')} tone="warn" />
       ) : (
@@ -269,6 +296,7 @@ export default function People({
   const byUser = new Map(meeting.participants.filter((p) => p.userId).map((p) => [p.userId!, p]));
 
   const micPolicy = cf?.rtc?.policies?.mic ?? 'RAISE_HAND';
+  const cameraPolicy = cf?.rtc?.policies?.camera ?? 'SPEAKERS_ONLY';
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
       {/* The class's rules, where the teacher runs the room from. */}
@@ -286,6 +314,23 @@ export default function People({
             >
               <option value="RAISE_HAND">{t('meeting.policy.RAISE_HAND')}</option>
               <option value="LISTEN_ONLY">{t('meeting.policy.LISTEN_ONLY')}</option>
+            </select>
+          </label>
+          <label className="inline-flex items-center gap-1.5 rounded-full bg-on-surface/[0.06] py-1 pe-1 ps-3 text-xs font-semibold">
+            <span aria-hidden className="material-symbols-outlined text-[16px]">
+              videocam
+            </span>
+            <span className="text-on-surface-variant">{t('meeting.policy.camera')}</span>
+            <select
+              value={cameraPolicy}
+              onChange={(e) => void cf.setCameraPolicy(e.target.value as typeof cameraPolicy)}
+              className="rounded-full bg-surface-container-highest px-2 py-1 text-xs font-semibold text-on-surface focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {(['SPEAKERS_ONLY', 'OPTIONAL', 'EXPECTED', 'OFF'] as const).map((v) => (
+                <option key={v} value={v}>
+                  {t(`meeting.policy.cam.${v}`)}
+                </option>
+              ))}
             </select>
           </label>
         </div>

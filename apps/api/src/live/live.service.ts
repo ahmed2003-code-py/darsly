@@ -3280,10 +3280,13 @@ export class LiveService {
     durationMin: number;
     status: LiveSessionStatus;
     startedAt?: Date | null;
+    cameraPolicy?: string;
   }) {
     return {
       id: s.id,
       title: s.title,
+      // The lobby tells a student when the teacher asks for cameras.
+      cameraPolicy: s.cameraPolicy ?? 'SPEAKERS_ONLY',
       startsAt: s.startsAt,
       durationMin: s.durationMin,
       status: this.effectiveStatus(s),

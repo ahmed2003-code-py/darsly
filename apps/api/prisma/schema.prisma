@@ -2935,7 +2935,11 @@ model LiveSession {
 
   /// Who may speak: RAISE_HAND (the teacher approves or invites) or
   /// LISTEN_ONLY (no hands; the teacher may still invite one student).
-  micPolicy LiveMicPolicy @default(RAISE_HAND)
+  micPolicy    LiveMicPolicy    @default(RAISE_HAND)
+  /// Students' cameras: SPEAKERS_ONLY (default — only while they may speak),
+  /// OPTIONAL, EXPECTED (asked to; never switched on for them) or OFF. A
+  /// non-speaking student's camera reaches the moderators only.
+  cameraPolicy LiveCameraPolicy @default(SPEAKERS_ONLY)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -3111,19 +3115,37 @@ enum LiveMicControl {
   BLOCKED
 }
 
+enum LiveCameraPolicy {
+  SPEAKERS_ONLY
+  OPTIONAL
+  EXPECTED
+  OFF
+}
+
+enum LiveCameraControl {
+  DEFAULT
+  EXEMPT
+  BLOCKED
+}
+
 /// A moderator's temporary control over one participant, for ONE run of the
 /// class (`roomName`): a control from an earlier run is ignored, and the next
 /// write for a new run starts from the session's defaults again.
 model LiveParticipantControl {
-  sessionId String
-  session   LiveSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
+  sessionId      String
+  session        LiveSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId         String
   /// The run these controls belong to.
-  roomName  String
-  mic       LiveMicControl @default(DEFAULT)
+  roomName       String
+  mic            LiveMicControl    @default(DEFAULT)
+  camera         LiveCameraControl @default(DEFAULT)
+  /// What the student's own page reported about their camera in this run
+  /// (DENIED / NO_DEVICE / FAILED), for the teacher's view; null when fine.
+  cameraReport   String?
+  cameraReportAt DateTime?
   /// Who set them last (a moderator), and when.
-  updatedBy String
-  updatedAt DateTime       @updatedAt
+  updatedBy      String
+  updatedAt      DateTime          @updatedAt
 
   @@id([sessionId, userId])
 }

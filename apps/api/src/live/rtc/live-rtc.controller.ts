@@ -32,7 +32,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { GuestAllowed } from '../../common/decorators/guest-allowed.decorator';
 import { LIMITS } from '../../common/validation';
-import { LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
+import { CAMERA_REPORTS, CameraReport, LiveRtcService, SIMULCAST_RIDS, SimulcastRid } from './live-rtc.service';
 import { LIVE_BONUS_REASONS, LiveBonusReason, LiveBonusService } from '../bonus/live-bonus.service';
 
 /** An SDP is a few KB; a hundred tracks' worth is still well under this. */
@@ -113,6 +113,12 @@ class BonusDto {
 
 class ControlsDto {
   @IsOptional() @IsIn(['DEFAULT', 'BLOCKED']) mic?: 'DEFAULT' | 'BLOCKED';
+  @IsOptional() @IsIn(['DEFAULT', 'EXEMPT', 'BLOCKED']) camera?: 'DEFAULT' | 'EXEMPT' | 'BLOCKED';
+}
+
+class DeviceReportDto {
+  /** Why my camera is not on (or null: it is fine now). Informational, for the teacher. */
+  @IsOptional() @IsIn([...CAMERA_REPORTS, null]) camera: CameraReport | null;
 }
 
 /**
@@ -284,6 +290,27 @@ export class LiveRtcController {
   ) {
     limit(u.sub);
     return this.rtc.setControls(u.sub, id, userId, dto);
+  }
+
+  /** A student's page: why their camera is not on (denied / no camera / failed), or null. */
+  @Post('live/:id/rtc/device-report')
+  @HttpCode(200)
+  @GuestAllowed()
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: "Report this device's camera state to the teacher (informational)" })
+  deviceReport(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Body() dto: DeviceReportDto) {
+    limit(u.sub);
+    return this.rtc.reportCamera(u.sub, id, dto.camera ?? null);
+  }
+
+  /** A moderator reminds a student to turn their camera on (a prompt; their click turns it on). */
+  @Post('live/:id/rtc/participants/:userId/nudge')
+  @HttpCode(200)
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'A moderator reminds a student to turn their camera on' })
+  nudge(@CurrentUser() u: JwtPayload, @Param('id') id: string, @Param('userId') userId: string) {
+    limit(u.sub);
+    return this.rtc.nudgeCamera(u.sub, id, userId);
   }
 
   /** "مكافأة": a moderator gives a student points in class (coins/XP — never money). */

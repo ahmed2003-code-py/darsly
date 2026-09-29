@@ -11,6 +11,7 @@ export interface LobbySession {
   title: string;
   startsAt: string;
   durationMin: number;
+  cameraPolicy?: 'SPEAKERS_ONLY' | 'OPTIONAL' | 'EXPECTED' | 'OFF';
 }
 
 /** Why the door is not open yet — from the server's refusal, which carries the session. */
@@ -174,6 +175,7 @@ export default function Lobby({
     p ? t(`meeting.dev.${kind}.${p}`) : null;
   const opensIn = waiting ? countdown(waiting.opensAt, now) : null;
   const canJoin = ready && !joining && !waiting;
+  const cameraExpected = !isTeacher && session.cameraPolicy === 'EXPECTED';
 
   const enter = () => {
     const choice = listenOnly
@@ -194,6 +196,25 @@ export default function Lobby({
       : listenOnly
         ? t('meeting.lobby.enterListening')
         : t('meeting.enter');
+
+  // Asked, never switched on: the student checks their camera here and turns
+  // it on in the class themselves.
+  const expectNote = cameraExpected ? (
+    <div className="flex items-start gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-3 text-sm" role="note">
+      <span aria-hidden className="material-symbols-outlined text-[22px] text-primary">
+        videocam
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{t('meeting.camera.expectedTitle')}</p>
+        <p className="text-on-surface-variant">{t('meeting.camera.expectedHint')}</p>
+        {listenOnly && !testing && (
+          <button type="button" className="mt-2 text-sm font-semibold text-primary hover:underline" onClick={() => setTesting(true)}>
+            {t('meeting.camera.checkNow')}
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   const preview = (
     <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-zinc-900 sm:aspect-video">
@@ -412,6 +433,7 @@ export default function Lobby({
         </div>
 
         <div className="space-y-3 lg:order-1">
+          {expectNote}
           {devicesOn ? (
             <>
               {preview}

@@ -5,7 +5,7 @@
   "scripts": {
     "build": "prisma generate && nest build && npm --prefix ../.. run build --workspace=@darsly/web",
     "dev": "nest start --watch",
-    "start": "sh scripts/start.sh",
+    "start": "node dist/main.js",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
@@ -77,6 +77,13 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "globalSetup": "<rootDir>/../test/db/global-setup.js",
+    "setupFiles": [
+      "<rootDir>/../test/db/worker-db.js"
+    ],
+    "setupFilesAfterEnv": [
+      "<rootDir>/../test/db/require-db.js"
+    ]
   }
 }

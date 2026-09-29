@@ -83,12 +83,17 @@ ENV NODE_ENV=production
 # HLS/attachments live here; mount a Railway volume at this path to persist them.
 ENV STORAGE_LOCAL_PATH=/data/storage
 
-# devDependencies are deliberately kept in the final image. `scripts/start.sh`
-# runs `prisma migrate deploy` on every boot, and the optional
-# RUN_SEED_ON_BOOT path runs the seed through ts-node — both devDependencies.
+# devDependencies are deliberately kept in the final image. The pre-deploy
+# step (apps/api/scripts/predeploy.sh) runs `prisma migrate deploy` and the
+# optional RUN_SEED_ON_BOOT seed through ts-node — both devDependencies.
 # Pruning them would shrink the image and break the migration step, and the
 # migration step is the one that must never break: a failed `migrate deploy`
 # is how this project has already had an outage (P3009).
 
-# start = prisma migrate deploy && node dist/main.js (honors $PORT)
-CMD ["npm", "run", "start", "--workspace=@darsly/api"]
+# Node is the container's main process, so it receives Railway's SIGTERM
+# itself and exits 0 after a clean shutdown (see main.ts). It used to be
+# `npm run start`: npm exited 143 on SIGTERM without waiting for the app,
+# which Railway recorded as a CRASHED deployment on every redeploy.
+# Migrations are not run here — railway.json's preDeployCommand owns them.
+WORKDIR /app/apps/api
+CMD ["node", "dist/main.js"]

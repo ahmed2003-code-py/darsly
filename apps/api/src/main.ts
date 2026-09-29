@@ -101,19 +101,50 @@ async function bootstrap() {
   }
 
   /**
-   * Let Nest see the shutdown.
+   * A clean stop is an exit 0.
    *
-   * Railway sends SIGTERM on every redeploy. Without this, Node exits on the
-   * signal and no `onModuleDestroy` ever runs — which means the drain in
-   * VideoJobWorker, and the one AiJobWorker already had, are dead code. Every
-   * in-flight job is abandoned mid-side-effect and only recovered when its
-   * lease expires minutes later.
+   * Railway sends SIGTERM to the outgoing deployment on every redeploy. Nest's
+   * own `enableShutdownHooks()` runs the hooks and then RE-RAISES the signal on
+   * itself, so even a perfect shutdown ended as "killed by SIGTERM" (143) —
+   * and the container's main process was `npm`, which exits 143 at once
+   * without waiting for the app. Railway records a non-zero exit as CRASHED:
+   * every deploy raised a CRITICAL "crashed" event for the deployment being
+   * replaced, while the video/AI worker drains (onModuleDestroy) never ran.
    *
-   * Also the prerequisite for ARCHITECTURE_REVIEW.md §11 #6 (the AI worker's
-   * drain); it is enabled here because the video queue cannot drain without
-   * it, and it costs nothing to the rest of the app.
+   * Here `app.close()` runs the same hooks (destroy → beforeShutdown →
+   * shutdown), then the process exits 0. A close that hangs past the deadline
+   * exits 1 — an honest failure, not a hidden one. The start command runs node
+   * directly (railway.json), so this handler is what receives the signal.
    */
-  app.enableShutdownHooks();
+  const SHUTDOWN_DEADLINE_MS = 25_000;
+  let stopping = false;
+  const stop = (signal: NodeJS.Signals) => {
+    if (stopping) return;
+    stopping = true;
+    // eslint-disable-next-line no-console
+    console.log(`${signal} received — closing (deadline ${SHUTDOWN_DEADLINE_MS} ms)`);
+    const deadline = setTimeout(() => {
+      // eslint-disable-next-line no-console
+      console.error(`shutdown did not finish within ${SHUTDOWN_DEADLINE_MS} ms — exiting 1`);
+      process.exit(1);
+    }, SHUTDOWN_DEADLINE_MS);
+    deadline.unref();
+    const started = Date.now();
+    app.close().then(
+      () => {
+        // eslint-disable-next-line no-console
+        console.log(`closed cleanly in ${Date.now() - started} ms — exiting 0`);
+        process.exit(0);
+      },
+      (e: unknown) => {
+        // eslint-disable-next-line no-console
+        console.error('shutdown failed — exiting 1', e);
+        process.exit(1);
+      },
+    );
+  };
+  process.on('SIGTERM', () => stop('SIGTERM'));
+  process.on('SIGINT', () => stop('SIGINT'));
 
   // PORT is injected by PaaS hosts (Railway/Heroku); API_PORT is the local dev var.
   const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);

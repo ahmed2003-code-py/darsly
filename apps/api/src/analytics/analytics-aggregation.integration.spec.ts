@@ -35,6 +35,17 @@ async function seed() {
   });
   tenantId = teacher.id;
   academyId = teacher.id;
+  // The personal academy row itself — the course's academyId points at it. A
+  // long-lived dev database has one from an old backfill; a fresh one does not.
+  await prisma.academy.create({
+    data: {
+      id: academyId,
+      slug: `qa-a-${randomUUID().slice(0, 8)}`,
+      name: 'QA Academy',
+      ownerUserId: teacherUser.id,
+      feeValue: 0,
+    },
+  });
 
   const courses = [];
   for (const title of ['A', 'B']) {
@@ -105,18 +116,26 @@ async function seed() {
 }
 
 beforeAll(async () => {
+  // Only "no database" may skip this suite. A failing seed is a failure: it
+  // used to be caught here too and reported as "no database reachable", which
+  // on a fresh database quietly turned every test below into a pass.
   try {
-    await prisma.$connect();
+    // onModuleInit, as the app runs it: it installs the soft-delete
+    // middleware this suite is about. A bare $connect() left `delete` a hard
+    // delete and reads unfiltered.
+    await prisma.onModuleInit();
     await prisma.enrollment.count();
-    await seed();
   } catch {
     available = false;
+    return;
   }
+  await seed();
 }, 30_000);
 
 afterAll(async () => {
   if (available) {
     await prisma.course.deleteMany({ where: { id: { in: madeCourses } } }).catch(() => undefined);
+    await prisma.academy.deleteMany({ where: { id: academyId } }).catch(() => undefined);
     await prisma.user.deleteMany({ where: { id: { in: madeUsers } } }).catch(() => undefined);
   }
   await prisma.$disconnect().catch(() => undefined);

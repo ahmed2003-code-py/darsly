@@ -24,7 +24,25 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+
+    # A real database, so the integration specs run here instead of skipping.
+    # Postgres 18 is what production runs. Jest's global setup migrates a
+    # template database with the real migrations and clones one per worker.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     env:
       # redis-memory-server's postinstall compiles a real Redis binary and
@@ -38,6 +56,10 @@ jobs:
       JWT_ACCESS_SECRET: ci-access-secret-not-a-real-key-32ch
       JWT_REFRESH_SECRET: ci-refresh-secret-not-a-real-key-32c
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci?schema=public
+      # The integration specs skip themselves when no database answers. Here
+      # one always should, so an unreachable database fails the run instead
+      # of quietly turning ~1,300 database tests into passes.
+      REQUIRE_TEST_DB: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -78,9 +100,11 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      # No Postgres service container on purpose: the integration specs skip
-      # themselves when DATABASE_URL is unreachable, which keeps this job at
-      # roughly half a minute. Wiring a real database is its own change.
+      # Runs every spec, the database-backed ones included, each Jest worker
+      # on its own database (apps/api/test/db). Until 2026-09-29 there was no
+      # database here and those specs skipped themselves, so they counted as
+      # passes without running; sharing one database is also what made them
+      # collide when run in parallel locally.
       # Jest is invoked directly, from apps/api, rather than through `npm test`.
       #
       # The root script is `npm run test --workspace=apps/api`, so

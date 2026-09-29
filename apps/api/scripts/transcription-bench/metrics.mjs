@@ -11,7 +11,9 @@ const ARABIC_INDIC = '٠١٢٣٤٥٦٧٨٩';
 const PERSIAN = '۰۱۲۳۴۵۶۷۸۹';
 
 export function toAsciiDigits(s) {
-  return s.replace(/[٠-٩۰-۹]/g, (d) => String(ARABIC_INDIC.indexOf(d) >= 0 ? ARABIC_INDIC.indexOf(d) : PERSIAN.indexOf(d)));
+  return s.replace(/[٠-٩۰-۹]/g, (d) =>
+    String(ARABIC_INDIC.indexOf(d) >= 0 ? ARABIC_INDIC.indexOf(d) : PERSIAN.indexOf(d)),
+  );
 }
 
 export function normalizeArabic(s) {
@@ -72,11 +74,14 @@ const isLatin = (w) => /^[a-z][a-z0-9-]+$/.test(w);
 const isNumber = (w) => /^\d+([.,]\d+)?$/.test(w);
 
 /** Arabic words kept (dialect included — the reference is what was said). */
-export const arabicRecall = (ref, hyp) => recall(words(ref).filter(isArabic), words(hyp).filter(isArabic));
+export const arabicRecall = (ref, hyp) =>
+  recall(words(ref).filter(isArabic), words(hyp).filter(isArabic));
 /** English terms inside Arabic speech. */
-export const englishRecall = (ref, hyp) => recall(words(ref).filter(isLatin), words(hyp).filter(isLatin));
+export const englishRecall = (ref, hyp) =>
+  recall(words(ref).filter(isLatin), words(hyp).filter(isLatin));
 /** Numbers, digits normalised (٣ = 3). */
-export const numberRecall = (ref, hyp) => recall(words(ref).filter(isNumber), words(hyp).filter(isNumber));
+export const numberRecall = (ref, hyp) =>
+  recall(words(ref).filter(isNumber), words(hyp).filter(isNumber));
 
 /**
  * Egyptian-dialect words kept as dialect. A model that "corrects" دلوقتي to
@@ -84,13 +89,48 @@ export const numberRecall = (ref, hyp) => recall(words(ref).filter(isNumber), wo
  * the reference's dialect markers (normalised) that survive.
  */
 export const EGYPTIAN_MARKERS = [
-  'دلوقتي', 'ازاي', 'عشان', 'علشان', 'كده', 'كدا', 'مش', 'بتاع', 'بتاعه', 'بتاعت', 'ليه', 'ايه',
-  'النهارده', 'بكره', 'امبارح', 'يعني', 'اهو', 'خلاص', 'اوي', 'فين', 'امتي', 'هنعمل', 'هنشوف',
-  'عايز', 'عاوز', 'عايزين', 'ماشي', 'بس', 'برضه', 'لسه', 'حاجه', 'زي', 'دي', 'ده', 'اللي',
+  'دلوقتي',
+  'ازاي',
+  'عشان',
+  'علشان',
+  'كده',
+  'كدا',
+  'مش',
+  'بتاع',
+  'بتاعه',
+  'بتاعت',
+  'ليه',
+  'ايه',
+  'النهارده',
+  'بكره',
+  'امبارح',
+  'يعني',
+  'اهو',
+  'خلاص',
+  'اوي',
+  'فين',
+  'امتي',
+  'هنعمل',
+  'هنشوف',
+  'عايز',
+  'عاوز',
+  'عايزين',
+  'ماشي',
+  'بس',
+  'برضه',
+  'لسه',
+  'حاجه',
+  'زي',
+  'دي',
+  'ده',
+  'اللي',
 ].map((w) => normalizeArabic(w));
 export const dialectRecall = (ref, hyp) => {
   const set = new Set(EGYPTIAN_MARKERS);
-  return recall(words(ref).filter((w) => set.has(w)), words(hyp).filter((w) => set.has(w)));
+  return recall(
+    words(ref).filter((w) => set.has(w)),
+    words(hyp).filter((w) => set.has(w)),
+  );
 };
 
 /** Punctuation the provider put in, relative to the reference (1 = as much). */

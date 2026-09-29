@@ -102,7 +102,11 @@ async function openai(model, file, prompt) {
   const j = await r.json();
   const text = j.text ?? (j.segments ?? []).map((s) => s.text).join(' ');
   const speakers = j.segments ? new Set(j.segments.map((s) => s.speaker)).size : null;
-  return { text, speakers, timestamps: Array.isArray(j.segments) && j.segments.some((s) => s.start != null) };
+  return {
+    text,
+    speakers,
+    timestamps: Array.isArray(j.segments) && j.segments.some((s) => s.start != null),
+  };
 }
 async function deepgram(file) {
   const key = process.env.DEEPGRAM_API_KEY;
@@ -119,16 +123,24 @@ async function deepgram(file) {
   const j = await r.json();
   const alt = j.results?.channels?.[0]?.alternatives?.[0] ?? {};
   const speakers = alt.words ? new Set(alt.words.map((w) => w.speaker)).size : null;
-  return { text: alt.transcript ?? '', speakers, timestamps: !!alt.words?.some((w) => w.start != null) };
+  return {
+    text: alt.transcript ?? '',
+    speakers,
+    timestamps: !!alt.words?.some((w) => w.start != null),
+  };
 }
 const run = (name, file, prompt) =>
   name === 'deepgram:nova-3' ? deepgram(file) : openai(name.slice('openai:'.length), file, prompt);
 
 function durationMin(file) {
   try {
-    const out = execFileSync(ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file], {
-      encoding: 'utf8',
-    });
+    const out = execFileSync(
+      ffprobe,
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', file],
+      {
+        encoding: 'utf8',
+      },
+    );
     return Number(out.trim()) / 60;
   } catch {
     return null;
@@ -138,10 +150,30 @@ function durationMin(file) {
 /** The production cut: independent 3-minute Opus/WebM pieces at 32 kbps mono. */
 function pieces(file, work) {
   execFileSync(ffmpeg, [
-    '-y', '-loglevel', 'error', '-i', file, '-vn', '-ac', '1', '-c:a', 'libopus', '-b:a', '32k',
-    '-f', 'segment', '-segment_time', String(PIECE_SEC), '-reset_timestamps', '1', join(work, 'p%04d.webm'),
+    '-y',
+    '-loglevel',
+    'error',
+    '-i',
+    file,
+    '-vn',
+    '-ac',
+    '1',
+    '-c:a',
+    'libopus',
+    '-b:a',
+    '32k',
+    '-f',
+    'segment',
+    '-segment_time',
+    String(PIECE_SEC),
+    '-reset_timestamps',
+    '1',
+    join(work, 'p%04d.webm'),
   ]);
-  return readdirSync(work).filter((f) => /^p\d+\.webm$/.test(f)).sort().map((f) => join(work, f));
+  return readdirSync(work)
+    .filter((f) => /^p\d+\.webm$/.test(f))
+    .sort()
+    .map((f) => join(work, f));
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
@@ -173,14 +205,18 @@ console.log(
   `plan: ${plan.length} file(s), ${totalMin.toFixed(1)} audio min, ${whole ? 'whole files' : `${PIECE_SEC}s production pieces`}, candidates: ${candidates.join(', ')}`,
 );
 for (const c of candidates) {
-  console.log(`  ${c}: ~$${(totalMin * PRICES[c]).toFixed(4)} for this run, $${(PRICES[c] * 60).toFixed(2)} per lesson hour`);
+  console.log(
+    `  ${c}: ~$${(totalMin * PRICES[c]).toFixed(4)} for this run, $${(PRICES[c] * 60).toFixed(2)} per lesson hour`,
+  );
 }
 if (dry) {
   for (const p of plan) {
     const work = mkdtempSync(join(tmpdir(), 'bench-'));
     try {
       const n = whole ? 1 : pieces(p.file, work).length;
-      console.log(`  ${p.a}: ${p.mins?.toFixed(2) ?? '?'} min → ${n} piece(s); reference ${p.ref.length} chars; prompt "${p.title}"`);
+      console.log(
+        `  ${p.a}: ${p.mins?.toFixed(2) ?? '?'} min → ${n} piece(s); reference ${p.ref.length} chars; prompt "${p.title}"`,
+      );
     } finally {
       rmSync(work, { recursive: true, force: true });
     }
@@ -201,7 +237,10 @@ for (const p of plan) {
         const files = name.includes('diarize') || name.startsWith('deepgram') ? [p.file] : parts;
         const outs = [];
         for (const f of files) outs.push(await run(name, f, p.title));
-        const text = outs.map((o) => o.text.trim()).filter(Boolean).join('\n');
+        const text = outs
+          .map((o) => o.text.trim())
+          .filter(Boolean)
+          .join('\n');
         const secs = (Date.now() - t0) / 1000;
         const row = {
           file: p.a,
@@ -234,19 +273,29 @@ for (const r of results.filter((x) => !x.error)) (byProvider[r.provider] ||= [])
 const summary = Object.fromEntries(
   Object.entries(byProvider).map(([prov, rs]) => {
     const mins = rs.reduce((n, r) => n + (r.minutes ?? 0), 0);
-    const w = (k) => rs.reduce((n, r) => n + r[k] * (r.minutes ?? 1), 0) / Math.max(1e-9, mins || rs.length);
+    const w = (k) =>
+      rs.reduce((n, r) => n + r[k] * (r.minutes ?? 1), 0) / Math.max(1e-9, mins || rs.length);
     const avg = (k) => {
       const xs = rs.map((r) => r[k]).filter((x) => x != null);
       return xs.length ? +(xs.reduce((n, x) => n + x, 0) / xs.length).toFixed(4) : null;
     };
-    return [prov, {
-      files: rs.length, minutes: +mins.toFixed(2),
-      wer: +w('wer').toFixed(4), cer: +w('cer').toFixed(4),
-      arabicWordRecall: avg('arabicWordRecall'), dialectRecall: avg('dialectRecall'),
-      englishTermRecall: avg('englishTermRecall'), numberRecall: avg('numberRecall'),
-      punctuationRatio: avg('punctuationRatio'), realtimeFactor: avg('realtimeFactor'),
-      usdPerHour: rs[0].usdPerHour, usd: +rs.reduce((n, r) => n + (r.usd ?? 0), 0).toFixed(4),
-    }];
+    return [
+      prov,
+      {
+        files: rs.length,
+        minutes: +mins.toFixed(2),
+        wer: +w('wer').toFixed(4),
+        cer: +w('cer').toFixed(4),
+        arabicWordRecall: avg('arabicWordRecall'),
+        dialectRecall: avg('dialectRecall'),
+        englishTermRecall: avg('englishTermRecall'),
+        numberRecall: avg('numberRecall'),
+        punctuationRatio: avg('punctuationRatio'),
+        realtimeFactor: avg('realtimeFactor'),
+        usdPerHour: rs[0].usdPerHour,
+        usd: +rs.reduce((n, r) => n + (r.usd ?? 0), 0).toFixed(4),
+      },
+    ];
   }),
 );
 console.table(summary);

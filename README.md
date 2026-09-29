@@ -202,8 +202,14 @@ and the API serves `apps/web/dist` at `/` (SPA fallback; API stays under
 `/api`). Web calls are same-origin in production — no CORS / `VITE_API_URL`.
 
 - Service build command: `npm run build --workspace=@darsly/api`
-- Service start command: `npm run start --workspace=@darsly/api`
-  (runs `prisma migrate deploy` before boot)
+- Deploy settings live in `railway.json` (API) and `railway.recorder.json`
+  (live-recorder, selected by that service's config-file setting):
+  - start: `node dist/main.js` — node is the main process, so a redeploy's
+    SIGTERM ends in a clean exit 0 (see `main.ts`)
+  - pre-deploy: `scripts/predeploy.sh` runs `prisma migrate deploy` — the only
+    migration owner; the recorder's `scripts/wait-for-schema.sh` only waits
+  - health check: `/api/v1/health/ready` (503 until the database answers)
+  - Railway waits for GitHub CI to pass before deploying a commit
 - Required variables: `DATABASE_URL=${{Postgres.DATABASE_URL}}`,
   `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_TTL`,
   `JWT_REFRESH_TTL`, `OTP_*`, `MAX_CONCURRENT_SESSIONS_DEFAULT`,

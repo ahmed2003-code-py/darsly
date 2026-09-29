@@ -1,4 +1,4 @@
-import { Component, ReactNode } from 'react';
+import { Component, ErrorInfo, ReactNode } from 'react';
 import i18n from '../i18n';
 
 interface Props {
@@ -27,7 +27,10 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { error, recovering: isRecoverable(error) };
   }
 
-  componentDidCatch(error: Error) {
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    // Production React logs only the error; where it happened is what makes
+    // a crash report actionable.
+    console.error('[ErrorBoundary]', error?.stack ?? error, info.componentStack);
     if (isRecoverable(error)) {
       // Reload once (guarded so we never loop) to fetch the current build.
       sessionStorage.setItem('chunk-reloaded', '1');

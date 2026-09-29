@@ -159,14 +159,25 @@ export default function Conversation({
   const openedFor = useRef<string | null>(null);
   const forceBottom = useRef(false);
   const lastSeenCount = useRef(0);
+  /** The sending message the view was last pinned for — pinned once, not per render. */
+  const pinnedFor = useRef<string | null>(null);
+  const newCountRef = useRef(newCount);
+  newCountRef.current = newCount;
+  const scrolledUpRef = useRef(scrolledUp);
+  scrolledUpRef.current = scrolledUp;
 
+  // Sets state only when it changes. The scroll effect below calls this while
+  // committing; React may hand that effect a fresh `messages` array on
+  // consecutive renders while it replays queued updates, so an unconditional
+  // setState here kept a render cycle alive until React aborted the page
+  // (error #185 — seen in production on a student's group chat mid-send).
   const toBottom = useCallback((smooth = false) => {
     const el = scrollerRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
     nearBottom.current = true;
-    setNewCount(0);
-    setScrolledUp(false);
+    if (newCountRef.current !== 0) setNewCount(0);
+    if (scrolledUpRef.current) setScrolledUp(false);
   }, []);
 
   const onScroll = useCallback(() => {
@@ -217,7 +228,11 @@ export default function Conversation({
     const grew = conv.messages.length > lastSeenCount.current;
     lastSeenCount.current = conv.messages.length;
     if (lastMessage?.mine && lastMessage.status === 'sending') {
-      toBottom();
+      // My own send: follow it down once; after that just stay at the bottom.
+      if (pinnedFor.current !== lastMessage.id) {
+        pinnedFor.current = lastMessage.id;
+        toBottom();
+      } else if (nearBottom.current) el.scrollTop = el.scrollHeight;
     } else if (nearBottom.current && !conv.hasNewer) {
       el.scrollTop = el.scrollHeight;
     } else if (grew && lastMessage && !lastMessage.mine) {

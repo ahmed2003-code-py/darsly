@@ -95,7 +95,10 @@ export class DraftsService {
     }
     const size = Buffer.byteLength(JSON.stringify(input.data ?? {}));
     if (size > MAX_DATA_BYTES) {
-      throw new BadRequestException('Draft is too large to save');
+      throw new BadRequestException({
+        message: 'Draft is too large to save',
+        code: 'DRAFT_TOO_LARGE',
+      });
     }
 
     const common = {

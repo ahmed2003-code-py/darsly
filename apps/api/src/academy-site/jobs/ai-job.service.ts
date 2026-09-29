@@ -230,10 +230,16 @@ export class AiJobService {
     const job = await this.prisma.aiJob.findUnique({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Job not found');
     if (job.status !== 'FAILED') {
-      throw new ConflictException(`Only FAILED jobs can be rerun (this one is ${job.status})`);
+      throw new ConflictException({
+        message: `Only FAILED jobs can be rerun (this one is ${job.status})`,
+        code: 'JOB_NOT_FAILED',
+      });
     }
     if (await this.hasActiveJob(job.academyId)) {
-      throw new ConflictException('This academy already has an active job');
+      throw new ConflictException({
+        message: 'This academy already has an active job',
+        code: 'AI_JOB_ACTIVE',
+      });
     }
     return this.prisma.aiJob.update({
       where: { id: jobId },
@@ -267,7 +273,10 @@ export class AiJobService {
     const job = await this.prisma.aiJob.findFirst({ where: { id: jobId, academyId } });
     if (!job) throw new NotFoundException('Job not found');
     if (job.status !== 'QUEUED') {
-      throw new ConflictException(`Cannot cancel a ${job.status.toLowerCase()} job`);
+      throw new ConflictException({
+        message: `Cannot cancel a ${job.status.toLowerCase()} job`,
+        code: 'JOB_NOT_QUEUED',
+      });
     }
     return this.prisma.aiJob.update({ where: { id: jobId }, data: { status: 'CANCELED' } });
   }

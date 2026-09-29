@@ -59,7 +59,11 @@ export class PlaybackService {
       where: { userId },
       include: { user: { select: { fullName: true, phone: true } } },
     });
-    if (!s) throw new BadRequestException('No student profile for this account');
+    if (!s)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return s;
   }
 
@@ -195,7 +199,10 @@ export class PlaybackService {
 
   private assertVideoReady(lesson: { videoAsset: { status: string } | null }): void {
     if (!lesson.videoAsset || lesson.videoAsset.status !== 'READY') {
-      throw new BadRequestException('Lesson video is not ready');
+      throw new BadRequestException({
+        message: 'Lesson video is not ready',
+        code: 'VIDEO_NOT_READY',
+      });
     }
   }
 

@@ -78,7 +78,12 @@ export class DeviceEnrollmentService {
     meta: { model?: string; appVersion?: string },
   ): Promise<DeviceTokens & { phone: string }> {
     const code = this.normalizeCode(rawCode);
-    if (!code) throw new BadRequestException('Enrollment code is required');
+    if (!code)
+      throw new BadRequestException({
+        message: 'Enrollment code is required',
+        code: 'ENROLLMENT_CODE_REQUIRED',
+        field: 'code',
+      });
 
     const candidates = await this.prisma.deviceEnrollmentCode.findMany({
       where: {
@@ -123,7 +128,11 @@ export class DeviceEnrollmentService {
       where: { consumedAt: null, expiresAt: { gt: new Date() } },
       data: { attempts: { increment: 1 } },
     });
-    throw new BadRequestException('Invalid or expired enrollment code');
+    throw new BadRequestException({
+      message: 'Invalid or expired enrollment code',
+      code: 'ENROLLMENT_CODE_INVALID',
+      field: 'code',
+    });
   }
 
   /** Admin view: codes that are still usable, never the codes themselves. */

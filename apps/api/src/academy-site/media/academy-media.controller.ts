@@ -56,7 +56,10 @@ export class AcademyMediaController {
         IMAGE_MIME.test(file.mimetype) || VIDEO_MIME.test(file.mimetype)
           ? cb(null, true)
           : cb(
-              new BadRequestException('Only PNG, JPEG, WebP images or MP4 video are accepted'),
+              new BadRequestException({
+                message: 'Only PNG, JPEG, WebP images or MP4 video are accepted',
+                code: 'MEDIA_TYPE',
+              }),
               false,
             ),
     }),
@@ -68,7 +71,8 @@ export class AcademyMediaController {
     // here since the multipart request skips the global transforming pipe.
     @Body('kind') kind: string,
   ) {
-    if (!file) throw new BadRequestException('file is required');
+    if (!file)
+      throw new BadRequestException({ message: 'file is required', code: 'FILE_REQUIRED' });
     if (!UPLOADABLE_KINDS.includes(kind as AcademyMediaKind)) {
       throw new BadRequestException('kind must be one of LOGO, COVER, GALLERY, AVATAR, PROMO');
     }

@@ -104,7 +104,11 @@ export class AcademySiteService {
   async previewHtml(academyId: string): Promise<string> {
     const site = await this.getByAcademy(academyId);
     const doc = site?.draftDoc ?? site?.publishedDoc;
-    if (!doc) throw new BadRequestException('لا توجد صفحة للمعاينة بعد — قم بالتوليد أولاً');
+    if (!doc)
+      throw new BadRequestException({
+        message: 'لا توجد صفحة للمعاينة بعد — قم بالتوليد أولاً',
+        code: 'SITE_NO_PAGE',
+      });
     const parsed = parseSiteDocument(doc);
     if (!parsed.success)
       throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
@@ -264,7 +268,11 @@ export class AcademySiteService {
   /** Teacher publish. First time → PENDING_MODERATION; once approved → live. */
   async publish(academyId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
-    if (!site.draftDoc) throw new BadRequestException('There is no draft to publish');
+    if (!site.draftDoc)
+      throw new BadRequestException({
+        message: 'There is no draft to publish',
+        code: 'SITE_NO_DRAFT',
+      });
     // A locked page has no compiled markup to replace, so this used to bump the
     // version and change nothing — a success that does nothing, which reads as
     // a button that does nothing. Refuse, and name the way out.
@@ -307,10 +315,17 @@ export class AcademySiteService {
    */
   async unlockHtml(academyId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getOrCreate(academyId);
-    if (!site.htmlLocked) throw new ConflictException('This page is already built by the studio');
+    if (!site.htmlLocked)
+      throw new ConflictException({
+        message: 'This page is already built by the studio',
+        code: 'SITE_ALREADY_STUDIO',
+      });
     const doc = site.draftDoc ?? site.publishedDoc;
     if (!doc)
-      throw new BadRequestException('There is no page to build from yet — generate one first');
+      throw new BadRequestException({
+        message: 'There is no page to build from yet — generate one first',
+        code: 'SITE_NO_PAGE',
+      });
     const parsed = parseSiteDocument(doc);
     if (!parsed.success)
       throw new BadRequestException({ message: 'Draft is invalid', errors: parsed.errors });
@@ -364,7 +379,7 @@ export class AcademySiteService {
   async unpublish(academyId: string, actorUserId: string): Promise<AcademySite> {
     const site = await this.getByAcademy(academyId);
     if (!site || site.status !== 'PUBLISHED') {
-      throw new ConflictException('Site is not published');
+      throw new ConflictException({ message: 'Site is not published', code: 'SITE_NOT_PUBLISHED' });
     }
     const updated = await this.prisma.academySite.update({
       where: { id: site.id },
@@ -383,7 +398,10 @@ export class AcademySiteService {
   ): Promise<AcademySite> {
     const site = await this.getByAcademy(academyId);
     if (!site || site.status !== 'PENDING_MODERATION') {
-      throw new ConflictException('Site is not pending moderation');
+      throw new ConflictException({
+        message: 'Site is not pending moderation',
+        code: 'SITE_NOT_PENDING',
+      });
     }
     if (decision === 'reject') {
       const updated = await this.prisma.academySite.update({
@@ -471,7 +489,11 @@ export class AcademySiteService {
   async upgradeDraft(academyId: string, actorUserId: string) {
     const site = await this.getByAcademy(academyId);
     const source = site?.draftDoc ?? site?.publishedDoc;
-    if (!source) throw new BadRequestException('There is no page to upgrade yet');
+    if (!source)
+      throw new BadRequestException({
+        message: 'There is no page to upgrade yet',
+        code: 'SITE_NO_PAGE',
+      });
     const parsed = parseSiteDocument(source);
     if (!parsed.success) {
       throw new BadRequestException({
@@ -666,7 +688,10 @@ export class AcademySiteService {
       where: { academyId, state: 'UNVERIFIED' },
     });
     if (unverified > 0 && documentReferencesClaims(doc)) {
-      throw new BadRequestException('Remove or verify unverified claims before publishing');
+      throw new BadRequestException({
+        message: 'Remove or verify unverified claims before publishing',
+        code: 'SITE_UNVERIFIED_CLAIMS',
+      });
     }
   }
 

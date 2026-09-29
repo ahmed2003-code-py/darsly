@@ -94,7 +94,12 @@ export class PayoutsService {
 
     const min = await this.minimumCents();
     if (amountCents < min) {
-      throw new BadRequestException(`Minimum payout is ${min / 100} EGP`);
+      throw new BadRequestException({
+        message: `Minimum payout is ${min / 100} EGP`,
+        code: 'PAYOUT_BELOW_MINIMUM',
+        field: 'amountCents',
+        params: { min: min / 100 },
+      });
     }
 
     // Serializable: the balance/pending read and the insert must be one unit, or
@@ -136,9 +141,11 @@ export class PayoutsService {
       );
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2034') {
-        throw new ConflictException(
-          'A concurrent payout request was in progress — please try again',
-        );
+        throw new ConflictException({
+          message: 'A concurrent payout request was in progress — please try again',
+          code: 'WRITE_CONFLICT',
+          retryable: true,
+        });
       }
       throw e;
     }
@@ -195,7 +202,10 @@ export class PayoutsService {
       });
     const notifyUserId = payout.teacher?.userId ?? org.ownerUserId;
     if (['COMPLETED', 'REJECTED'].includes(payout.status)) {
-      throw new BadRequestException('Payout is already finalized');
+      throw new BadRequestException({
+        message: 'Payout is already finalized',
+        code: 'PAYOUT_FINALIZED',
+      });
     }
 
     // The write itself refuses a finalised row. Two admins acting at once used
@@ -218,7 +228,11 @@ export class PayoutsService {
             });
           }
           const flip = await tx.payoutRequest.updateMany({ where: open, data });
-          if (flip.count === 0) throw new BadRequestException('Payout is already finalized');
+          if (flip.count === 0)
+            throw new BadRequestException({
+              message: 'Payout is already finalized',
+              code: 'PAYOUT_FINALIZED',
+            });
           await this.ledger.recordPayout(id, tx);
           return tx.payoutRequest.findUniqueOrThrow({ where: { id } });
         },
@@ -226,7 +240,11 @@ export class PayoutsService {
       );
     } else {
       const flip = await this.prisma.payoutRequest.updateMany({ where: open, data });
-      if (flip.count === 0) throw new BadRequestException('Payout is already finalized');
+      if (flip.count === 0)
+        throw new BadRequestException({
+          message: 'Payout is already finalized',
+          code: 'PAYOUT_FINALIZED',
+        });
       updated = await this.prisma.payoutRequest.findUniqueOrThrow({ where: { id } });
     }
 

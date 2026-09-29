@@ -263,7 +263,8 @@ export class AdminCentersService {
         code: 'ALREADY_ACTIVE',
       });
     }
-    if (!academy.owner.email) throw new BadRequestException('Admin has no email');
+    if (!academy.owner.email)
+      throw new BadRequestException({ message: 'Admin has no email', code: 'ADMIN_NO_EMAIL' });
 
     const rawToken = randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.now() + ACTIVATION_TTL_DAYS * 86_400_000);

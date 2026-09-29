@@ -73,12 +73,17 @@ export class AcademyMediaProcessor {
     maxBytes: number = MAX_VIDEO_BYTES,
   ): Promise<ProcessedVideo> {
     if (!ACCEPTED_VIDEO.test(mimeType)) {
-      throw new BadRequestException('Only MP4 video is accepted');
+      throw new BadRequestException({
+        message: 'Only MP4 video is accepted',
+        code: 'VIDEO_MP4_ONLY',
+      });
     }
     if (input.length > maxBytes) {
-      throw new BadRequestException(
-        `Video is too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`,
-      );
+      throw new BadRequestException({
+        message: `Video is too large (max ${Math.round(maxBytes / (1024 * 1024))}MB)`,
+        code: 'MEDIA_VIDEO_TOO_LARGE',
+        params: { max: Math.round(maxBytes / (1024 * 1024)) },
+      });
     }
     const contentHash = createHash('sha256').update(input).digest('hex');
     const dims = await this.probeDimensions(input);
@@ -123,7 +128,10 @@ export class AcademyMediaProcessor {
 
   async process(input: Buffer, mimeType: string, kind: AcademyMediaKind): Promise<ProcessedImage> {
     if (!ACCEPTED_INPUT.test(mimeType)) {
-      throw new BadRequestException('Only PNG, JPEG and WebP images are accepted');
+      throw new BadRequestException({
+        message: 'Only PNG, JPEG and WebP images are accepted',
+        code: 'IMAGE_TYPE',
+      });
     }
     // The line above checks the *declared* type; this checks the bytes. sharp
     // picks its decoder from the magic number and never consults the MIME, so
@@ -137,13 +145,23 @@ export class AcademyMediaProcessor {
     try {
       meta = await this.sharp(input).metadata();
     } catch {
-      throw new BadRequestException('File is not a valid image');
+      throw new BadRequestException({
+        message: 'File is not a valid image',
+        code: 'IMAGE_INVALID',
+      });
     }
     if (!meta.format || !meta.width || !meta.height) {
-      throw new BadRequestException('File is not a valid image');
+      throw new BadRequestException({
+        message: 'File is not a valid image',
+        code: 'IMAGE_INVALID',
+      });
     }
     if (meta.width > MAX_INPUT_DIM || meta.height > MAX_INPUT_DIM) {
-      throw new BadRequestException(`Image is too large (max ${MAX_INPUT_DIM}px per side)`);
+      throw new BadRequestException({
+        message: `Image is too large (max ${MAX_INPUT_DIM}px per side)`,
+        code: 'IMAGE_DIMENSIONS_TOO_LARGE',
+        params: { max: MAX_INPUT_DIM },
+      });
     }
 
     const maxDim = KIND_MAX_DIM[kind];
@@ -159,7 +177,10 @@ export class AcademyMediaProcessor {
         .webp({ quality: 82 })
         .toBuffer({ resolveWithObject: true }));
     } catch {
-      throw new BadRequestException('File is not a valid image');
+      throw new BadRequestException({
+        message: 'File is not a valid image',
+        code: 'IMAGE_INVALID',
+      });
     }
 
     const blurhash = await this.blurhashFor(data);

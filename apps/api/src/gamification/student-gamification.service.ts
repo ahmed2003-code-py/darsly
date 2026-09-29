@@ -34,7 +34,11 @@ export class StudentGamificationService {
       where: { userId },
       select: { id: true },
     });
-    if (!s) throw new BadRequestException('No student profile for this account');
+    if (!s)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return s.id;
   }
 
@@ -252,7 +256,10 @@ export class StudentGamificationService {
     const reward = await this.prisma.reward.findUnique({ where: { key: rewardKey } });
     if (!reward || !reward.isActive) throw new NotFoundException('Reward not available');
     if (reward.stock != null && reward.stock <= 0)
-      throw new BadRequestException('This reward is sold out');
+      throw new BadRequestException({
+        message: 'This reward is sold out',
+        code: 'REWARD_SOLD_OUT',
+      });
 
     const payload = (reward.payload ?? {}) as Record<string, unknown>;
 
@@ -264,14 +271,19 @@ export class StudentGamificationService {
           coinsSpent: { increment: reward.costCoins },
         },
       });
-      if (!debit.count) throw new BadRequestException('Not enough coins');
+      if (!debit.count)
+        throw new BadRequestException({ message: 'Not enough coins', code: 'NOT_ENOUGH_COINS' });
 
       if (reward.stock != null) {
         const took = await tx.reward.updateMany({
           where: { id: reward.id, stock: { gt: 0 } },
           data: { stock: { decrement: 1 } },
         });
-        if (!took.count) throw new BadRequestException('This reward is sold out');
+        if (!took.count)
+          throw new BadRequestException({
+            message: 'This reward is sold out',
+            code: 'REWARD_SOLD_OUT',
+          });
       }
 
       // A real-world prize is a promise, not an effect: it waits for an admin.

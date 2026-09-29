@@ -548,7 +548,11 @@ export class ChallengesService {
       where: { challengeId },
       orderBy: { sortOrder: 'asc' },
     });
-    if (!questions.length) throw new BadRequestException('Challenge has no questions yet');
+    if (!questions.length)
+      throw new BadRequestException({
+        message: 'Challenge has no questions yet',
+        code: 'CHALLENGE_EMPTY',
+      });
 
     const existing = await this.prisma.challengeAttempt.findMany({
       where: { challengeId, studentId },

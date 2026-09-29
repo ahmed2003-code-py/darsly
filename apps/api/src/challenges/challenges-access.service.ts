@@ -19,7 +19,11 @@ export class ChallengesAccessService {
 
   async studentIdOf(userId: string): Promise<string> {
     const s = await this.prisma.studentProfile.findUnique({ where: { userId } });
-    if (!s) throw new BadRequestException('No student profile for this account');
+    if (!s)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return s.id;
   }
 

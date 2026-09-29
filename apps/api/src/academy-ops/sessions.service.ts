@@ -223,7 +223,12 @@ export class SessionsService {
   ) {
     const startAt = input.startAt ? new Date(input.startAt) : existing!.startAt;
     const endAt = input.endAt ? new Date(input.endAt) : existing!.endAt;
-    if (!(endAt > startAt)) throw new BadRequestException('endAt must be after startAt');
+    if (!(endAt > startAt))
+      throw new BadRequestException({
+        message: 'endAt must be after startAt',
+        code: 'END_BEFORE_START',
+        field: 'endAt',
+      });
 
     const roomId = input.roomId !== undefined ? input.roomId : (existing?.roomId ?? undefined);
     const teacherUserId =
@@ -237,7 +242,11 @@ export class SessionsService {
       });
       if (!room) throw new NotFoundException('Room not found');
       if (room.status === 'ARCHIVED')
-        throw new BadRequestException('This room is archived and cannot be scheduled into');
+        throw new BadRequestException({
+          message: 'This room is archived and cannot be scheduled into',
+          code: 'ROOM_ARCHIVED',
+          field: 'roomId',
+        });
     }
     if (teacherUserId) {
       // An approved TEACHER identity with ACTIVE membership here — STAFF,
@@ -248,7 +257,12 @@ export class SessionsService {
         const assigned = await this.prisma.groupAssignment.findFirst({
           where: { groupId, userId: teacherUserId },
         });
-        if (!assigned) throw new BadRequestException('That user is not assigned to this group');
+        if (!assigned)
+          throw new BadRequestException({
+            message: 'That user is not assigned to this group',
+            code: 'TEACHER_NOT_IN_GROUP',
+            field: 'teacherUserId',
+          });
       }
     }
     const delivery = await this.resolveDelivery(

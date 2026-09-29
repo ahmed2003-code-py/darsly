@@ -49,7 +49,13 @@ export const examUploadInterceptor = () =>
     fileFilter: (_req, file, cb) =>
       ACCEPTED.test(file.mimetype)
         ? cb(null, true)
-        : cb(new BadRequestException('Pages must be images or a PDF'), false),
+        : cb(
+            new BadRequestException({
+              message: 'Pages must be images or a PDF',
+              code: 'PAPER_FILE_TYPE',
+            }),
+            false,
+          ),
   });
 
 /**

@@ -319,18 +319,36 @@ export class AuthService {
       include: { teacherProfile: true, studentProfile: true },
     });
 
-    // Soft-lock check before touching the password.
-    if (user?.lockedUntil && user.lockedUntil > new Date()) {
-      throw new ForbiddenException({
-        message: 'Account temporarily locked after too many attempts. Try again later.',
-        code: 'ACCOUNT_LOCKED',
-      });
+    // A locked account answers exactly like an unknown one.
+    //
+    // It used to answer 403 ACCOUNT_LOCKED — and only an account that exists
+    // can ever be locked, so ten wrong guesses told anyone whether a phone or
+    // email was registered. Now the lock is visible in the log only, and from
+    // outside a locked account, a missing account and a wrong password are
+    // the same 401 with the same body and the same latency (the verify still
+    // runs, against the dummy hash). The real password is deliberately not
+    // checked while locked: answering "right password, but locked" would let
+    // guessing continue through the lock and turn it into an oracle.
+    const locked = !!user?.lockedUntil && user.lockedUntil > new Date();
+    if (locked) {
+      this.logger.warn(
+        `login refused: account locked user=${user!.id} until=${user!.lockedUntil!.toISOString()}`,
+      );
     }
 
     // Always run a verify (against a dummy hash when the user/hash is absent) so
     // login latency is the same for existing and non-existing handles.
-    const ok = await argon2.verify(user?.passwordHash ?? (await this.dummyHash), dto.password);
-    if (!user || !user.passwordHash || !ok) {
+    const ok = await argon2.verify(
+      (!locked && user?.passwordHash) || (await this.dummyHash),
+      dto.password,
+    );
+    if (locked || !user || !user.passwordHash || !ok) {
+      if (locked) {
+        throw new UnauthorizedException({
+          message: 'Invalid credentials',
+          code: 'INVALID_CREDENTIALS',
+        });
+      }
       if (user?.isActive) await this.recordFailedLogin(user.id, user.failedLogins);
       throw new UnauthorizedException({
         message: 'Invalid credentials',

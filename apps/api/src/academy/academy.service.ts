@@ -560,7 +560,10 @@ export class AcademyService {
       where: { userId_academyId: { userId: user.id, academyId } },
     });
     if (existing && existing.role === 'OWNER') {
-      throw new BadRequestException('This user is the academy owner');
+      throw new BadRequestException({
+        message: 'This user is the academy owner',
+        code: 'IS_ACADEMY_OWNER',
+      });
     }
     return this.prisma.academyMembership.upsert({
       where: { userId_academyId: { userId: user.id, academyId } },

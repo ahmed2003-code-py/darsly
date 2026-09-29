@@ -971,7 +971,11 @@ export class ChatService {
     // New thread — the initiator picks the counterpart.
     if (user.role === Role.STUDENT) {
       const sid = await this.studentId(user.sub);
-      if (!sid) throw new BadRequestException('No student profile');
+      if (!sid)
+        throw new BadRequestException({
+          message: 'No student profile',
+          code: 'STUDENT_ACCOUNT_REQUIRED',
+        });
       if (payload.team) return this.learnerToTeam(sid, payload.academyId, null, 'ACTIVE');
       if (payload.staffUserId) {
         return this.learnerToAssistant(sid, payload.academyId, payload.staffUserId, null);

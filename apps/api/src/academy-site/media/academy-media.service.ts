@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { AcademyMedia, AcademyMediaKind } from '@prisma/client';
@@ -84,9 +85,11 @@ export class AcademyMediaService {
       where: { academyId, kind, status: { in: ['UPLOADING', 'PROCESSING', 'READY'] } },
     });
     if (existing >= max) {
-      throw new ConflictException(
-        `You already have the maximum number of ${kind.toLowerCase()} items (${max}). Delete one first.`,
-      );
+      throw new ConflictException({
+        message: `You already have the maximum number of ${kind.toLowerCase()} items (${max}). Delete one first.`,
+        code: 'MEDIA_LIMIT_REACHED',
+        params: { max },
+      });
     }
 
     // Which pipeline runs is decided by what was actually uploaded, not by
@@ -96,7 +99,10 @@ export class AcademyMediaService {
     // "always video" case of the same check.
     const isVideo = VIDEO_MIME.test(file.mimetype);
     if (isVideo && !VIDEO_CAPABLE[kind]) {
-      throw new BadRequestException(`${kind.toLowerCase()} does not accept video`);
+      throw new BadRequestException({
+        message: `${kind.toLowerCase()} does not accept video`,
+        code: 'MEDIA_NO_VIDEO',
+      });
     }
     const processed = isVideo
       ? await this.processor.processVideo(file.buffer, file.mimetype, KIND_MAX_VIDEO_BYTES[kind])
@@ -130,7 +136,10 @@ export class AcademyMediaService {
         data: { status: 'REJECTED', rejectReason: 'storage failed' },
       });
       this.logger.error(`media ${media.id} storage failed: ${(e as Error).message}`);
-      throw new BadRequestException('Failed to store image');
+      throw new ServiceUnavailableException({
+        message: 'Storage is unavailable — try again shortly',
+        code: 'STORAGE_UNAVAILABLE',
+      });
     }
   }
 

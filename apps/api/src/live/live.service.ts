@@ -432,7 +432,12 @@ export class LiveService {
         where: { groupId, userId: teacherUserId },
         select: { id: true },
       });
-      if (!assigned) throw new BadRequestException('That teacher is not assigned to this group');
+      if (!assigned)
+        throw new BadRequestException({
+          message: 'That teacher is not assigned to this group',
+          code: 'TEACHER_NOT_IN_GROUP',
+          field: 'teacherUserId',
+        });
     }
     return groupId;
   }
@@ -2255,7 +2260,7 @@ export class LiveService {
   async sendChat(userId: string, sessionId: string, body: string) {
     const { session } = await this.assertInSession(userId, sessionId);
     const text = body.trim();
-    if (!text) throw new BadRequestException('Empty message');
+    if (!text) throw new BadRequestException({ message: 'Empty message', code: 'EMPTY_MESSAGE' });
     const saved = await this.prisma.liveChatMessage.create({
       data: { sessionId, userId, body: text.slice(0, 2000) },
       include: { user: { select: { id: true, fullName: true, role: true } } },
@@ -3253,7 +3258,11 @@ export class LiveService {
       where: { userId },
       include: { user: { select: { fullName: true } } },
     });
-    if (!s) throw new BadRequestException('No student profile for this account');
+    if (!s)
+      throw new BadRequestException({
+        message: 'No student profile for this account',
+        code: 'STUDENT_ACCOUNT_REQUIRED',
+      });
     return s;
   }
 

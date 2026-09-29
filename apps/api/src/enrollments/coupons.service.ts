@@ -101,7 +101,11 @@ export class CouponsService {
       (dto.courseId && dto.scope && dto.scope !== 'COURSE') ||
       (dto.liveSessionId && dto.scope && dto.scope !== 'LIVE')
     ) {
-      throw new BadRequestException('The coupon scope does not match what it targets');
+      throw new BadRequestException({
+        message: 'The coupon scope does not match what it targets',
+        code: 'COUPON_SCOPE_MISMATCH',
+        field: 'scope',
+      });
     }
 
     const code = dto.code.trim().toUpperCase();

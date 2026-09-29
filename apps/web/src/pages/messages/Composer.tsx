@@ -270,7 +270,10 @@ function UploadChip({
     );
   }
   return (
-    <li className="relative flex w-56 shrink-0 items-center gap-2.5 rounded-sm bg-surface-container-low p-2 pe-9">
+    // A refused file gets room to say what to change, not just that it failed.
+    <li
+      className={`relative flex ${u.status === 'failed' ? 'w-72' : 'w-56'} shrink-0 items-center gap-2.5 rounded-sm bg-surface-container-low p-2 pe-9`}
+    >
       {u.isImage && u.localUrl ? (
         <img src={u.localUrl} alt="" className="h-11 w-11 shrink-0 rounded-[8px] object-cover" />
       ) : (
@@ -287,7 +290,7 @@ function UploadChip({
         </bdi>
         {u.status === 'failed' ? (
           <span className="flex items-start gap-2 text-xs">
-            <span className="line-clamp-3 min-w-0 text-error" title={u.error} role="alert">
+            <span className="line-clamp-4 min-w-0 text-error" title={u.error} role="alert">
               {u.error ?? t('messages.uploadFailed')}
             </span>
             {u.retryable !== false && (

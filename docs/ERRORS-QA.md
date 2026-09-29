@@ -132,8 +132,80 @@ generic "invalid" in place of the rule (now `WEAK_PASSWORD`), "لازم يكون
 حروف", "Wait 1 seconds", and an offline sentence that promised an automatic
 retry.
 
-**Not verified in production:** anything behind a staff or student sign-in
-(G1–G10, messaging, payments, live, exams). No TEST credentials exist for
-production. These are covered by the Postgres integration and e2e suites in CI;
-run those rows by hand with TEST accounts.
+## Authenticated production QA — 2026-09-29 (deploy of e3879db / 993b57f)
+
+### TEST fixtures used
+
+Reused, not created, unless marked. All live in TEST academies; no real
+user, course or conversation was touched.
+
+| Fixture | What | Origin |
+|---|---|---|
+| `darsly-smoke-teacher-65f6a4@example.com` | TEST teacher, owner of the TEST academy "SMOKE-TEST Teacher 65f6a4" (`cmuh04jou001514t4yckcf8zo`) | registered 2026-09-25 by the live-commerce smoke; credentials in that session's scratchpad, never in the repo |
+| `darsly-smoke-student-65f6a4@example.com` | TEST student | same |
+| "TEST · طالب اختبار 1 (smoke)" | another TEST student — used only as the *existing account* whose phone `PHONE_IN_USE` refuses | Student Care smoke |
+| "TEST · ولي أمر (smoke)" | the TEST guardian — used for "already linked", link revoked again at the end | Student Care smoke |
+| **created:** course `cmumlaaiw001chox2rbewt9b1` "TEST · QA أخطاء (smoke, safe to delete)" | free course with one assignment lesson; published for 1.5 s so the TEST student could enroll, then **archived** | this QA — puts the TEST student in the TEST teacher's scope (their earlier course had been deleted) |
+| **created, then deleted:** one INSTAPAY payout method on the TEST academy | needed to reach the payout minimum check | this QA |
+
+The phase-0/Student-Care TEST academy ("TEST · مدرس اختبار (smoke)") has
+richer fixtures but no stored credentials, and its password reset goes to an
+`@example.com` inbox, so it could not be used.
+
+### API results — 22/22 pass
+
+Each refusal: expected status and code, `field` where one applies, envelope
+complete (`requestId` equals the `X-Request-Id` header), no internals.
+
+| Row | Probe | Status | Code | Field |
+|---|---|---|---|---|
+| G0 | teacher lists guardians of own TEST student | 200 | — | — |
+| G5 | invalid phone | 400 | `INVALID_PHONE` | phone |
+| G6 | one-letter name | 400 | `VALIDATION_FAILED` | name: `TOO_SHORT` |
+| G4 | the student's own phone | 400 | `GUARDIAN_IS_STUDENT` | phone |
+| **G1** | **another account's phone — the reported conflict** | **409** | **`PHONE_IN_USE`** | **phone** |
+| G3 | link the TEST guardian | 201 | — | — |
+| G2 | the same guardian again | 409 | `GUARDIAN_ALREADY_LINKED` | phone |
+| — | remove that link (cleanup) | 200 | — | — |
+| G9 | "new link" on the removed guardian | 400 | `LINK_REVOKED` | — |
+| G10 | student outside the academy | 404 | `NOT_FOUND` | — |
+| G10b | student id that does not exist | 404 | `NOT_FOUND` (identical) | — |
+| Z1 | a student on a staff route | 404 | `NOT_FOUND` | — |
+| Z2 | a teacher naming a foreign academy | 404 | `NOT_FOUND` | — |
+| Z3 | no token | 401 | `UNAUTHENTICATED` | — |
+| M | empty message | 400 | `EMPTY_MESSAGE` | — |
+| M4 | HEIC photo | 400 | `IMAGE_HEIC` | — |
+| M5 | `.exe` renamed `.pdf` | 400 | `ATTACHMENT_TYPE` | — |
+| P6 | payout below the minimum | 400 | `PAYOUT_BELOW_MINIMUM` | amountCents |
+| L1 | live class with bad fields | 400 | `VALIDATION_FAILED` | startsAt |
+| X5 | exam import from a `.txt` | 400 | `PAPER_FILE_TYPE` | — |
+| U1 | academy logo as `.txt` | 400 | `MEDIA_TYPE` | — |
+
+### UI results (real production screens, by eye)
+
+- **Guardian form, reported case** (ar 1280, ar 360, en 360): the
+  `PHONE_IN_USE` sentence under the phone field, phone focused, typed number
+  kept, modal open, **no toast, no second note**; the error clears on edit.
+  Found and fixed: the error icon was clipped beside a long message
+  (`shrink-0`, 993b57f).
+- **Chat, an iPhone HEIC saved as `.jpg`** (ar 360, en 1280): the chip shows
+  the HEIC sentence, **no Retry** (retrying cannot help), no toast. Found and
+  fixed: at the old chip width the English sentence was cut before its fix
+  ("…convert it to JPG"); refused chips are now wider with four lines.
+
+### Login lock (production, TEST teacher only)
+
+Ten wrong passwords locked the TEST teacher. Then an unknown account, the
+locked account with a wrong password, and the locked account with the
+**right** password all answered `401 {"message":"Invalid credentials","code":"INVALID_CREDENTIALS","statusCode":401,"retryable":false}`
+in 264 / 264 / 271 ms. The lock was visible only internally: `lockedUntil`
+set in the database and `login refused: account locked user=…` in the log,
+under the same request id the client received. The lock expired by itself
+after 15 minutes.
+
+### Still covered by CI rather than production
+
+Paid purchase flows (P1–P4) and live booking (L2–L4) need a paid course or
+session and real money movement; they stay covered by the Postgres
+integration suites and were not exercised in production.
 

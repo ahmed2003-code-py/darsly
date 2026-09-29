@@ -107,29 +107,33 @@ Automated coverage: `A` = `apps/api/src/common/errors/api-exception.filter.spec.
 
 ## Production verification — 2026-09-29 (deploy of 2c13cf5)
 
-Unauthenticated probes (no account created or changed; the login probe uses an
-identifier that belongs to no account). Every body carried , and a  equal to its , and nothing internal.
+Unauthenticated probes. No account was created or changed; the login probe
+uses an identifier that belongs to no account. Every body carried `code`,
+`retryable` and a `requestId` equal to its `X-Request-Id` header, and nothing
+internal.
 
 | Probe | Before | After |
 |---|---|---|
-| Login, unknown account | 401  | 401  |
-| Sign-up, bad fields | 400 with seven English sentences | 400  +  with codes and  |
-| Malformed JSON | 400 "Unexpected end of JSON input" (parser text) | 400  |
-| 4 MB body | 413 "request entity too large" | 413  |
-| Protected route, no token | 401, no code | 401  |
-| Bogus guardian link | 410  | same, plus envelope |
-| 21 logins in a minute | — | 429 ,  =  |
+| Login, unknown account | 401 `{ message: 'Invalid credentials', error: 'Unauthorized' }` | 401 `INVALID_CREDENTIALS` |
+| Sign-up, bad fields | 400 with seven English sentences | 400 `VALIDATION_FAILED` + `fields[]` with codes and `{ min: 2 }` |
+| Malformed JSON | 400 "Unexpected end of JSON input" (parser text) | 400 `MALFORMED_BODY` |
+| 4 MB body | 413 "request entity too large" | 413 `PAYLOAD_TOO_LARGE` |
+| Protected route, no token | 401, no code | 401 `UNAUTHENTICATED` |
+| Bogus guardian link | 410 `GUARDIAN_LINK_INVALID` | same, in the full envelope |
+| 21 logins in one minute | — | 429 `RATE_LIMITED`, `retryAfterSeconds: 60` = `Retry-After` |
 
-Log correlation: each probe's request id found exactly one line, e.g.
-.
+Log correlation: each probe's request id found exactly one server line, e.g.
+`410 GUARDIAN_LINK_INVALID [NOT_FOUND] POST /api/v1/auth/guardian/consume`.
 
-Screens reviewed by eye (1280 px and 360 px, Arabic and English): login wrong
-credentials, login offline, login rate-limited, sign-up field errors, invalid
-guardian link. Fixed after review: the password rule was replaced by a generic
-"invalid" (now  with the rule), "لازم يكون 2 حروف" grammar,
-"Wait 1 seconds", and an offline sentence that promised an automatic retry.
+Screens reviewed by eye (1280 px and 360 px, Arabic and English): login with
+wrong credentials, login offline, login rate-limited, sign-up field errors,
+invalid guardian link. Fixed after that review: a failed password rule showed a
+generic "invalid" in place of the rule (now `WEAK_PASSWORD`), "لازم يكون 2
+حروف", "Wait 1 seconds", and an offline sentence that promised an automatic
+retry.
 
 **Not verified in production:** anything behind a staff or student sign-in
-(guardian G1–G9, messaging, payments, live, exams). No TEST credentials exist
-for production; these are covered by the Postgres integration and e2e suites in
-CI. Run those rows by hand with TEST accounts.
+(G1–G10, messaging, payments, live, exams). No TEST credentials exist for
+production. These are covered by the Postgres integration and e2e suites in CI;
+run those rows by hand with TEST accounts.
+

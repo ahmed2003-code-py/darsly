@@ -182,7 +182,10 @@ describe('Checkpoint C: replay of a live recording, inside Darsly', () => {
     const { replays, playback } = build();
     const r = await replays.start(who(w.teacher), w.ls.id, {});
     expect(r.masterUrl).toMatch(/^\/api\/v1\/playback\/hls\/[^/]+\/master\.m3u8$/);
-    expect(JSON.stringify(r)).not.toMatch(/source\/|live-rec|final\.webm|r2|amazonaws/);
+    // Storage hosts, not the letters "r2" (a random cuid can contain them).
+    expect(JSON.stringify(r)).not.toMatch(
+      /source\/|live-rec|final\.webm|\.r2\.cloudflarestorage|\.r2\.dev|amazonaws/,
+    );
     const t = tokenOf(r.masterUrl);
     const m = res();
     await playback.master(t, undefined as any, m);

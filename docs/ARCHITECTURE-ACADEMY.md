@@ -592,7 +592,9 @@ graph TB
 
 **Migration is P3009-safe:** additive columns are nullable-then-backfilled or
 default-then-drop (per `prisma-migration-safety`), and each step is its own migration so
-the self-healing `start.sh` can recover. **Reversibility:** steps 1–5 are pure additions;
+a failure stops at one step. (Migrations now run in Railway's pre-deploy step,
+`apps/api/scripts/predeploy.sh`: a failed one fails the deploy and the running
+deployment keeps serving, instead of the old boot-time `start.sh` recovery.) **Reversibility:** steps 1–5 are pure additions;
 the rename (6) and key-rewrite (7) ship with a tested down-migration.
 
 ---

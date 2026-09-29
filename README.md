@@ -202,8 +202,10 @@ and the API serves `apps/web/dist` at `/` (SPA fallback; API stays under
 `/api`). Web calls are same-origin in production — no CORS / `VITE_API_URL`.
 
 - Service build command: `npm run build --workspace=@darsly/api`
-- Deploy settings live in `railway.json` (it applies to every service built
-  from this repo; live-recorder's own Dockerfile path is a service setting):
+- Deploy settings live in `railway.json`, which the API service reads.
+  live-recorder does not read it: its Dockerfile path, pre-deploy command
+  (`sh scripts/predeploy.sh`) and draining (30 s) are set on that service in
+  Railway, and `Dockerfile.recorder` starts node directly.
   - start: `node dist/main.js` — node is the main process, so a redeploy's
     SIGTERM ends in a clean exit 0 (see `main.ts`)
   - pre-deploy: `scripts/predeploy.sh` — the API service runs

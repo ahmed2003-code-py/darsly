@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GuardianRelationship } from '@prisma/client';
+import { GuardianRelationship, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { JwtPayload, Role } from '@darsly/shared-types';
 import { StaffScope, StaffScopeService } from '../academy/staff-scope.service';
@@ -88,8 +88,32 @@ export class GuardianService {
    * that already belongs to a guardian is the same guardian (one parent,
    * several children, several academies). A phone that belongs to any other
    * account is refused: V1 has one role per account.
+   *
+   * Every refusal names its own reason (docs/ERRORS.md): the phone is the
+   * student's own, belongs to another kind of account, or is already this
+   * student's guardian here. The last one used to succeed silently — and
+   * rotate the guardian's token, so the link staff had already sent stopped
+   * working without anyone being told.
    */
   async add(
+    scope: StaffScope,
+    studentId: string,
+    input: { name: string; phone: string; relationship: GuardianRelationship },
+  ) {
+    try {
+      return await this.addOnce(scope, studentId, input);
+    } catch (e) {
+      // Two staff adding the same new parent at the same moment: both saw no
+      // account, one created it, the other hit the unique phone. Once more
+      // finds the account and links to it — the answer the loser should get.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        return this.addOnce(scope, studentId, input);
+      }
+      throw e;
+    }
+  }
+
+  private async addOnce(
     scope: StaffScope,
     studentId: string,
     input: { name: string; phone: string; relationship: GuardianRelationship },
@@ -98,7 +122,11 @@ export class GuardianService {
     const phone = normalizeEgyptianPhone(input.phone);
     const name = input.name.trim();
     if (!name)
-      throw new BadRequestException({ message: 'Name is required', code: 'NAME_REQUIRED' });
+      throw new BadRequestException({
+        message: 'Name is required',
+        code: 'NAME_REQUIRED',
+        field: 'name',
+      });
     const student = await this.prisma.studentProfile.findUnique({
       where: { id: studentId },
       select: { user: { select: { phone: true } } },
@@ -107,6 +135,7 @@ export class GuardianService {
       throw new BadRequestException({
         message: 'That is the student’s own number',
         code: 'GUARDIAN_IS_STUDENT',
+        field: 'phone',
       });
     }
     const existing = await this.prisma.user.findUnique({
@@ -114,11 +143,33 @@ export class GuardianService {
       select: { id: true, role: true, guardian: { select: { id: true } } },
     });
     if (existing && existing.role !== Role.GUARDIAN) {
+      // Which kind of account is deliberately not said: staff could otherwise
+      // probe any number for "is this a teacher on Darsly".
       throw new ConflictException({
         message:
           'This phone number already belongs to another Darsly account, which cannot be a guardian account too',
         code: 'PHONE_IN_USE',
+        field: 'phone',
       });
+    }
+    if (existing?.guardian) {
+      const current = await this.prisma.guardianLink.findUnique({
+        where: {
+          guardianId_studentId_academyId: {
+            guardianId: existing.guardian.id,
+            studentId,
+            academyId: scope.ctx.academyId,
+          },
+        },
+        select: { status: true },
+      });
+      if (current?.status === 'ACTIVE') {
+        throw new ConflictException({
+          message: 'This guardian is already linked to this student',
+          code: 'GUARDIAN_ALREADY_LINKED',
+          field: 'phone',
+        });
+      }
     }
     const { link, raw } = await this.prisma.$transaction(async (tx) => {
       let guardianId = existing?.guardian?.id;

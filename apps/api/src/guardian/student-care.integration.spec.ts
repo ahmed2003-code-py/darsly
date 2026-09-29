@@ -516,6 +516,72 @@ describe('guardians', () => {
     expect((await guardians.children(a.jwt)).map((c) => c.student.id)).toEqual([w.laila.studentId]);
   });
 
+  it('every refusal on "add guardian" names its own reason and field', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const scope = await scopeOf(w.ahmed.jwt, w.academyId);
+    const add = (ph: string, name = 'Father') =>
+      guardians.add(scope, w.sara.studentId, { name, phone: ph, relationship: 'FATHER' });
+
+    // Adding the same guardian twice is said, not silently turned into a new
+    // link — which used to revoke the one staff had already sent.
+    const first = await linkGuardian(w, w.sara.studentId);
+    await expect(add(first.phone)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'GUARDIAN_ALREADY_LINKED', field: 'phone' },
+    });
+    const tokens = await prisma.guardianAccessToken.count({
+      where: { linkId: first.link.id, revokedAt: null },
+    });
+    expect(tokens).toBe(1);
+    expect((await guardians.consume(first.token, {})).accessToken).toBeTruthy();
+
+    // A removed guardian can be added back: that is not a conflict.
+    await guardians.revoke(scope, first.link.id);
+    const back = await add(first.phone);
+    expect(back.id).toBe(first.link.id);
+    expect(back.status).toBe('ACTIVE');
+
+    // Another account's number (here: another student's) — the guardian 409
+    // teachers were shown as "a conflict with existing data".
+    await expect(add(w.laila.phone)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'PHONE_IN_USE', field: 'phone' },
+    });
+    // The student's own number, and a malformed one, are 400s on the phone.
+    await expect(add(w.sara.phone)).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'GUARDIAN_IS_STUDENT', field: 'phone' },
+    });
+    await expect(add('12345')).rejects.toMatchObject({
+      status: 400,
+      response: { code: 'INVALID_PHONE', field: 'phone' },
+    });
+    await expect(add(phone(), '   ')).rejects.toMatchObject({
+      response: { code: 'NAME_REQUIRED', field: 'name' },
+    });
+  });
+
+  it('two staff adding the same new parent at once both succeed, onto one account', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const scope = await scopeOf(w.ahmed.jwt, w.academyId);
+    const ph = phone();
+    const [a, b] = await Promise.all([
+      guardians.add(scope, w.sara.studentId, { name: 'Father', phone: ph, relationship: 'FATHER' }),
+      guardians.add(scope, w.laila.studentId, {
+        name: 'Father',
+        phone: ph,
+        relationship: 'FATHER',
+      }),
+    ]);
+    const links = await prisma.guardianLink.findMany({
+      where: { id: { in: [a.id, b.id] } },
+      select: { guardianId: true },
+    });
+    expect(new Set(links.map((l) => l.guardianId)).size).toBe(1);
+  });
+
   it('cross-academy and existing-account isolation', async () => {
     if (!guard()) return;
     const w = await world();

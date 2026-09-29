@@ -13,7 +13,7 @@ import { RedisModule } from './redis/redis.module';
 import { RedisService } from './redis/redis.service';
 import { RedisThrottlerStorageService } from './redis/redis-throttler-storage.service';
 import { CatalogModule } from './catalog/catalog.module';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { ApiExceptionFilter } from './common/errors/api-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { PrismaService } from './prisma/prisma.service';
@@ -149,11 +149,10 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     { provide: APP_GUARD, useClass: UserThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
-    // Turns an uncaught database constraint into the refusal it actually is,
-    // instead of the 500 Nest's default filter gives a non-HttpException.
-    // Scoped to Prisma errors alone, so nothing that already throws an
-    // HttpException is affected — see the filter for the full reasoning.
-    { provide: APP_FILTER, useClass: PrismaExceptionFilter },
+    // Every error leaves in one envelope — { code, message, retryable, requestId }
+    // — with Prisma constraint violations mapped and unexpected failures logged
+    // with their stack. See common/errors/api-exception.filter.ts and docs/ERRORS.md.
+    { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],
 })
 export class AppModule implements NestModule {

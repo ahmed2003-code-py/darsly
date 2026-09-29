@@ -307,7 +307,13 @@ export class AuthService {
   /** Email / phone / username + password login for everyone. */
   async login(dto: LoginDto, device: DeviceContext) {
     const handle = (dto.identifier ?? dto.email ?? '').trim();
-    if (!handle) throw new UnauthorizedException('Invalid credentials');
+    // One code for "no such account" and "wrong password" alike — which one it
+    // was must stay unknowable from outside.
+    if (!handle)
+      throw new UnauthorizedException({
+        message: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS',
+      });
     const user = await this.prisma.user.findUnique({
       where: this.resolveIdentifier(handle),
       include: { teacherProfile: true, studentProfile: true },
@@ -326,7 +332,10 @@ export class AuthService {
     const ok = await argon2.verify(user?.passwordHash ?? (await this.dummyHash), dto.password);
     if (!user || !user.passwordHash || !ok) {
       if (user?.isActive) await this.recordFailedLogin(user.id, user.failedLogins);
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException({
+        message: 'Invalid credentials',
+        code: 'INVALID_CREDENTIALS',
+      });
     }
 
     this.assertLoginAllowed(user);

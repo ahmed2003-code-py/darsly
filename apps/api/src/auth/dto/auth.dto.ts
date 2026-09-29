@@ -309,6 +309,7 @@ export function normalizeEgyptianPhone(raw: string): string {
     throw new BadRequestException({
       message: 'phone must be a valid Egyptian mobile number',
       code: 'INVALID_PHONE',
+      field: 'phone',
     });
   }
   return `+20${match[1]}`;

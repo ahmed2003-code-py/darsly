@@ -124,6 +124,8 @@ export class AiJobService {
       throw new ServiceUnavailableException({
         message: 'Monthly AI budget reached — try again next month',
         code: 'AI_BUDGET_REACHED',
+        // A 503 defaults to retryable; a spent monthly budget is not.
+        retryable: false,
       });
     }
   }

@@ -257,27 +257,38 @@ export class ChallengesService {
     });
     if (!challenge) throw new NotFoundException('Challenge not found');
 
+    // Each problem twice: an English line for logs and API clients (`errors`,
+    // unchanged), and a code the web words in the teacher's language (`issues`).
     const errors: string[] = [];
-    if (!challenge.title.trim()) errors.push('Title is required');
-    if (!challenge.questions.length) errors.push('Add at least one question');
+    const issues: { code: string; params?: { n: number } }[] = [];
+    const add = (code: string, text: string, n?: number) => {
+      errors.push(n === undefined ? text : `Question ${n}: ${text}`);
+      issues.push(n === undefined ? { code } : { code, params: { n } });
+    };
+    if (!challenge.title.trim()) add('TITLE_REQUIRED', 'Title is required');
+    if (!challenge.questions.length) add('NO_QUESTIONS', 'Add at least one question');
     for (const q of challenge.questions) {
+      const n = q.sortOrder + 1;
       const options = Array.isArray(q.options) ? (q.options as { id: string }[]) : [];
-      if (!q.prompt.trim()) errors.push(`Question ${q.sortOrder + 1}: prompt is empty`);
+      if (!q.prompt.trim()) add('PROMPT_EMPTY', 'prompt is empty', n);
       if (q.type !== 'SHORT_ANSWER' && options.length < 2) {
-        errors.push(`Question ${q.sortOrder + 1}: needs at least 2 options`);
+        add('TOO_FEW_OPTIONS', 'needs at least 2 options', n);
       }
       if (q.type !== 'SHORT_ANSWER' && !q.correctOptionIds.length) {
-        errors.push(`Question ${q.sortOrder + 1}: no correct answer set`);
+        add('NO_CORRECT_ANSWER', 'no correct answer set', n);
       }
       if (q.correctOptionIds.some((id) => !options.some((o) => o.id === id))) {
-        errors.push(`Question ${q.sortOrder + 1}: correct answer does not match its options`);
+        add('ANSWER_NOT_IN_OPTIONS', 'correct answer does not match its options', n);
       }
-      if (q.points < 1) errors.push(`Question ${q.sortOrder + 1}: points must be positive`);
+      if (q.points < 1) add('POINTS_NOT_POSITIVE', 'points must be positive', n);
     }
     if (challenge.scoring === 'SPEED_BASED' && !challenge.questionTimeSec) {
       const anyPerQuestionTimer = challenge.questions.some((q) => q.timeLimitSec != null);
       if (!anyPerQuestionTimer) {
-        errors.push('Speed-based scoring needs a question timer (default or per-question)');
+        add(
+          'SPEED_NEEDS_TIMER',
+          'Speed-based scoring needs a question timer (default or per-question)',
+        );
       }
     }
     if (errors.length) {
@@ -285,6 +296,7 @@ export class ChallengesService {
         message: 'Challenge is not ready to publish',
         code: 'CHALLENGE_INVALID',
         errors,
+        issues,
       });
     }
 

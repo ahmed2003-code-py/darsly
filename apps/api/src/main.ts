@@ -8,6 +8,8 @@ import { AppModule } from './app.module';
 import { JSON_BODY_LIMIT } from './common/validation';
 import { AppLogger } from './common/app-logger';
 import { validateConfig } from './common/config.validation';
+import { bodyParserErrors } from './common/errors/body-parser-errors';
+import { VALIDATION_PIPE_OPTIONS } from './common/errors/validation-exception.factory';
 import { requestIdMiddleware } from './common/request-context';
 import { configureRouting } from './common/routing';
 import { RedisIoAdapter } from './redis/redis-io.adapter';
@@ -63,16 +65,23 @@ async function bootstrap() {
   // the largest field cap; validation, not body-parser, decides what's too big.
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ limit: JSON_BODY_LIMIT, extended: true }));
+  // Their failures (too large, malformed) never reach Nest's filters.
+  app.use(bodyParserErrors);
 
   const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
     .split(',')
     .map((o) => o.trim());
-  app.enableCors({ origin: allowedOrigins, credentials: true });
+  // X-Request-Id and Retry-After are read by the web's error resolver (the
+  // reference number on an unexpected error, the wait on a 429). Same-origin
+  // in production; exposed so a cross-origin dev setup behaves the same.
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    exposedHeaders: ['X-Request-Id', 'Retry-After'],
+  });
 
   configureRouting(app);
-  app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
-  );
+  app.useGlobalPipes(new ValidationPipe(VALIDATION_PIPE_OPTIONS));
 
   // Rooms/broadcasts fan out across every Railway replica via Redis pub/sub —
   // see redis/redis-io.adapter.ts. Falls open to the default in-memory

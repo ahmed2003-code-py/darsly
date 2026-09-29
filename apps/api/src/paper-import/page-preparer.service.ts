@@ -142,10 +142,12 @@ export class PdfHandle {
   async pageCount(): Promise<number> {
     const { stdout } = await execFileAsync('pdfinfo', [this.file], { timeout: 30_000 }).catch(
       (e: Error) => {
+        // The tool's own words name server paths — the log gets them, the
+        // caller gets the code.
+        this.logger.warn(`pdfinfo refused a file: ${e.message.slice(0, 300)}`);
         throw new BadRequestException({
           message: 'That PDF could not be read',
           code: 'PAPER_PDF_UNREADABLE',
-          detail: e.message.slice(0, 200),
         });
       },
     );
@@ -188,10 +190,11 @@ export class PdfHandle {
       const rendered = await fs.readFile(`${out}.jpg`);
       return await this.preparer.normalizeImage(rendered);
     } catch (e) {
+      this.logger.warn(`pdftoppm page ${pageNumber} failed: ${(e as Error).message.slice(0, 300)}`);
       throw new BadRequestException({
         message: `Page ${pageNumber} of that PDF could not be rendered`,
         code: 'PAPER_PDF_PAGE_FAILED',
-        detail: (e as Error).message.slice(0, 200),
+        params: { page: pageNumber },
       });
     } finally {
       await fs.unlink(`${out}.jpg`).catch(() => undefined);

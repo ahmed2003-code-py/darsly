@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, UseFilters } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -15,6 +15,7 @@ import { ChatService } from '../chat/chat.service';
 import { RealtimeService } from './realtime.service';
 import { LiveService } from '../live/live.service';
 import { isReaction, ReactionLimiter } from '../live/live-reactions';
+import { WsExceptionFilter } from './ws-exception.filter';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
   .split(',')
@@ -27,6 +28,7 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? 'http://localhost:5173')
  * gateway is transport only.
  */
 @WebSocketGateway({ cors: { origin: allowedOrigins, credentials: true } })
+@UseFilters(new WsExceptionFilter())
 export class ChatGateway implements OnGatewayInit, OnGatewayConnection {
   private readonly logger = new Logger(ChatGateway.name);
 

@@ -1728,6 +1728,7 @@ export class ChatService {
       throw new BadRequestException({
         message: `At most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message`,
         code: 'TOO_MANY_ATTACHMENTS',
+        params: { max: MAX_ATTACHMENTS_PER_MESSAGE },
       });
     }
     if (!body && !attachmentIds.length) throw new BadRequestException('Empty message');
@@ -1830,6 +1831,7 @@ export class ChatService {
             throw new BadRequestException({
               message: `At most ${MAX_ATTACHMENTS_PER_MESSAGE} files per message`,
               code: 'TOO_MANY_ATTACHMENTS',
+              params: { max: MAX_ATTACHMENTS_PER_MESSAGE },
             });
           }
         }

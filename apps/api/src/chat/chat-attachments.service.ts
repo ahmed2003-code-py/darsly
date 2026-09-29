@@ -185,6 +185,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException({
           message: 'You have reached today’s upload limit',
           code: 'UPLOAD_QUOTA',
+          params: { max: Math.round(CHAT_DAILY_UPLOAD_BYTES / 1024 / 1024) },
         });
       }
 
@@ -209,6 +210,7 @@ export class ChatAttachmentsService implements OnModuleInit, OnModuleDestroy {
         throw new BadRequestException({
           message: `The file is larger than ${Math.round(max / 1024 / 1024)} MB`,
           code: 'ATTACHMENT_TOO_LARGE',
+          params: { max: Math.round(max / 1024 / 1024), mb: Math.ceil(file.size / 1024 / 1024) },
         });
       }
 

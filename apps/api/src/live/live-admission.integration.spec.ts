@@ -3,7 +3,13 @@ import { databaseReady } from '../common/testing/db-available';
 import { PrismaService } from '../prisma/prisma.service';
 import { LiveAdmissionService } from './admission/live-admission.service';
 import { assertLedgerBalanced, commerceStack, commerceWorld, fundWallet } from './commerce/testing';
-import { classroom, classroomWorld, codeOf, confirmedGuest, type ClassroomWorld } from './testing/classroom';
+import {
+  classroom,
+  classroomWorld,
+  codeOf,
+  confirmedGuest,
+  type ClassroomWorld,
+} from './testing/classroom';
 
 /**
  * Live V1 Phase F on a real PostgreSQL: "طلب الانضمام". Capacity keeps its
@@ -38,13 +44,16 @@ async function fullFreeClass() {
   const admission = new LiveAdmissionService(prisma, c.live, c.realtime as never, n as never);
   const extra = [];
   for (let i = 0; i < 2; i++) {
-    const u = await prisma.user.create({ data: { role: 'STUDENT', fullName: `X${i} ${w.k}`, email: `adm${i}-${w.k}@it.test` } });
+    const u = await prisma.user.create({
+      data: { role: 'STUDENT', fullName: `X${i} ${w.k}`, email: `adm${i}-${w.k}@it.test` },
+    });
     const sp = await prisma.studentProfile.create({ data: { userId: u.id } });
     extra.push({ user: u, sp });
   }
   return { w, c, admission, notes: n, extra };
 }
-const bookingsOf = (w: ClassroomWorld) => prisma.liveBooking.count({ where: { sessionId: w.ls.id } });
+const bookingsOf = (w: ClassroomWorld) =>
+  prisma.liveBooking.count({ where: { sessionId: w.ls.id } });
 
 describe('FREE class, full', () => {
   it('ask → approve: a seat past the full capacity; capacity unchanged; the next student is still refused', async () => {
@@ -55,9 +64,13 @@ describe('FREE class, full', () => {
     const r = await admission.request(A.user.id, w.ls.id);
     expect(r).toMatchObject({ status: 'PENDING', attempts: 1 });
     expect(n.create).toHaveBeenCalledTimes(1); // the teacher is told
-    expect(c.events).toContainEqual(expect.objectContaining({ to: 'user', id: w.teacher.id, event: 'live:admissions' }));
+    expect(c.events).toContainEqual(
+      expect.objectContaining({ to: 'user', id: w.teacher.id, event: 'live:admissions' }),
+    );
     // Not in the class before approval.
-    expect(await codeOf(c.live.assertInSession(A.user.id, w.ls.id))).toBe('You are not in this session');
+    expect(await codeOf(c.live.assertInSession(A.user.id, w.ls.id))).toBe(
+      'You are not in this session',
+    );
     const d = await admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE');
     expect(d).toMatchObject({ status: 'USED', alreadyDecided: false });
     expect((await c.live.assertInSession(A.user.id, w.ls.id)).role).toBe('STUDENT');
@@ -68,7 +81,14 @@ describe('FREE class, full', () => {
     expect(detail.seats).toMatchObject({ capacity: 3, taken: 4, exceptions: 1 });
     // The exception was A's alone.
     expect(await codeOf(c.live.book(B.user.id, w.ls.id))).toBe('SESSION_FULL');
-    expect(c.events).toContainEqual(expect.objectContaining({ to: 'user', id: A.user.id, event: 'live:admission', payload: { sessionId: w.ls.id, status: 'USED' } }));
+    expect(c.events).toContainEqual(
+      expect.objectContaining({
+        to: 'user',
+        id: A.user.id,
+        event: 'live:admission',
+        payload: { sessionId: w.ls.id, status: 'USED' },
+      }),
+    );
   });
 
   it('only when full; asking twice is one request; a guest cannot ask; an outsider to a group class cannot ask', async () => {
@@ -94,10 +114,14 @@ describe('FREE class, full', () => {
     if (!guard()) return;
     const { w, admission, extra } = await fullFreeClass();
     const r = await admission.request(extra[0].user.id, w.ls.id);
-    const out = await Promise.all([1, 2, 3].map(() => admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')));
+    const out = await Promise.all(
+      [1, 2, 3].map(() => admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')),
+    );
     expect(out.filter((o) => !o.alreadyDecided)).toHaveLength(1);
     expect(out.every((o) => o.status === 'USED')).toBe(true);
-    expect(await prisma.liveBooking.count({ where: { sessionId: w.ls.id, studentId: extra[0].sp.id } })).toBe(1);
+    expect(
+      await prisma.liveBooking.count({ where: { sessionId: w.ls.id, studentId: extra[0].sp.id } }),
+    ).toBe(1);
   });
 
   it('reject → ask again only after the wait, and at most three times', async () => {
@@ -108,7 +132,11 @@ describe('FREE class, full', () => {
     await admission.decide(w.teacher.id, w.ls.id, r!.id, 'REJECT');
     expect(await admission.mine(u, w.ls.id)).toMatchObject({ status: 'REJECTED' });
     expect(await codeOf(admission.request(u, w.ls.id))).toBe('ADMISSION_COOLDOWN');
-    const past = () => prisma.liveAdmissionRequest.update({ where: { id: r!.id }, data: { decidedAt: new Date(Date.now() - 10 * 60_000) } });
+    const past = () =>
+      prisma.liveAdmissionRequest.update({
+        where: { id: r!.id },
+        data: { decidedAt: new Date(Date.now() - 10 * 60_000) },
+      });
     await past();
     r = await admission.request(u, w.ls.id);
     expect(r).toMatchObject({ status: 'PENDING', attempts: 2 });
@@ -129,7 +157,10 @@ describe('FREE class, full', () => {
     expect(await c.live.book(extra[0].user.id, w.ls.id)).toMatchObject({ ok: true });
     expect(await admission.mine(extra[0].user.id, w.ls.id)).toMatchObject({ status: 'CANCELLED' });
     // Approving it now changes nothing.
-    expect(await admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')).toMatchObject({ status: 'CANCELLED', alreadyDecided: true });
+    expect(await admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')).toMatchObject({
+      status: 'CANCELLED',
+      alreadyDecided: true,
+    });
     expect(await bookingsOf(w)).toBe(3);
   });
 
@@ -139,7 +170,10 @@ describe('FREE class, full', () => {
     const r = await admission.request(extra[0].user.id, w.ls.id);
     await c.live.endSession(w.ls.id, 'MANUAL');
     expect(await admission.mine(extra[0].user.id, w.ls.id)).toMatchObject({ status: 'EXPIRED' });
-    expect(await admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')).toMatchObject({ status: 'EXPIRED', alreadyDecided: true });
+    expect(await admission.decide(w.teacher.id, w.ls.id, r!.id, 'APPROVE')).toMatchObject({
+      status: 'EXPIRED',
+      alreadyDecided: true,
+    });
     expect(await codeOf(admission.request(extra[1].user.id, w.ls.id))).toBe('SESSION_ENDED');
   });
 
@@ -147,10 +181,18 @@ describe('FREE class, full', () => {
     if (!guard()) return;
     const { w, c, admission, extra } = await fullFreeClass();
     const r = await admission.request(extra[0].user.id, w.ls.id);
-    expect(await codeOf(admission.decide(w.assistant.id, w.ls.id, r!.id, 'APPROVE'))).toBe('NOT_A_MODERATOR');
-    expect(await codeOf(admission.decide(w.s[0].id, w.ls.id, r!.id, 'APPROVE'))).toBe('NOT_A_MODERATOR');
+    expect(await codeOf(admission.decide(w.assistant.id, w.ls.id, r!.id, 'APPROVE'))).toBe(
+      'NOT_A_MODERATOR',
+    );
+    expect(await codeOf(admission.decide(w.s[0].id, w.ls.id, r!.id, 'APPROVE'))).toBe(
+      'NOT_A_MODERATOR',
+    );
     const st = await c.rtc.state(w.teacher.id, w.ls.id);
-    expect(st.admissions).toMatchObject({ capacity: 3, exceptions: 0, requests: [expect.objectContaining({ id: r!.id, status: 'PENDING' })] });
+    expect(st.admissions).toMatchObject({
+      capacity: 3,
+      exceptions: 0,
+      requests: [expect.objectContaining({ id: r!.id, status: 'PENDING' })],
+    });
     expect((await c.rtc.state(w.s[0].id, w.ls.id)).admissions).toBeUndefined();
   });
 });
@@ -161,26 +203,48 @@ describe('PAID class, full: approval is never payment', () => {
     const S = commerceStack(prisma);
     const w = await commerceWorld(prisma, { students: 3, capacity: 1, priceCents: 10_000 });
     const [A, B, C] = w.students;
-    const admission = new LiveAdmissionService(prisma, S.live, { emitToLive: () => undefined, emitToUser: () => undefined } as never, notes() as never);
+    const admission = new LiveAdmissionService(
+      prisma,
+      S.live,
+      { emitToLive: () => undefined, emitToUser: () => undefined } as never,
+      notes() as never,
+    );
     // A holds the only seat.
     await S.commerce.hold(A.user.id, w.session.id);
     expect(await codeOf(S.commerce.hold(B.user.id, w.session.id))).toBe('SESSION_FULL');
     const r = await admission.request(B.user.id, w.session.id);
-    expect(await admission.decide(w.teacher.id, w.session.id, r!.id, 'APPROVE')).toMatchObject({ status: 'APPROVED' });
+    // Only asked, not approved: still full for B.
+    expect(await codeOf(S.commerce.hold(B.user.id, w.session.id))).toBe('SESSION_FULL');
+    expect(await admission.decide(w.teacher.id, w.session.id, r!.id, 'APPROVE')).toMatchObject({
+      status: 'APPROVED',
+    });
     // Approved is not a seat: no booking, not in the class, and the free path stays shut.
-    expect(await prisma.liveBooking.count({ where: { sessionId: w.session.id, studentId: B.sp.id } })).toBe(0);
-    expect(await codeOf(S.live.assertInSession(B.user.id, w.session.id))).toBe('You are not in this session');
+    expect(
+      await prisma.liveBooking.count({ where: { sessionId: w.session.id, studentId: B.sp.id } }),
+    ).toBe(0);
+    expect(await codeOf(S.live.assertInSession(B.user.id, w.session.id))).toBe(
+      'You are not in this session',
+    );
     expect(await codeOf(S.live.book(B.user.id, w.session.id))).toBe('PAID_SESSION_NEEDS_PURCHASE');
     // The ordinary purchase, past the full check — and paid.
     const before = await prisma.ledgerTransaction.count();
     await fundWallet(prisma, S.ledger, B.sp.id, 50_000);
     const paid = await S.commerce.payWithWallet(B.user.id, w.session.id);
     expect(paid).toMatchObject({ status: 'CONFIRMED' });
-    expect(await prisma.liveBooking.count({ where: { sessionId: w.session.id, studentId: B.sp.id } })).toBe(1);
+    expect(
+      await prisma.liveBooking.count({ where: { sessionId: w.session.id, studentId: B.sp.id } }),
+    ).toBe(1);
     const used = await prisma.liveAdmissionRequest.findUniqueOrThrow({ where: { id: r!.id } });
     expect(used).toMatchObject({ status: 'USED', purchaseId: paid.id });
-    const txns = await prisma.ledgerTransaction.findMany({ orderBy: { createdAt: 'asc' }, skip: before, select: { id: true } });
-    await assertLedgerBalanced(prisma, txns.map((t) => t.id));
+    const txns = await prisma.ledgerTransaction.findMany({
+      orderBy: { createdAt: 'asc' },
+      skip: before,
+      select: { id: true },
+    });
+    await assertLedgerBalanced(
+      prisma,
+      txns.map((t) => t.id),
+    );
     // The exception was B's and is spent: C is refused, and so is B again.
     expect(await codeOf(S.commerce.hold(C.user.id, w.session.id))).toBe('SESSION_FULL');
     expect(await codeOf(admission.request(B.user.id, w.session.id))).toBe('ALREADY_BOOKED');
@@ -191,7 +255,12 @@ describe('PAID class, full: approval is never payment', () => {
     const S = commerceStack(prisma);
     const w = await commerceWorld(prisma, { students: 3, capacity: 1, priceCents: 10_000 });
     const [A, B, C] = w.students;
-    const admission = new LiveAdmissionService(prisma, S.live, { emitToLive: () => undefined, emitToUser: () => undefined } as never, notes() as never);
+    const admission = new LiveAdmissionService(
+      prisma,
+      S.live,
+      { emitToLive: () => undefined, emitToUser: () => undefined } as never,
+      notes() as never,
+    );
     await fundWallet(prisma, S.ledger, A.sp.id, 50_000);
     await S.commerce.payWithWallet(A.user.id, w.session.id); // the one seat, taken
     const r = await admission.request(B.user.id, w.session.id);
@@ -207,7 +276,10 @@ describe('PAID class, full: approval is never payment', () => {
       proofImageUrl: 'data:x',
     });
     expect(pend.status).toBe('PAYMENT_PENDING');
-    await prisma.livePurchase.update({ where: { id: hold.id }, data: { holdExpiresAt: new Date(Date.now() - 1000) } });
+    await prisma.livePurchase.update({
+      where: { id: hold.id },
+      data: { holdExpiresAt: new Date(Date.now() - 1000) },
+    });
     const matched = await S.matching.ingest({
       provider: 'VODAFONE_CASH',
       amountCents: hold.studentPaysCents,
@@ -216,8 +288,12 @@ describe('PAID class, full: approval is never payment', () => {
       identities: [phone],
     });
     expect(matched.status).toBe('MATCHED');
-    expect((await prisma.livePurchase.findUniqueOrThrow({ where: { id: hold.id } })).status).toBe('CONFIRMED');
-    expect(await prisma.liveAdmissionRequest.findUniqueOrThrow({ where: { id: r!.id } })).toMatchObject({ status: 'USED', purchaseId: hold.id });
+    expect((await prisma.livePurchase.findUniqueOrThrow({ where: { id: hold.id } })).status).toBe(
+      'CONFIRMED',
+    );
+    expect(
+      await prisma.liveAdmissionRequest.findUniqueOrThrow({ where: { id: r!.id } }),
+    ).toMatchObject({ status: 'USED', purchaseId: hold.id });
     // C, never approved, cannot ride on B's exception.
     expect(await codeOf(S.commerce.hold(C.user.id, w.session.id))).toBe('SESSION_FULL');
   });
@@ -227,15 +303,26 @@ describe('PAID class, full: approval is never payment', () => {
     const S = commerceStack(prisma);
     const w = await commerceWorld(prisma, { students: 2, capacity: 1, priceCents: 10_000 });
     const [A, B] = w.students;
-    const admission = new LiveAdmissionService(prisma, S.live, { emitToLive: () => undefined, emitToUser: () => undefined } as never, notes() as never);
+    const admission = new LiveAdmissionService(
+      prisma,
+      S.live,
+      { emitToLive: () => undefined, emitToUser: () => undefined } as never,
+      notes() as never,
+    );
     const a = await S.commerce.hold(A.user.id, w.session.id);
     const r = await admission.request(B.user.id, w.session.id);
     await Promise.all([
       admission.decide(w.teacher.id, w.session.id, r!.id, 'APPROVE'),
-      prisma.livePurchase.update({ where: { id: a.id }, data: { holdExpiresAt: new Date(Date.now() - 1000) } }).then(() => S.commerce.expireHolds()),
+      prisma.livePurchase
+        .update({ where: { id: a.id }, data: { holdExpiresAt: new Date(Date.now() - 1000) } })
+        .then(() => S.commerce.expireHolds()),
     ]);
     const holds = await Promise.all([1, 2, 3].map(() => S.commerce.hold(B.user.id, w.session.id)));
     expect(new Set(holds.map((h) => h.id)).size).toBe(1);
-    expect(await prisma.livePurchase.count({ where: { sessionId: w.session.id, studentId: B.sp.id, status: 'HELD' } })).toBe(1);
+    expect(
+      await prisma.livePurchase.count({
+        where: { sessionId: w.session.id, studentId: B.sp.id, status: 'HELD' },
+      }),
+    ).toBe(1);
   });
 });

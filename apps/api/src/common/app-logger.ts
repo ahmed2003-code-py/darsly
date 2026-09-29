@@ -16,6 +16,14 @@ import { currentRequestId } from './request-context';
  * framework would also mean routing every existing `Logger` call in 37 files
  * through something new.
  */
+/**
+ * Boot chatter: one line per module and per route (~500 lines in a second).
+ * Railway caps a replica at 500 lines/s and DROPS the excess — at every boot it
+ * dropped 100+ lines, including the "listening" line, which is exactly where
+ * a startup failure would be reported. Their warnings and errors still print.
+ */
+const BOOT_CHATTER = new Set(['RouterExplorer', 'RoutesResolver', 'InstanceLoader']);
+
 export class AppLogger extends ConsoleLogger {
   private readonly asJson = process.env.NODE_ENV === 'production';
 
@@ -39,6 +47,7 @@ export class AppLogger extends ConsoleLogger {
       return;
     }
 
+    if (logLevel === 'log' && BOOT_CHATTER.has(context)) return;
     for (const message of messages) {
       const line = JSON.stringify({
         level: logLevel,

@@ -42,6 +42,20 @@ describe('AppLogger', () => {
       return new AppLogger();
     }
 
+    it('drops per-route/per-module boot lines (Railway drops the excess), keeps their warnings', () => {
+      const logger = prodLogger();
+      const lines = capture(() => {
+        logger.log('Mapped {/api/x, GET} route', 'RouterExplorer');
+        logger.log('XModule dependencies initialized', 'InstanceLoader');
+        logger.warn('something odd while mapping', 'RouterExplorer');
+        logger.log('Nest application successfully started', 'NestApplication');
+      });
+      expect(lines.map((l) => JSON.parse(l).message)).toEqual([
+        'something odd while mapping',
+        'Nest application successfully started',
+      ]);
+    });
+
     it('emits one JSON object per line, carrying the request id', () => {
       const logger = prodLogger();
 

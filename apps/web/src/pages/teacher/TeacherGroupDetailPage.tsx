@@ -16,9 +16,12 @@ import {
 import { Badge, EmptyState, ErrorNote, Modal, Skeleton } from '../../components/ui';
 import { askConfirm } from '../../lib/confirm';
 import { confirmDelete } from '../../lib/confirm';
+import { useClassAccess } from '../../lib/classOps';
+import { GroupClassesTab, GroupTimetableTab, TransferDialog } from '../classes/GroupClassOps';
 
 const TABS = ['students', 'staff', 'attendance'] as const;
-type Tab = (typeof TABS)[number];
+/** With classes on (C2): the class tabs, and the date-based sheet one tap away. */
+type Tab = (typeof TABS)[number] | 'classes' | 'timetable';
 
 // Literal, greppable class strings — Tailwind's JIT scanner can't see classes
 // assembled at runtime via template interpolation. Same token set as Badge's
@@ -38,12 +41,14 @@ const STATUS_DOT_CLASS: Record<string, string> = {
   EXCUSED: 'bg-outline',
 };
 
-function StudentsTab({ groupId }: { groupId: string }) {
+function StudentsTab({ groupId, canTransfer }: { groupId: string; canTransfer: boolean }) {
   const { t } = useTranslation();
   const { data } = useGroupDetail(groupId);
   const removeMember = useRemoveGroupMember(groupId);
   const addMembers = useAddGroupMembers(groupId);
   const [showAdd, setShowAdd] = useState(false);
+  const [moving, setMoving] = useState<{ studentId: string; fullName: string } | null>(null);
+  const full = data?.capacity != null && data.members.length >= data.capacity;
   const [search, setSearch] = useState('');
   const { data: roster } = useRoster({ search, page: 1, pageSize: 20 });
   const memberIds = useMemo(() => new Set(data?.members.map((m) => m.studentId)), [data]);
@@ -51,8 +56,24 @@ function StudentsTab({ groupId }: { groupId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex justify-end">
-        <button className="btn-secondary px-4 py-2 text-sm" onClick={() => setShowAdd(true)}>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3">
+        {data?.capacity != null && (
+          <span
+            className={`me-auto inline-flex items-center gap-1 text-sm ${full ? 'font-semibold text-error' : 'text-on-surface-variant'}`}
+          >
+            <span className="material-symbols-outlined text-base" aria-hidden>
+              event_seat
+            </span>
+            {full
+              ? t('groupConfig.full', { count: data.capacity })
+              : t('groupConfig.seatsOf', { seated: data.members.length, count: data.capacity })}
+          </span>
+        )}
+        <button
+          className="btn-secondary min-h-11 px-4 py-2 text-sm"
+          onClick={() => setShowAdd(true)}
+          disabled={full}
+        >
           <span className="material-symbols-outlined align-middle text-lg">person_add</span>{' '}
           {t('groups.addStudents')}
         </button>
@@ -71,13 +92,23 @@ function StudentsTab({ groupId }: { groupId: string }) {
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-heading font-bold">{m.fullName}</p>
+                <p className="truncate font-heading font-bold">
+                  <bdi>{m.fullName}</bdi>
+                </p>
                 <p className="truncate text-xs text-outline" dir="ltr">
                   {m.email}
                 </p>
               </div>
+              {canTransfer && (
+                <button
+                  className="min-h-11 rounded-lg border border-outline-variant px-3 py-1.5 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
+                  onClick={() => setMoving({ studentId: m.studentId, fullName: m.fullName })}
+                >
+                  {t('transfer.short')}
+                </button>
+              )}
               <button
-                className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
+                className="min-h-11 rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
                 onClick={async () =>
                   (await confirmDelete({ kind: 'remove', name: m.fullName })) &&
                   removeMember.mutate(m.studentId)
@@ -89,6 +120,9 @@ function StudentsTab({ groupId }: { groupId: string }) {
             </div>
           ))}
         </div>
+      )}
+      {moving && (
+        <TransferDialog groupId={groupId} student={moving} onClose={() => setMoving(null)} />
       )}
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)} title={t('groups.addStudents')}>
@@ -155,7 +189,7 @@ function StaffTab({ groupId }: { groupId: string }) {
                 {t(`groups.staffRole.${a.role}`)}
               </Badge>
               <button
-                className="rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
+                className="min-h-11 rounded-lg border border-error/40 px-3 py-1.5 text-sm font-bold text-error hover:bg-error-container/40"
                 onClick={async () =>
                   (await confirmDelete({ kind: 'remove', name: a.fullName })) &&
                   unassign.mutate(a.userId)
@@ -433,6 +467,19 @@ export default function TeacherGroupDetailPage() {
   const [tab, setTab] = useState<Tab>('students');
   const { data, isLoading, error } = useGroupDetail(groupId);
   const updateGroup = useUpdateGroup(groupId ?? '');
+  const classAccess = useClassAccess();
+  const ops = classAccess.data?.enabled ? classAccess.data : null;
+  /** Opened from the Classes tab: the date-based sheet, for records from before classes. */
+  const [legacyOpen, setLegacyOpen] = useState(false);
+  const tabs: Tab[] = ops
+    ? [
+        'students',
+        ...(ops.canAttend ? (['classes'] as const) : []),
+        ...(ops.canSchedule ? (['timetable'] as const) : []),
+        'staff',
+        ...(legacyOpen ? (['attendance'] as const) : []),
+      ]
+    : [...TABS];
 
   if (isLoading)
     return (
@@ -451,7 +498,7 @@ export default function TeacherGroupDetailPage() {
     <div className="page">
       <Link
         to="/teacher/groups"
-        className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
+        className="mb-3 inline-flex min-h-11 items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
       >
         <span className="material-symbols-outlined text-lg">arrow_forward</span>
         {t('groups.backToGroups')}
@@ -463,7 +510,7 @@ export default function TeacherGroupDetailPage() {
           {data.status === 'ARCHIVED' && <Badge tone="neutral">{t('groups.archived')}</Badge>}
         </div>
         <button
-          className="rounded-lg border border-outline px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
+          className="min-h-11 rounded-lg border border-outline px-4 py-2 text-sm font-bold text-on-surface-variant hover:bg-surface-container-low"
           onClick={() =>
             updateGroup.mutate({ status: data.status === 'ACTIVE' ? 'ARCHIVED' : 'ACTIVE' })
           }
@@ -475,11 +522,17 @@ export default function TeacherGroupDetailPage() {
 
       <GroupChatCard groupId={groupId!} archived={data.status === 'ARCHIVED'} />
 
-      <div className="mb-6 flex gap-2">
-        {TABS.map((tb) => (
+      {/* One rail; on a phone it scrolls sideways rather than wrapping into rows. */}
+      <div
+        className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
+        role="tablist"
+      >
+        {tabs.map((tb) => (
           <button
             key={tb}
-            className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
+            role="tab"
+            aria-selected={tab === tb}
+            className={`min-h-11 shrink-0 whitespace-nowrap rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
               tab === tb
                 ? 'bg-primary text-on-primary'
                 : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
@@ -491,9 +544,22 @@ export default function TeacherGroupDetailPage() {
         ))}
       </div>
 
-      {tab === 'students' && <StudentsTab groupId={groupId!} />}
+      {tab === 'students' && (
+        <StudentsTab groupId={groupId!} canTransfer={!!ops?.canManageGroups} />
+      )}
       {tab === 'staff' && <StaffTab groupId={groupId!} />}
       {tab === 'attendance' && <AttendanceTab groupId={groupId!} />}
+      {tab === 'classes' && ops && (
+        <GroupClassesTab
+          groupId={groupId!}
+          access={ops}
+          onLegacy={() => {
+            setLegacyOpen(true);
+            setTab('attendance');
+          }}
+        />
+      )}
+      {tab === 'timetable' && ops && <GroupTimetableTab groupId={groupId!} access={ops} />}
     </div>
   );
 }

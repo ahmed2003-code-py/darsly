@@ -23,9 +23,12 @@ import {
   NavItem,
   navFor,
   REGISTRY_ITEM,
+  CLASSES_ITEM,
+  MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
 import { useRegistryAccess } from '../lib/centerStudents';
+import { useClassAccess } from '../lib/classOps';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -98,13 +101,20 @@ export default function Layout({ children }: { children: ReactNode }) {
     : ws.assists && user?.role === Role.TEACHER
       ? [...navFor(user?.role), ASSISTING_ITEM]
       : navFor(user?.role);
-  const baseNav = registry.data?.canView
-    ? [roleNav[0], REGISTRY_ITEM, ...roleNav.slice(1)].filter(Boolean)
-    : roleNav;
+  // Classes (C2): same rule as the register — only where they are on and
+  // this person may take attendance, asked of the same academy.
+  const classes = useClassAccess(staffish);
+  const baseNav = [
+    roleNav[0],
+    ...(classes.data?.canAttend ? [CLASSES_ITEM] : []),
+    ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
+    ...roleNav.slice(1),
+  ].filter(Boolean);
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
   const bottomTabs = (BOTTOM_TABS[assistantMode ? 'ASSISTANT' : (user?.role ?? Role.STUDENT)] ?? [])
     .map((to) => nav.find((n) => n.to === to))
-    .filter((n): n is NavItem => !!n);
+    .filter((n): n is NavItem => !!n)
+    .slice(0, MAX_BOTTOM_TABS);
   const roleLabel =
     user?.role === Role.SUPER_ADMIN
       ? t('layout.adminConsole')

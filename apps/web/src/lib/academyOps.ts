@@ -26,6 +26,8 @@ export interface GroupRow {
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
   studentsCount: number;
+  /** Seats (C2); null = unlimited. */
+  capacity?: number | null;
   staff: { role: 'TEACHER' | 'ASSISTANT'; name: string }[];
 }
 export interface GroupsResult {
@@ -57,6 +59,11 @@ export interface GroupDetail {
   description: string | null;
   status: 'ACTIVE' | 'ARCHIVED';
   createdAt: string;
+  /** C2 class configuration. */
+  subject?: { id: string; nameAr: string; nameEn: string } | null;
+  grade?: { id: string; nameAr: string; nameEn: string } | null;
+  capacity?: number | null;
+  lateGraceMin?: number | null;
   members: GroupMember[];
   assignments: GroupAssignmentRow[];
 }

@@ -38,6 +38,8 @@ const CenterStudioPage = lazyPage(() => import('./pages/center/CenterStudioPage'
 const CenterActivityPage = lazyPage(() => import('./pages/center/CenterActivityPage'));
 const CenterStudentsPage = lazyPage(() => import('./pages/center/CenterStudentsPage'));
 const StudentImportPage = lazyPage(() => import('./pages/center/StudentImportPage'));
+const ClassesTodayPage = lazyPage(() => import('./pages/classes/ClassesTodayPage'));
+const ClassPage = lazyPage(() => import('./pages/classes/ClassPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -751,6 +753,25 @@ export default function App() {
             element={
               <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
                 <CenterStudentsPage />
+              </RequireAuth>
+            }
+          />
+          {/* Classes (Center Operations C2): today's classes and one class's
+              attendance. The page and the API check attendance.mark, the
+              classOperations flag and the group assignment. */}
+          <Route
+            path="/classes"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <ClassesTodayPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/classes/:sessionId"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <ClassPage />
               </RequireAuth>
             }
           />

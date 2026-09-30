@@ -103,6 +103,17 @@ export const REGISTRY_ITEM: NavItem = {
   labelKey: 'nav.centerStudents',
 };
 
+/**
+ * Today's classes (Center Operations C2). Like the register, added by the
+ * layout only where classes are switched on and the viewer may take
+ * attendance (GET /class-ops/access).
+ */
+export const CLASSES_ITEM: NavItem = {
+  to: '/classes',
+  icon: 'co_present',
+  labelKey: 'nav.classes',
+};
+
 /** A teacher who also assists in someone else's academy gets one door to that workspace. */
 export const ASSISTING_ITEM: NavItem = {
   to: '/staff',
@@ -133,12 +144,17 @@ export const ADMIN_NAV: NavItem[] = [
 
 /**
  * The destinations that earn a permanent spot on a phone, per role —
- * everything else stays one tap away behind "more".
+ * everything else stays one tap away behind "more". In order of priority:
+ * the layout keeps the first MAX_BOTTOM_TABS that this person actually has
+ * (an entry that is switched off here simply drops out).
  */
+export const MAX_BOTTOM_TABS = 5;
+
 export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.STUDENT]: ['/', '/my-courses', '/learning', '/messages', '/wallet'],
   [Role.TEACHER]: [
     '/teacher',
+    '/classes',
     '/teacher/courses',
     '/teacher/students',
     '/messages',
@@ -147,12 +163,20 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
   [Role.STAFF]: [
     '/center',
+    '/classes',
     '/center/students',
     '/center/members',
     '/teacher/groups',
     '/teacher/schedule',
   ],
-  ASSISTANT: ['/staff', '/center/students', '/messages', '/staff/grading', '/staff/payments'],
+  ASSISTANT: [
+    '/staff',
+    '/classes',
+    '/center/students',
+    '/messages',
+    '/staff/grading',
+    '/staff/payments',
+  ],
   [Role.GUARDIAN]: ['/guardian', '/messages'],
 };
 

@@ -149,7 +149,7 @@ export default function CenterDashboardPage() {
                 <p className="font-heading text-lg font-bold leading-tight tabular-nums sm:text-xl">
                   {k.value}
                 </p>
-                <p className="truncate text-xs text-outline">{k.label}</p>
+                <p className="line-clamp-2 text-xs leading-snug text-outline">{k.label}</p>
               </div>
             </div>
           ))}

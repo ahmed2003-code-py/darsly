@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,8 +26,10 @@ export class AttendanceService {
           student: { select: { id: true, user: { select: { fullName: true, avatarUrl: true } } } },
         },
       }),
-      this.prisma.attendanceSession.findUnique({
-        where: { groupId_date: { groupId, date: new Date(date) } },
+      // The date-based sheet (C2 occurrence sheets carry a groupSessionId and
+      // are read by occurrence, never by date).
+      this.prisma.attendanceSession.findFirst({
+        where: { groupId, date: new Date(date), groupSessionId: null },
         include: { records: { select: { studentId: true, status: true } } },
       }),
     ]);
@@ -69,11 +72,7 @@ export class AttendanceService {
     }
 
     const date = new Date(dto.date);
-    const session = await this.prisma.attendanceSession.upsert({
-      where: { groupId_date: { groupId, date } },
-      create: { groupId, academyId: ctx.academyId, date, createdBy: ctx.userId },
-      update: {},
-    });
+    const session = await this.legacySheet(ctx, groupId, date);
 
     await this.prisma.$transaction(
       dto.records.map((r) =>
@@ -101,6 +100,28 @@ export class AttendanceService {
     });
 
     return this.sessionFor(ctx, groupId, dto.date);
+  }
+
+  /**
+   * The date-based sheet for (group, date), created on first mark. Its
+   * uniqueness is the partial index over sheets without an occurrence
+   * (migration 20261101100000), which Prisma cannot name as an upsert key —
+   * so: insert, and on the unique violation a concurrent first mark caused,
+   * read the winner's row.
+   */
+  private async legacySheet(ctx: AcademyContext, groupId: string, date: Date) {
+    const where = { groupId, date, groupSessionId: null };
+    const existing = await this.prisma.attendanceSession.findFirst({ where });
+    if (existing) return existing;
+    try {
+      return await this.prisma.attendanceSession.create({
+        data: { groupId, academyId: ctx.academyId, date, createdBy: ctx.userId },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')
+        return this.prisma.attendanceSession.findFirstOrThrow({ where });
+      throw e;
+    }
   }
 
   /** A student's attendance history within this academy. Non-OWNER callers

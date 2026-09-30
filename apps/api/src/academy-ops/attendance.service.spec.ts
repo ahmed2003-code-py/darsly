@@ -16,7 +16,7 @@ function ctx(overrides: Partial<{ academyId: string; userId: string; role: strin
 function makeDeps() {
   const prisma: any = {
     groupMembership: { findMany: jest.fn() },
-    attendanceSession: { findUnique: jest.fn(), upsert: jest.fn() },
+    attendanceSession: { findFirst: jest.fn(), create: jest.fn(), findFirstOrThrow: jest.fn() },
     attendanceRecord: { upsert: jest.fn(), findMany: jest.fn() },
     groupAssignment: { findMany: jest.fn() },
     $transaction: jest.fn((ops: any[]) => Promise.all(ops)),
@@ -40,7 +40,7 @@ describe('AttendanceService', () => {
           records: [{ studentId: 's2', status: 'PRESENT' }],
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
-      expect(prisma.attendanceSession.upsert).not.toHaveBeenCalled();
+      expect(prisma.attendanceSession.create).not.toHaveBeenCalled();
     });
 
     it('checks group access before touching any attendance data', async () => {
@@ -56,15 +56,18 @@ describe('AttendanceService', () => {
       expect(prisma.groupMembership.findMany).not.toHaveBeenCalled();
     });
 
-    it('upserts one session and one record per student, audits with the count', async () => {
+    it('creates the date-based sheet on first mark, one record per student, audits with the count', async () => {
       const { prisma, audit, access } = makeDeps();
       prisma.groupMembership.findMany.mockResolvedValueOnce([
         { studentId: 's1' },
         { studentId: 's2' },
       ]);
-      prisma.attendanceSession.upsert.mockResolvedValue({ id: 'sess1' });
+      // No sheet yet for that date (the first lookup), then sessionFor's re-read.
+      prisma.attendanceSession.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'sess1', records: [] });
+      prisma.attendanceSession.create.mockResolvedValue({ id: 'sess1' });
       prisma.groupMembership.findMany.mockResolvedValueOnce([]); // sessionFor's re-fetch after marking
-      prisma.attendanceSession.findUnique.mockResolvedValue({ id: 'sess1', records: [] });
 
       const svc = new AttendanceService(prisma, access, audit);
       await svc.mark(ctx(), 'g1', {
@@ -75,11 +78,13 @@ describe('AttendanceService', () => {
         ],
       });
 
-      expect(prisma.attendanceSession.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { groupId_date: { groupId: 'g1', date: new Date('2026-09-20') } },
-        }),
-      );
+      // A date-based sheet: never one belonging to a class occurrence (C2).
+      expect(prisma.attendanceSession.findFirst.mock.calls[0][0]).toEqual({
+        where: { groupId: 'g1', date: new Date('2026-09-20'), groupSessionId: null },
+      });
+      expect(prisma.attendanceSession.create).toHaveBeenCalledWith({
+        data: { groupId: 'g1', academyId: 'a1', date: new Date('2026-09-20'), createdBy: 'u1' },
+      });
       expect(prisma.attendanceRecord.upsert).toHaveBeenCalledTimes(2);
       expect(audit.log).toHaveBeenCalledWith(
         expect.objectContaining({

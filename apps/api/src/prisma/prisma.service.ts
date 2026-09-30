@@ -67,6 +67,8 @@ const SOFT_DELETE_MODELS = new Set([
   // comments in schema.prisma); this only hides genuinely deleted rows.
   'Room',
   'GroupSession',
+  // Center Operations C2 — a removed timetable line keeps its past classes.
+  'GroupScheduleSlot',
 ]);
 
 /**

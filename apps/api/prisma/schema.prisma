@@ -82,6 +82,7 @@ model User {
   liveMessages       LiveChatMessage[]
   groupAssignments   GroupAssignment[]
   taughtSessions     GroupSession[]
+  taughtSlots        GroupScheduleSlot[]
   taughtLiveSessions LiveSession[]       @relation("liveSessionTeacher")
   guestBuyer         GuestBuyer?
   guardian           Guardian?
@@ -228,6 +229,13 @@ model Academy {
   // is confirmed. See EnrollmentsService for the exact per-mode behavior.
   enrollmentMode AcademyEnrollmentMode @default(AUTOMATIC)
 
+  // Center Operations C2. A weekly slot "Saturday 18:00" means 18:00 on this
+  // clock (an IANA zone), whatever the server's or the viewer's clock says.
+  timezone     String @default("Africa/Cairo")
+  // Minutes after a class starts before a first check-in counts as LATE. A
+  // group may override it (Group.lateGraceMin).
+  lateGraceMin Int    @default(10)
+
   // Architecture Reset Phase 7 — CENTER only. The share of a course's net
   // price (after the platform fee) that goes to the authoring teacher; the
   // rest is the Center's revenue. A membership may override it. NULL means
@@ -249,6 +257,7 @@ model Academy {
   rooms         Room[]
   groupSessions GroupSession[]
   liveSessions  LiveSession[]
+  scheduleSlots GroupScheduleSlot[]
 
   // Academy Studio (AI site) — Phase 1. All additive.
   siteFacts    AcademyProfileFacts?
@@ -427,12 +436,28 @@ model Group {
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt   DateTime?
 
+  // Center Operations C2 — a physical class's configuration. All optional:
+  // a group that predates C2, or an online-only one, needs none of them, and
+  // a group never needs a Course.
+  subjectId    String?
+  subject      Subject?    @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  gradeId      String?
+  grade        GradeLevel? @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  /// Seats: the most ACTIVE memberships the group may hold. Null = unlimited.
+  /// Enforced in GroupsService.writeMemberships under a lock on this row.
+  capacity     Int?
+  /// Overrides Academy.lateGraceMin for this group's classes. Null = inherit.
+  lateGraceMin Int?
+
   members            GroupMembership[]
   assignments        GroupAssignment[]
   attendanceSessions AttendanceSession[]
   groupSessions      GroupSession[]
   liveSessions       LiveSession[]
   chatThreads        ChatThread[]
+  scheduleSlots      GroupScheduleSlot[]
+  /// Makeup attendance recorded elsewhere for students whose home is this group.
+  makeupRecords      AttendanceRecord[]
 
   @@index([academyId, status])
 }
@@ -440,6 +465,13 @@ model Group {
 // A student's membership in a group. A student may belong to multiple groups.
 // academyId is denormalized (same convention as Enrollment.tenantId) so
 // tenant-scoped queries and isolation checks never need to join through Group.
+//
+// Center Operations C2: one row is one STINT, [addedAt, deletedAt). Leaving
+// ends the stint (the soft delete stamps deletedAt); coming back opens a new
+// row, so who was in the group on any past date stays answerable. At most one
+// open stint per (group, student) and no two stints overlapping are database
+// guarantees (migration 20261101100000_class_operations: a partial unique
+// index and a GiST exclusion constraint — neither expressible in Prisma).
 model GroupMembership {
   id        String         @id @default(cuid())
   groupId   String
@@ -447,13 +479,14 @@ model GroupMembership {
   studentId String
   student   StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   academyId String
+  /// When this stint began.
   addedAt   DateTime       @default(now())
-  /// Soft delete: rows with deletedAt set are hidden from all reads.
+  /// When this stint ended (removed, transferred, withdrawn). Null while open.
   deletedAt DateTime?
 
-  @@unique([groupId, studentId])
   @@index([academyId])
   @@index([studentId])
+  @@index([groupId, addedAt])
 }
 
 enum GroupAssignmentRole {
@@ -489,39 +522,69 @@ enum AttendanceStatus {
   EXCUSED
 }
 
+/// How a record came to be. C3 adds its scan methods here.
+enum AttendanceMethod {
+  MANUAL
+  AUTO
+}
+
 // One attendance-taking occasion for a group, on one calendar date. The
 // (groupId, date) uniqueness is what actually prevents a duplicate session for
 // the same group/day — AttendanceRecord's own uniqueness then follows from it.
+//
+// Center Operations C2: a sheet may belong to one class occurrence
+// (groupSessionId). Such a sheet still carries its group and the occurrence's
+// local date, so everything that reads attendance by group and date keeps
+// working. (groupId, date) stays unique only for the date-based sheets that
+// predate occurrences (groupSessionId IS NULL) — a partial index in the
+// migration; two classes of one group on one day have two sheets.
 model AttendanceSession {
-  id        String    @id @default(cuid())
-  groupId   String
-  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  academyId String
-  date      DateTime  @db.Date
-  createdBy String
-  createdAt DateTime  @default(now())
+  id             String        @id @default(cuid())
+  groupId        String
+  group          Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  academyId      String
+  date           DateTime      @db.Date
+  groupSessionId String?       @unique
+  groupSession   GroupSession? @relation(fields: [groupSessionId], references: [id], onDelete: NoAction)
+  /// When the sheet was closed: every expected student without a record was
+  /// marked ABSENT (method AUTO). Server time; never sent by a client.
+  closedAt       DateTime?
+  closedBy       String?
+  createdBy      String
+  createdAt      DateTime      @default(now())
   /// Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt DateTime?
+  deletedAt      DateTime?
 
   records AttendanceRecord[]
 
-  @@unique([groupId, date])
   @@index([academyId])
+  @@index([groupId, date])
 }
 
 model AttendanceRecord {
-  id        String            @id @default(cuid())
-  sessionId String
-  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  studentId String
-  student   StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  status    AttendanceStatus
-  academyId String
-  markedBy  String
-  markedAt  DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  sessionId          String
+  session            AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId          String
+  student            StudentProfile    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status             AttendanceStatus
+  academyId          String
+  markedBy           String
+  markedAt           DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   /// Soft delete: rows with deletedAt set are hidden from all reads.
-  deletedAt DateTime?
+  deletedAt          DateTime?
+  /// C2: who decided — a person (MANUAL) or closing the sheet (AUTO absent).
+  method             AttendanceMethod  @default(MANUAL)
+  /// C2: server time of the first PRESENT/LATE mark. Never from a client.
+  checkedInAt        DateTime?
+  /// C2 makeup: the group the student belongs to, when this record is them
+  /// attending another group's class. Null for a group's own students.
+  homeGroupId        String?
+  homeGroup          Group?            @relation(fields: [homeGroupId], references: [id], onDelete: SetNull)
+  /// C2 makeup: the class of the home group this attendance makes up for.
+  makeupForSessionId String?
+  makeupForSession   GroupSession?     @relation("makeupFor", fields: [makeupForSessionId], references: [id], onDelete: SetNull)
 
   @@unique([sessionId, studentId])
   @@index([academyId])
@@ -551,6 +614,7 @@ model Room {
   deletedAt DateTime?
 
   sessions GroupSession[]
+  slots    GroupScheduleSlot[]
 
   @@index([academyId, status])
 }
@@ -577,6 +641,51 @@ enum GroupSessionStatus {
   SCHEDULED
   CANCELLED
   COMPLETED
+}
+
+// Center Operations C2 — a group's weekly timetable line: "Saturdays at 18:00
+// for 90 minutes, room 1, with this teacher, from this date". It is a rule,
+// not a calendar: it generates real GroupSession rows (a rolling 28-day
+// horizon, see ClassScheduleService), and those occurrences are what
+// attendance, cancellation and starting a class hang on. Times are wall-clock
+// in the academy's timezone; each occurrence is converted on its own date, so
+// a DST change moves the UTC instant, never the local time.
+model GroupScheduleSlot {
+  id               String               @id @default(cuid())
+  academyId        String
+  academy          Academy              @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  groupId          String
+  group            Group                @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// 0 = Sunday … 6 = Saturday (JavaScript's getDay()).
+  weekday          Int
+  /// Minutes after local midnight (18:00 → 1080).
+  startMinute      Int
+  durationMin      Int
+  roomId           String?
+  room             Room?                @relation(fields: [roomId], references: [id])
+  teacherUserId    String?
+  teacher          User?                @relation(fields: [teacherUserId], references: [id])
+  locationType     SessionLocationType?
+  locationNote     String?
+  /// First local date the slot applies to.
+  validFrom        DateTime             @db.Date
+  /// Last local date it applies to (inclusive). Null = open-ended.
+  validTo          DateTime?            @db.Date
+  /// Occurrences exist up to and including this local date.
+  generatedThrough DateTime?            @db.Date
+  /// Idempotency key of the request that created it (a retried save returns it).
+  requestKey       String?
+  createdBy        String
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  /// Soft delete: a removed slot keeps its past classes; its future untouched ones go.
+  deletedAt        DateTime?
+
+  occurrences GroupSession[]
+
+  @@unique([academyId, requestKey])
+  @@index([groupId])
+  @@index([academyId, generatedThrough])
 }
 
 // A scheduled occurrence for a Group — a physical/in-person class slot, never
@@ -617,6 +726,25 @@ model GroupSession {
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt     DateTime?
 
+  // Center Operations C2 — a class generated from a weekly slot. (slotId,
+  // occurrenceDate) is unique among undeleted rows (partial index in the
+  // migration), and a CANCELLED occurrence keeps its key: the generator can
+  // never bring back a class somebody cancelled.
+  slotId         String?
+  slot           GroupScheduleSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  /// The slot's local calendar date for this occurrence (academy timezone).
+  occurrenceDate DateTime?          @db.Date
+  /// Set when someone changed this one occurrence by hand — a later edit of
+  /// the slot leaves it alone.
+  customizedAt   DateTime?
+  /// When the teacher started the class (server time), and who.
+  startedAt      DateTime?
+  startedBy      String?
+
+  attendance    AttendanceSession?
+  makeupRecords AttendanceRecord[] @relation("makeupFor")
+
+  @@index([slotId, occurrenceDate])
   @@index([academyId, startAt])
   @@index([groupId, startAt])
   @@index([roomId, startAt])
@@ -1036,6 +1164,7 @@ model Subject {
   interests  StudentInterest[]
   challenges Challenge[]
   academies  AcademySubject[]
+  groups     Group[]
 }
 
 /// What a teacher teaches. Many-to-many: see `TeacherProfile.subjects`.
@@ -1081,6 +1210,7 @@ model GradeLevel {
   challenges      Challenge[]
   /// The year an academy's register records for a learner (may differ from the profile's own).
   academyStudents AcademyStudent[]
+  groups          Group[]
 }
 
 /// Which years a course is offered to.

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AttendanceStatus, GroupSession, Prisma } from '@prisma/client';
+import { AttendanceMethod, AttendanceStatus, GroupSession, Prisma } from '@prisma/client';
 import { AcademyContext } from '../academy/academy-context';
 import { AcademyOpsAccessService } from '../academy-ops/academy-ops-access.service';
 import { AuditService } from '../audit/audit.service';
@@ -16,7 +16,7 @@ import { addDays, formatClock, localDayBounds, wallClock } from './zoned-time';
 type Db = Prisma.TransactionClient | PrismaService;
 
 /** A class's sheet opens this long before it starts (people arrive early). */
-const OPENS_BEFORE_MIN = 60;
+export const OPENS_BEFORE_MIN = 60;
 /** How far back a makeup search offers missed classes. */
 const MISSED_LOOKBACK_DAYS = 21;
 /** A student code: five digits and a Luhn digit (C1). */
@@ -184,7 +184,9 @@ export class ClassAttendanceService {
         const firstCheckIn = !before || (before.method === 'AUTO' && !before.checkedInAt);
         const status: AttendanceStatus =
           firstCheckIn && asked === 'PRESENT' && live ? 'LATE' : asked;
-        if (before && before.status === status && before.method === 'MANUAL') continue;
+        // Nothing to write when the status already stands (an automatic absence
+        // is the one exception: a person confirming it makes it theirs).
+        if (before && before.status === status && before.method !== 'AUTO') continue;
         const attended = status === 'PRESENT' || status === 'LATE';
         const checkedInAt = before?.checkedInAt ?? (attended ? now : null);
         if (!before) checkIns++;
@@ -325,83 +327,24 @@ export class ClassAttendanceService {
         throw new ConflictException({ message: 'Already marked', code: 'ALREADY_MARKED' });
       }
 
-      // Where they come from: the class they missed, or their one group.
-      let homeGroupId: string;
-      let makeupForSessionId: string | null = null;
-      if (dto.makeupForSessionId) {
-        const missed = await tx.groupSession.findFirst({
-          where: { id: dto.makeupForSessionId, academyId: ctx.academyId },
-        });
-        if (!missed || missed.id === s.id)
-          throw new NotFoundException({ message: 'Class not found', code: 'SESSION_NOT_FOUND' });
-        if (!(await this.expected(tx, missed)).has(dto.studentId))
-          throw new ConflictException({
-            message: 'That class was not theirs',
-            code: 'MAKEUP_NOT_ALLOWED',
-            reason: 'NOT_THEIR_CLASS',
-          });
-        homeGroupId = missed.groupId;
-        makeupForSessionId = missed.id;
-      } else {
-        const stints = await tx.groupMembership.findMany({
-          where: { academyId: ctx.academyId, studentId: dto.studentId, deletedAt: null },
-          select: { groupId: true },
-        });
-        const own = stints.map((m) => m.groupId).filter((g) => g !== s.groupId);
-        if (dto.homeGroupId) {
-          if (!own.includes(dto.homeGroupId))
-            throw new ConflictException({
-              message: 'That is not one of their groups',
-              code: 'MAKEUP_NOT_ALLOWED',
-              reason: 'NOT_THEIR_GROUP',
-            });
-          homeGroupId = dto.homeGroupId;
-        } else if (own.length === 1) homeGroupId = own[0];
-        else
-          throw new ConflictException({
-            message: own.length ? 'Say which of their groups' : 'This student has no group',
-            code: 'MAKEUP_NOT_ALLOWED',
-            reason: own.length ? 'PICK_HOME_GROUP' : 'NO_GROUP',
-          });
-      }
-
-      // Seats: the class's own students plus the makeups already in it.
-      const group = await tx.group.findUniqueOrThrow({
-        where: { id: s.groupId },
-        select: { capacity: true },
-      });
-      if (group.capacity != null) {
-        const guests = await tx.attendanceRecord.count({
-          where: { sessionId: sheet.id, homeGroupId: { not: null } },
-        });
-        if (expected.size + guests >= group.capacity)
-          throw new ConflictException({
-            message: 'This class is full',
-            code: 'GROUP_FULL',
-            capacity: group.capacity,
-            seated: expected.size + guests,
-          });
-      }
-      // The same live-check-in rule as mark(): late only while the class is on.
-      const late =
-        now.getTime() > s.startAt.getTime() + grace * 60_000 && now.getTime() < s.endAt.getTime();
-      await tx.attendanceRecord.create({
-        data: {
-          sessionId: sheet.id,
-          studentId: dto.studentId,
-          status: late ? 'LATE' : 'PRESENT',
-          method: 'MANUAL',
-          checkedInAt: now,
-          markedAt: now,
-          markedBy: ctx.userId,
-          academyId: ctx.academyId,
-          homeGroupId,
-          makeupForSessionId,
-        },
-      });
-      return { sheetId: sheet.id, created: true, homeGroupId, makeupForSessionId };
+      return {
+        sheetId: sheet.id,
+        created: true,
+        ...(await this.seatGuest(
+          tx,
+          ctx,
+          s,
+          sheet.id,
+          expected,
+          dto.studentId,
+          dto,
+          now,
+          grace,
+          'MANUAL',
+        )),
+      };
     });
-    if (outcome.created)
+    if ('homeGroupId' in outcome)
       await this.audit.log({
         actorUserId: ctx.userId,
         action: 'attendance.makeup',
@@ -416,6 +359,103 @@ export class ClassAttendanceService {
         },
       });
     return this.roster(ctx, sessionId);
+  }
+
+  /**
+   * Seat a student of another group in this class as a makeup — the rules
+   * the class screen's makeup and the desk share: where they come from (the
+   * class they missed, the home group named, or their one group), and the
+   * seats (the class's own students plus the makeups already in it). Runs
+   * inside the caller's transaction, under the class's row lock.
+   */
+  private async seatGuest(
+    tx: Prisma.TransactionClient,
+    ctx: AcademyContext,
+    s: GroupSession,
+    sheetId: string,
+    expected: Set<string>,
+    studentId: string,
+    dto: { homeGroupId?: string; makeupForSessionId?: string },
+    now: Date,
+    grace: number,
+    method: AttendanceMethod,
+  ) {
+    // Where they come from: the class they missed, or their one group.
+    let homeGroupId: string;
+    let makeupForSessionId: string | null = null;
+    if (dto.makeupForSessionId) {
+      const missed = await tx.groupSession.findFirst({
+        where: { id: dto.makeupForSessionId, academyId: ctx.academyId },
+      });
+      if (!missed || missed.id === s.id)
+        throw new NotFoundException({ message: 'Class not found', code: 'SESSION_NOT_FOUND' });
+      if (!(await this.expected(tx, missed)).has(studentId))
+        throw new ConflictException({
+          message: 'That class was not theirs',
+          code: 'MAKEUP_NOT_ALLOWED',
+          reason: 'NOT_THEIR_CLASS',
+        });
+      homeGroupId = missed.groupId;
+      makeupForSessionId = missed.id;
+    } else {
+      const stints = await tx.groupMembership.findMany({
+        where: { academyId: ctx.academyId, studentId, deletedAt: null },
+        select: { groupId: true },
+      });
+      const own = stints.map((m) => m.groupId).filter((g) => g !== s.groupId);
+      if (dto.homeGroupId) {
+        if (!own.includes(dto.homeGroupId))
+          throw new ConflictException({
+            message: 'That is not one of their groups',
+            code: 'MAKEUP_NOT_ALLOWED',
+            reason: 'NOT_THEIR_GROUP',
+          });
+        homeGroupId = dto.homeGroupId;
+      } else if (own.length === 1) homeGroupId = own[0];
+      else
+        throw new ConflictException({
+          message: own.length ? 'Say which of their groups' : 'This student has no group',
+          code: 'MAKEUP_NOT_ALLOWED',
+          reason: own.length ? 'PICK_HOME_GROUP' : 'NO_GROUP',
+        });
+    }
+
+    // Seats: the class's own students plus the makeups already in it.
+    const group = await tx.group.findUniqueOrThrow({
+      where: { id: s.groupId },
+      select: { capacity: true },
+    });
+    if (group.capacity != null) {
+      const guests = await tx.attendanceRecord.count({
+        where: { sessionId: sheetId, homeGroupId: { not: null } },
+      });
+      if (expected.size + guests >= group.capacity)
+        throw new ConflictException({
+          message: 'This class is full',
+          code: 'GROUP_FULL',
+          capacity: group.capacity,
+          seated: expected.size + guests,
+        });
+    }
+    // The same live-check-in rule as mark(): late only while the class is on.
+    const late =
+      now.getTime() > s.startAt.getTime() + grace * 60_000 && now.getTime() < s.endAt.getTime();
+    const status: AttendanceStatus = late ? 'LATE' : 'PRESENT';
+    await tx.attendanceRecord.create({
+      data: {
+        sessionId: sheetId,
+        studentId,
+        status,
+        method,
+        checkedInAt: now,
+        markedAt: now,
+        markedBy: ctx.userId,
+        academyId: ctx.academyId,
+        homeGroupId,
+        makeupForSessionId,
+      },
+    });
+    return { homeGroupId, makeupForSessionId, status };
   }
 
   /**
@@ -491,6 +531,214 @@ export class ClassAttendanceService {
           })),
       })),
     };
+  }
+
+  // ── The reception desk (C3) ───────────────────────────────────────────
+
+  /**
+   * One learner checked in at the desk — a first check-in, nothing else.
+   *
+   * The desk supplies who (already identified by DeskService, which also
+   * derived `method` from how) and which class; everything about attendance
+   * is this service's, under the same row lock and database clock as the
+   * class screen: expected students check in PRESENT, or LATE once the grace
+   * has passed; anyone else only as a makeup the desk confirmed, through the
+   * same seating rules and capacity. What the desk may NOT do is correct:
+   * a record that already exists is reported, never changed, and a closed
+   * sheet or an ended class is refused — corrections stay with those who hold
+   * attendance.mark on the class screen.
+   *
+   * Authorization is the caller's: desk.checkin reaches every class of the
+   * academy, so there is no group-assignment check here.
+   */
+  async deskCheckIn(
+    ctx: AcademyContext,
+    input: {
+      sessionId: string;
+      studentId: string;
+      method: AttendanceMethod;
+      /** The card that identified them: it must still be active when the record is written. */
+      cardId?: string;
+      /** Present only when the desk confirmed a makeup. */
+      makeup?: { homeGroupId?: string; makeupForSessionId?: string };
+    },
+  ) {
+    const session = await this.prisma.groupSession.findFirst({
+      where: { id: input.sessionId, academyId: ctx.academyId },
+    });
+    if (!session)
+      throw new NotFoundException({ message: 'Class not found', code: 'SESSION_NOT_FOUND' });
+    if (session.mode === 'ONLINE')
+      throw new ConflictException({
+        message: 'An online session has no physical attendance',
+        code: 'SESSION_ONLINE',
+      });
+    const grace = await this.graceFor(session);
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const s = await this.lock(tx, input.sessionId);
+      const now = await this.now(tx);
+      this.assertOpen(s, now);
+      if (now >= s.endAt)
+        throw new ConflictException({
+          message: 'This class has ended; attendance is taken on the class screen',
+          code: 'CLASS_ENDED',
+        });
+      if (input.cardId) {
+        // Serializes with a revoke (which locks the card FOR UPDATE): a card
+        // revoked a moment ago cannot still check someone in.
+        const [card] = await tx.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "AcademyStudentCard"
+          WHERE id = ${input.cardId} AND "academyId" = ${ctx.academyId} AND "revokedAt" IS NULL
+          FOR SHARE`;
+        if (!card)
+          throw new ConflictException({ message: 'This card was cancelled', code: 'CARD_REVOKED' });
+      }
+      const record = await tx.academyStudent.findUnique({
+        where: { academyId_studentId: { academyId: ctx.academyId, studentId: input.studentId } },
+        select: { status: true },
+      });
+      if (!record)
+        throw new NotFoundException({ message: 'Student not found', code: 'STUDENT_NOT_FOUND' });
+      if (record.status !== 'ACTIVE')
+        throw new ConflictException({
+          message: 'This student has withdrawn; reactivate them first',
+          code: 'STUDENT_WITHDRAWN',
+        });
+      const open = await tx.attendanceSession.findUnique({ where: { groupSessionId: s.id } });
+      if (open?.closedAt)
+        throw new ConflictException({
+          message: 'Attendance for this class is closed',
+          code: 'ATTENDANCE_CLOSED',
+        });
+      const sheet = open ?? (await this.sheet(tx, s, ctx));
+      const existing = await tx.attendanceRecord.findUnique({
+        where: { sessionId_studentId: { sessionId: sheet.id, studentId: input.studentId } },
+      });
+      if (existing)
+        return {
+          created: false as const,
+          sheetId: sheet.id,
+          status: existing.status,
+          method: existing.method,
+          checkedInAt: existing.checkedInAt,
+          makeup: !!existing.homeGroupId,
+        };
+      const expected = await this.expected(tx, s);
+      if (expected.has(input.studentId)) {
+        // The same live rule as mark(): late only once the grace has passed.
+        const status: AttendanceStatus =
+          now.getTime() > s.startAt.getTime() + grace * 60_000 ? 'LATE' : 'PRESENT';
+        await tx.attendanceRecord.create({
+          data: {
+            sessionId: sheet.id,
+            studentId: input.studentId,
+            status,
+            method: input.method,
+            checkedInAt: now,
+            markedAt: now,
+            markedBy: ctx.userId,
+            academyId: ctx.academyId,
+          },
+        });
+        return {
+          created: true as const,
+          sheetId: sheet.id,
+          status,
+          method: input.method,
+          checkedInAt: now,
+          makeup: false,
+          homeGroupId: null,
+          makeupForSessionId: null,
+        };
+      }
+      if (!input.makeup)
+        throw new ConflictException({
+          message: 'This student is not in this class — confirm a makeup',
+          code: 'MAKEUP_REQUIRED',
+        });
+      const seated = await this.seatGuest(
+        tx,
+        ctx,
+        s,
+        sheet.id,
+        expected,
+        input.studentId,
+        input.makeup,
+        now,
+        grace,
+        input.method,
+      );
+      return {
+        created: true as const,
+        sheetId: sheet.id,
+        status: seated.status,
+        method: input.method,
+        checkedInAt: now,
+        makeup: true,
+        homeGroupId: seated.homeGroupId,
+        makeupForSessionId: seated.makeupForSessionId,
+      };
+    });
+    if (outcome.created)
+      await this.audit.log({
+        actorUserId: ctx.userId,
+        action: outcome.makeup ? 'attendance.makeup' : 'attendance.mark',
+        entity: 'AttendanceSession',
+        entityId: outcome.sheetId,
+        academyId: ctx.academyId,
+        // Ids, statuses and how — never a name, a code or a card token.
+        meta: {
+          sessionId: input.sessionId,
+          groupId: session.groupId,
+          desk: true,
+          method: outcome.method,
+          studentId: input.studentId,
+          status: outcome.status,
+          ...(outcome.makeup
+            ? { homeGroupId: outcome.homeGroupId, makeupForSessionId: outcome.makeupForSessionId }
+            : { checkIns: 1 }),
+        },
+      });
+    return outcome;
+  }
+
+  /**
+   * Of these classes, the ones this student is expected at — the same rule
+   * as expected(), asked the other way round (one student, many classes) so
+   * the desk resolves a learner's day in one query.
+   */
+  async expectedClassesOf(db: Db, academyId: string, studentId: string, sessionIds: string[]) {
+    if (!sessionIds.length) return new Set<string>();
+    const rows = await db.$queryRaw<{ id: string }[]>`
+      SELECT DISTINCT gs.id
+      FROM "GroupSession" gs
+      JOIN "GroupMembership" m ON m."groupId" = gs."groupId" AND m."studentId" = ${studentId}
+      LEFT JOIN "AcademyStudent" a ON a."academyId" = m."academyId" AND a."studentId" = m."studentId"
+      WHERE gs."academyId" = ${academyId}
+        AND gs.id IN (${Prisma.join(sessionIds)})
+        AND m."addedAt" < gs."endAt"
+        AND (m."deletedAt" IS NULL OR m."deletedAt" > gs."startAt")
+        AND (a.id IS NULL OR a.status <> 'WITHDRAWN' OR a."leftAt" > gs."startAt")`;
+    return new Set(rows.map((r) => r.id));
+  }
+
+  /** Seats per class: capacity, and expected students plus makeups already in. */
+  async seatsOf(sessionIds: string[]) {
+    if (!sessionIds.length) return new Map<string, number>();
+    const rows = await this.prisma.$queryRaw<{ id: string; seated: number }[]>`
+      SELECT gs.id,
+        (SELECT count(DISTINCT m."studentId")::int
+           FROM "GroupMembership" m
+           LEFT JOIN "AcademyStudent" a ON a."academyId" = m."academyId" AND a."studentId" = m."studentId"
+          WHERE m."groupId" = gs."groupId" AND m."addedAt" < gs."endAt"
+            AND (m."deletedAt" IS NULL OR m."deletedAt" > gs."startAt")
+            AND (a.id IS NULL OR a.status <> 'WITHDRAWN' OR a."leftAt" > gs."startAt"))
+        + (SELECT count(*)::int FROM "AttendanceSession" s
+             JOIN "AttendanceRecord" r ON r."sessionId" = s.id AND r."deletedAt" IS NULL
+            WHERE s."groupSessionId" = gs.id AND s."deletedAt" IS NULL AND r."homeGroupId" IS NOT NULL) AS seated
+      FROM "GroupSession" gs
+      WHERE gs.id IN (${Prisma.join(sessionIds)})`;
+    return new Map(rows.map((r) => [r.id, r.seated]));
   }
 
   // ── Internals ─────────────────────────────────────────────────────────

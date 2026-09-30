@@ -12,5 +12,7 @@ import { ClassScheduleService } from './class-schedule.service';
   imports: [AcademyModule, AcademyOpsModule, FeatureFlagsModule],
   controllers: [ClassOpsController],
   providers: [ClassScheduleService, ClassAttendanceService, ClassOpsWorker],
+  // The reception desk (C3) checks in through the same attendance engine.
+  exports: [ClassScheduleService, ClassAttendanceService],
 })
 export class ClassOpsModule {}

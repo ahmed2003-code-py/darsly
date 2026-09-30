@@ -150,6 +150,9 @@ export interface MakeupCandidate {
 
 const key = () => `c2-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
+/** Send a call to one named academy (a class opened from another workspace). */
+const at = (academyId?: string) => (academyId ? { headers: { 'X-Academy-Id': academyId } } : {});
+
 function useAcademyKey() {
   return useStaffAcademyStore((s) => s.academyId) ?? 'self';
 }
@@ -163,6 +166,38 @@ export function useClassAccess(enabled = true) {
     enabled,
     staleTime: 60_000,
     retry: false,
+  });
+}
+
+export interface MyClassesDay {
+  academies: {
+    academy: { id: string; name: string; slug: string };
+    date: string;
+    today: string;
+    timezone: string;
+    classes: ClassSummary[];
+  }[];
+}
+
+/** Anywhere I take attendance, across every workspace (a Center teacher's home is usually their own academy). */
+export function useMyClassAccess(enabled = true) {
+  return useQuery<{ enabled: boolean; academies: { id: string; name: string; slug: string }[] }>({
+    queryKey: ['my-class-access'],
+    queryFn: async () => (await api.get('/class-ops/my-access')).data,
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+/** My classes of one day in every workspace where I take attendance. */
+export function useMyClassDay(date: string | undefined, enabled = true) {
+  return useQuery<MyClassesDay>({
+    queryKey: ['class-day', 'mine', date ?? 'today'],
+    queryFn: async () =>
+      (await api.get('/class-ops/my-day', { params: date ? { date } : {} })).data,
+    enabled,
+    refetchInterval: 60_000,
   });
 }
 
@@ -190,10 +225,10 @@ export function useGroupClasses(
   });
 }
 
-export function useClassRoster(sessionId: string | undefined) {
+export function useClassRoster(sessionId: string | undefined, academyId?: string) {
   return useQuery<ClassRoster>({
     queryKey: ['class-roster', sessionId],
-    queryFn: async () => (await api.get(`/class-ops/sessions/${sessionId}`)).data,
+    queryFn: async () => (await api.get(`/class-ops/sessions/${sessionId}`, at(academyId))).data,
     enabled: !!sessionId,
     // Another device at the door may be marking the same class.
     refetchInterval: 20_000,
@@ -213,36 +248,40 @@ function useClassWrite<TVars>(sessionId: string, fn: (vars: TVars) => Promise<Cl
   });
 }
 
-export function useStartClass(sessionId: string) {
+export function useStartClass(sessionId: string, academyId?: string) {
   return useClassWrite<void>(
     sessionId,
-    async () => (await api.post(`/class-ops/sessions/${sessionId}/start`)).data,
+    async () =>
+      (await api.post(`/class-ops/sessions/${sessionId}/start`, undefined, at(academyId))).data,
   );
 }
 
-export function useMarkAttendance(sessionId: string) {
+export function useMarkAttendance(sessionId: string, academyId?: string) {
   return useClassWrite<{ studentId: string; status: AttendanceStatus }[]>(
     sessionId,
     async (records) =>
-      (await api.post(`/class-ops/sessions/${sessionId}/attendance`, { records })).data,
+      (await api.post(`/class-ops/sessions/${sessionId}/attendance`, { records }, at(academyId)))
+        .data,
   );
 }
 
-export function useCloseAttendance(sessionId: string) {
+export function useCloseAttendance(sessionId: string, academyId?: string) {
   return useClassWrite<void>(
     sessionId,
-    async () => (await api.post(`/class-ops/sessions/${sessionId}/close`)).data,
+    async () =>
+      (await api.post(`/class-ops/sessions/${sessionId}/close`, undefined, at(academyId))).data,
   );
 }
 
-export function useAddMakeup(sessionId: string) {
+export function useAddMakeup(sessionId: string, academyId?: string) {
   return useClassWrite<{ studentId: string; homeGroupId?: string; makeupForSessionId?: string }>(
     sessionId,
-    async (dto) => (await api.post(`/class-ops/sessions/${sessionId}/makeup`, dto)).data,
+    async (dto) =>
+      (await api.post(`/class-ops/sessions/${sessionId}/makeup`, dto, at(academyId))).data,
   );
 }
 
-export function useMakeupCandidates(sessionId: string, q: string) {
+export function useMakeupCandidates(sessionId: string, q: string, academyId?: string) {
   const query = q.trim();
   return useQuery<{ mode: 'CODE' | 'NAME' | 'CODE_ONLY'; candidates: MakeupCandidate[] }>({
     queryKey: ['makeup-candidates', sessionId, query],
@@ -250,6 +289,7 @@ export function useMakeupCandidates(sessionId: string, q: string) {
       (
         await api.get(`/class-ops/sessions/${sessionId}/makeup-candidates`, {
           params: { q: query },
+          ...at(academyId),
         })
       ).data,
     enabled: query.length >= 2,
@@ -375,6 +415,8 @@ export function useUpdateGroupConfig(groupId: string) {
 
 /** 'YYYY-MM-DD' as a weekday + day + month in the reader's language. */
 export function formatLocalDate(date: string, lang: string, opts: Intl.DateTimeFormatOptions = {}) {
+  // A date not known yet (still loading) is shown as nothing, never a crash.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
   const [y, m, d] = date.split('-').map(Number);
   return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'ar-EG-u-nu-latn', {
     weekday: 'long',

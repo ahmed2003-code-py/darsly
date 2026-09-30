@@ -8,45 +8,57 @@ import {
   formatLocalDate,
   shiftDate,
   useClassAccess,
-  useClassDay,
+  useMyClassAccess,
+  useMyClassDay,
 } from '../../lib/classOps';
 import { ClassStateChip } from './classParts';
 
 /**
  * Today's classes (Center Operations C2): what is on, where, with whom, and
  * how attendance stands — the one screen a desk or a teacher opens first.
- * An owner sees every class; a teacher or assistant only their groups' (the
- * server scopes it). A day switcher steps back to take a missed sheet or
- * ahead to see tomorrow; each card opens the class.
+ * It spans every workspace where this person takes attendance: a Center
+ * teacher's home workspace is usually their own academy, and without this
+ * their center's classes were unreachable from a phone. An owner sees every
+ * class of their academy; a teacher or assistant only their groups' (the
+ * server scopes it per academy). Each card opens the class in its academy.
  */
 export default function ClassesTodayPage() {
   const { t, i18n } = useTranslation();
-  const access = useClassAccess();
+  const here = useClassAccess();
+  const mine = useMyClassAccess();
   const [date, setDate] = useState<string | undefined>(undefined);
-  const day = useClassDay(date, !!access.data?.canAttend);
+  const day = useMyClassDay(date, !!mine.data?.enabled);
 
-  if (access.isLoading)
+  if (mine.isLoading)
     return (
       <div className="page grid place-items-center py-24">
         <Spinner />
       </div>
     );
-  if (!access.data?.enabled)
+  if (!mine.data?.enabled)
     return (
       <div className="page">
-        <EmptyState icon="toggle_off" title={t('classes.off')} hint={t('classes.offHint')} />
-      </div>
-    );
-  if (!access.data.canAttend)
-    return (
-      <div className="page">
-        <EmptyState icon="lock" title={t('classes.noAccess')} hint={t('classes.noAccessHint')} />
+        {here.data?.enabled ? (
+          <EmptyState icon="lock" title={t('classes.noAccess')} hint={t('classes.noAccessHint')} />
+        ) : (
+          <EmptyState icon="toggle_off" title={t('classes.off')} hint={t('classes.offHint')} />
+        )}
       </div>
     );
 
-  const shown = day.data?.date ?? access.data.today ?? '';
-  const isToday = shown === (day.data?.today ?? access.data.today);
-  const classes = day.data?.classes ?? [];
+  if (day.isLoading && !day.data)
+    return (
+      <div className="page grid place-items-center py-24">
+        <Spinner />
+      </div>
+    );
+
+  const places = day.data?.academies ?? [];
+  const first = places[0];
+  const shown = date ?? first?.today ?? here.data?.today ?? '';
+  const isToday = !date || date === first?.today;
+  const total = places.reduce((n, p) => n + p.classes.length, 0);
+  const several = places.length > 1;
   const nowMs = Date.now();
 
   return (
@@ -95,24 +107,47 @@ export default function ClassesTodayPage() {
           <Skeleton className="h-28 rounded-2xl" />
           <Skeleton className="h-28 rounded-2xl" />
         </div>
-      ) : !classes.length ? (
+      ) : !total ? (
         <EmptyState
           icon="event_available"
           title={isToday ? t('classes.noneToday') : t('classes.noneThatDay')}
-          hint={access.data.canSchedule ? t('classes.noneHintPlan') : t('classes.noneHint')}
+          hint={here.data?.canSchedule ? t('classes.noneHintPlan') : t('classes.noneHint')}
         />
       ) : (
-        <ul className="grid gap-3 lg:grid-cols-2">
-          {classes.map((c) => (
-            <ClassCard key={c.id} c={c} nowMs={nowMs} />
-          ))}
-        </ul>
+        <div className="grid gap-5">
+          {places
+            .filter((p) => p.classes.length)
+            .map((p) => (
+              <section key={p.academy.id} aria-label={p.academy.name}>
+                {/* The academy's name only when classes come from more than one. */}
+                {several && (
+                  <h2 className="mb-2 font-heading text-sm font-bold text-on-surface-variant">
+                    <bdi>{p.academy.name}</bdi>
+                  </h2>
+                )}
+                <ul className="grid gap-3 lg:grid-cols-2">
+                  {p.classes.map((c) => (
+                    <ClassCard key={c.id} c={c} nowMs={nowMs} academyId={p.academy.id} />
+                  ))}
+                </ul>
+              </section>
+            ))}
+        </div>
       )}
     </div>
   );
 }
 
-export function ClassCard({ c, nowMs }: { c: ClassSummary; nowMs: number }) {
+export function ClassCard({
+  c,
+  nowMs,
+  academyId,
+}: {
+  c: ClassSummary;
+  nowMs: number;
+  /** The class's academy, carried in the link so it opens from any workspace. */
+  academyId?: string;
+}) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const live = nowMs >= new Date(c.startAt).getTime() && nowMs < new Date(c.endAt).getTime();
@@ -121,7 +156,7 @@ export function ClassCard({ c, nowMs }: { c: ClassSummary; nowMs: number }) {
   return (
     <li>
       <Link
-        to={`/classes/${c.id}`}
+        to={academyId ? `/classes/${c.id}?academy=${academyId}` : `/classes/${c.id}`}
         className={`card-hover block rounded-2xl border bg-surface-container-lowest p-4 ${
           live && !cancelled ? 'border-primary' : 'border-outline-variant'
         } ${cancelled ? 'opacity-70' : ''}`}

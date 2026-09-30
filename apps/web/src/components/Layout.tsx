@@ -28,7 +28,7 @@ import {
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
 import { useRegistryAccess } from '../lib/centerStudents';
-import { useClassAccess } from '../lib/classOps';
+import { useClassAccess, useMyClassAccess } from '../lib/classOps';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -104,9 +104,11 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Classes (C2): same rule as the register — only where they are on and
   // this person may take attendance, asked of the same academy.
   const classes = useClassAccess(staffish);
+  // …or in any other workspace of theirs (a Center teacher's home is their own academy).
+  const myClasses = useMyClassAccess(staffish);
   const baseNav = [
     roleNav[0],
-    ...(classes.data?.canAttend ? [CLASSES_ITEM] : []),
+    ...(classes.data?.canAttend || myClasses.data?.enabled ? [CLASSES_ITEM] : []),
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
     ...roleNav.slice(1),
   ].filter(Boolean);

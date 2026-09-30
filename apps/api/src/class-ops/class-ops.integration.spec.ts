@@ -1200,7 +1200,7 @@ describe('C2 — who may do what', () => {
         'FORBIDDEN',
       );
     const a = await viaGuards(jwt(w.receptionId, Role.STAFF), w.A.acad.id, 'access').then(() =>
-      new ClassOpsController(schedule, classes, flags).access(w.reception),
+      new ClassOpsController(schedule, classes, flags, academy, prisma).access(w.reception),
     );
     expect(a).toMatchObject({ enabled: true, canAttend: false, canSchedule: false });
   });
@@ -1439,4 +1439,63 @@ describe('C2 — scale', () => {
     expect(dayMs).toBeLessThan(3_000);
     expect(rosterMs).toBeLessThan(1_500);
   }, 180_000);
+});
+
+describe('C2 — a teacher reaches their classes from any workspace', () => {
+  it('my-day: every academy where they take attendance and classes are on — assigned groups only', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const ctl = new ClassOpsController(schedule, classes, flags, academy, prisma);
+    // A second center where t1 also teaches (classes on), and a third where classes are off.
+    const k = randomUUID().slice(0, 6);
+    const mk = async (tag: string, on: boolean) => {
+      const acad = await prisma.academy.create({
+        data: {
+          slug: `c2-x-${tag}-${k}`,
+          name: `X ${tag}`,
+          ownerUserId: w.A.ownerId,
+          kind: 'CENTER',
+        },
+      });
+      await prisma.academyMembership.create({
+        data: { userId: w.t1, academyId: acad.id, role: 'TEACHER', status: 'ACTIVE' },
+      });
+      if (on) await flags.setFlag(acad.id, 'classOperations', true, w.A.ownerId);
+      const g = await prisma.group.create({ data: { academyId: acad.id, name: `G ${tag}` } });
+      await prisma.groupAssignment.create({
+        data: { groupId: g.id, userId: w.t1, role: 'TEACHER', academyId: acad.id },
+      });
+      const startAt = new Date(Date.now() - 10 * MIN);
+      await prisma.groupSession.create({
+        data: {
+          academyId: acad.id,
+          groupId: g.id,
+          startAt,
+          endAt: new Date(startAt.getTime() + 20 * MIN),
+          locationType: 'CENTER',
+          createdBy: w.A.ownerId,
+        },
+      });
+      return acad.id;
+    };
+    const on = await mk('on', true);
+    const off = await mk('off', false);
+    // In center A: a class of t1's group and one of a group not theirs.
+    const now = wallClock(new Date(), CAIRO).minute;
+    const offset = now > 23 * 60 ? -30 : now < 60 ? 5 : -30;
+    await classAt(w, w.A.gA.id, offset, 20);
+    await classAt(w, w.A.gB.id, offset, 20);
+    const user = jwt(w.t1, Role.TEACHER);
+    const day = await ctl.myDay(user, {});
+    const byAcademy = new Map(day.academies.map((a) => [a.academy.id, a.classes]));
+    expect([...byAcademy.keys()].sort()).toEqual([w.A.acad.id, on].sort());
+    expect(byAcademy.get(w.A.acad.id)!.map((c) => c.group.id)).toEqual([w.A.gA.id]);
+    expect(byAcademy.get(on)!.length).toBe(1);
+    expect(byAcademy.has(off)).toBe(false);
+    const accessT = await ctl.myAccess(user);
+    expect(accessT.enabled).toBe(true);
+    // Reception holds no attendance.mark anywhere: nothing.
+    const accessR = await ctl.myAccess(jwt(w.receptionId, Role.STAFF));
+    expect(accessR).toEqual({ enabled: false, academies: [] });
+  });
 });

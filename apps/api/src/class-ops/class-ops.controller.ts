@@ -10,7 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtPayload } from '@darsly/shared-types';
 import { AcademyContext, CurrentAcademy } from '../academy/academy-context';
+import { AcademyService } from '../academy/academy.service';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PrismaService } from '../prisma/prisma.service';
 import { AcademyMembershipGuard } from '../academy/guards/academy-membership.guard';
 import { AcademyStaffFeature } from '../feature-flags/academy-staff-feature.decorator';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -41,7 +45,57 @@ export class ClassOpsController {
     private readonly schedule: ClassScheduleService,
     private readonly attendance: ClassAttendanceService,
     private readonly flags: FeatureFlagsService,
+    private readonly academy: AcademyService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Every workspace where this person may take attendance and classes are
+   * on, each as a context built exactly as a request to that academy would
+   * be (membership, capability, flag). A Center teacher's home workspace is
+   * usually their own academy, and the web has no workspace switcher yet — so
+   * their center's classes must be reachable without one.
+   */
+  private async myPlaces(user: JwtPayload) {
+    const rows = await this.prisma.academyMembership.findMany({
+      where: {
+        userId: user.sub,
+        status: 'ACTIVE',
+        deletedAt: null,
+        role: { in: ['OWNER', 'TEACHER', 'ASSISTANT'] },
+      },
+      select: { academyId: true, academy: { select: { id: true, name: true, slug: true } } },
+    });
+    const places: { ctx: AcademyContext; academy: { id: string; name: string; slug: string } }[] =
+      [];
+    for (const r of rows) {
+      if (!(await this.flags.isEnabled(r.academyId, 'classOperations'))) continue;
+      const ctx = await this.academy.buildContext(user.sub, r.academyId, user.role);
+      if (ctx?.can('attendance.mark')) places.push({ ctx, academy: r.academy });
+    }
+    return places;
+  }
+
+  /** Is there anywhere I take attendance? For the menu; never a 403. */
+  @Get('my-access')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Whether classes are on in any of my workspaces' })
+  async myAccess(@CurrentUser() user: JwtPayload) {
+    const places = await this.myPlaces(user);
+    return { enabled: places.length > 0, academies: places.map((p) => p.academy) };
+  }
+
+  /** My classes of one day (each academy's own local date; default today) in every workspace. */
+  @Get('my-day')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'My classes today across every workspace where I take attendance' })
+  async myDay(@CurrentUser() user: JwtPayload, @Query() q: DayQuery) {
+    const places = await this.myPlaces(user);
+    const academies = [];
+    for (const p of places)
+      academies.push({ academy: p.academy, ...(await this.attendance.day(p.ctx, q.date)) });
+    return { academies };
+  }
 
   /** What this member may do here — for the menu; never a 403. */
   @Get('access')

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { EmptyState, ErrorNote, Modal, Skeleton } from '../../components/ui';
 import { askConfirm } from '../../lib/confirm';
 import {
@@ -35,12 +35,14 @@ const FILTERS: Filter[] = ['ALL', 'UNMARKED', 'PRESENT', 'LATE', 'ABSENT', 'EXCU
  */
 export default function ClassPage() {
   const { sessionId = '' } = useParams();
+  // The class's academy, when opened from Today in another workspace.
+  const academyId = useSearchParams()[0].get('academy') ?? undefined;
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
-  const roster = useClassRoster(sessionId);
-  const mark = useMarkAttendance(sessionId);
-  const close = useCloseAttendance(sessionId);
-  const start = useStartClass(sessionId);
+  const roster = useClassRoster(sessionId, academyId);
+  const mark = useMarkAttendance(sessionId, academyId);
+  const close = useCloseAttendance(sessionId, academyId);
+  const start = useStartClass(sessionId, academyId);
   const [filter, setFilter] = useState<Filter>('ALL');
   const [search, setSearch] = useState('');
   const [menuFor, setMenuFor] = useState<RosterStudent | null>(null);
@@ -384,7 +386,13 @@ export default function ClassPage() {
         </Modal>
       )}
 
-      {makeupOpen && <MakeupDialog sessionId={sessionId} onClose={() => setMakeupOpen(false)} />}
+      {makeupOpen && (
+        <MakeupDialog
+          sessionId={sessionId}
+          academyId={academyId}
+          onClose={() => setMakeupOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -514,14 +522,22 @@ function RosterRow({
  * Makeup: a student of another group sits in this class. Found by their
  * code (the teacher's way in); by name too for someone holding the register.
  */
-function MakeupDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }) {
+function MakeupDialog({
+  sessionId,
+  academyId,
+  onClose,
+}: {
+  sessionId: string;
+  academyId?: string;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<string | null>(null);
   const [home, setHome] = useState<string>('');
   const [missed, setMissed] = useState<string>('');
-  const found = useMakeupCandidates(sessionId, q);
-  const add = useAddMakeup(sessionId);
+  const found = useMakeupCandidates(sessionId, q, academyId);
+  const add = useAddMakeup(sessionId, academyId);
   const cand = found.data?.candidates.find((c) => c.studentId === picked) ?? null;
   const needsHome = !!cand && !missed && cand.groups.length > 1;
 

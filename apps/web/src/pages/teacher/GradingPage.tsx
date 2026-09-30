@@ -508,7 +508,7 @@ function Search({
 }) {
   return (
     <div className="relative mb-4">
-      <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 grid place-items-center text-[20px] text-outline">
+      <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 grid place-items-center text-[20px] text-outline [direction:inherit]">
         search
       </span>
       <input

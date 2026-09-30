@@ -79,7 +79,7 @@ export default function AuthShell({
             <span className="absolute start-1/2 top-0 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/50" />
           </m.span>
           <span className="absolute -end-28 -top-28 h-[26rem] w-[26rem] rounded-full border border-white/10" />
-          <span className="material-symbols-outlined absolute -bottom-10 end-6 text-[13rem] leading-none text-white/[0.06]">
+          <span className="material-symbols-outlined absolute -bottom-10 end-6 text-[13rem] leading-none text-white/[0.06] [direction:inherit]">
             school
           </span>
           <span className="absolute inset-y-0 end-0 w-px bg-white/10" />

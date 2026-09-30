@@ -27,7 +27,7 @@ function StudentPicker({
   return (
     <div>
       <div className="relative mb-3">
-        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-lg text-outline">
+        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-lg text-outline [direction:inherit]">
           search
         </span>
         <input
@@ -252,7 +252,7 @@ function RosterTab() {
   return (
     <div>
       <div className="relative mb-4">
-        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline">
+        <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline [direction:inherit]">
           search
         </span>
         <input

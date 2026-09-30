@@ -119,7 +119,7 @@ export default function StaffHomePage() {
                 : t('staff.myStudents')}
             </h2>
             <label className="relative w-full sm:w-72">
-              <span className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[20px] text-outline">
+              <span className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[20px] text-outline [direction:inherit]">
                 search
               </span>
               <input

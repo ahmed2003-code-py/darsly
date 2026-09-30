@@ -68,7 +68,7 @@ export default function ConversationList({
           </div>
         )}
         <label className="relative block">
-          <span className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[20px] text-outline">
+          <span className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-[20px] text-outline [direction:inherit]">
             search
           </span>
           <input

@@ -103,7 +103,7 @@ export default function CenterSubjectsPage() {
       <div className="mb-4 rounded-2xl border border-outline-variant bg-surface-container-low p-3 sm:p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
+            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline [direction:inherit]">
               search
             </span>
             <input

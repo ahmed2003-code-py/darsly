@@ -262,7 +262,7 @@ export default function TeacherCoursesPage() {
 
         <div className="mt-3 flex flex-col gap-2 border-t border-outline-variant/60 pt-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline">
+            <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-3 my-auto h-fit text-outline [direction:inherit]">
               search
             </span>
             <input

@@ -375,7 +375,7 @@ export function TranscriptViewer({
         <div className="relative min-w-0 flex-1">
           <span
             aria-hidden
-            className="material-symbols-outlined pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-[18px] text-outline"
+            className="material-symbols-outlined pointer-events-none absolute start-2.5 top-1/2 -translate-y-1/2 text-[18px] text-outline [direction:inherit]"
           >
             search
           </span>

@@ -69,7 +69,7 @@ export function FilterBar({
     <div className="mb-6 space-y-3">
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <label className="relative flex-1">
-          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-4 my-auto h-fit text-[20px] text-outline">
+          <span className="material-symbols-outlined pointer-events-none absolute inset-y-0 start-4 my-auto h-fit text-[20px] text-outline [direction:inherit]">
             search
           </span>
           <input

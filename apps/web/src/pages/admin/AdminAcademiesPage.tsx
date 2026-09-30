@@ -108,7 +108,7 @@ export default function AdminAcademiesPage() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <form onSubmit={submitSearch} className="flex-1 min-w-[220px]">
           <div className="relative">
-            <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline">
+            <span className="material-symbols-outlined absolute start-3 top-1/2 -translate-y-1/2 text-xl text-outline [direction:inherit]">
               search
             </span>
             <input

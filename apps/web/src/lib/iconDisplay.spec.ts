@@ -16,7 +16,9 @@ describe('icon visibility', () => {
   it('no icon relies on a plain `hidden` class', () => {
     const offenders: string[] = [];
     for (const f of files(join(__dirname, '..'))) {
-      for (const m of readFileSync(f, 'utf8').matchAll(/className="([^"]*material-symbols-outlined[^"]*)"/g)) {
+      for (const m of readFileSync(f, 'utf8').matchAll(
+        /className="([^"]*material-symbols-outlined[^"]*)"/g,
+      )) {
         if (/(^|\s)hidden(\s|$)/.test(m[1])) offenders.push(`${f}: ${m[1]}`);
       }
     }

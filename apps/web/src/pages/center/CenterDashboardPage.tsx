@@ -123,20 +123,63 @@ export default function CenterDashboardPage() {
       )}
       {loadingOv ? (
         <Skeleton className="mb-6 h-24 rounded-2xl" />
-      ) : (
-        <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
-          {tiles.map((k) => (
-            <div key={k.label} className="card flex items-center gap-3 p-4">
-              <span className="material-symbols-outlined text-2xl text-primary">{k.icon}</span>
+      ) : tiles.length ? (
+        // The figures share one surface with hairline dividers — two across on
+        // a phone — rather than one full-width card each (seven cards were
+        // more than a screen of padding before anything to act on). Each cell
+        // draws its own end/bottom hairline and the frame clips the outer ones,
+        // so an unfinished last row (7 figures in 2, 3 or 4 columns) is plain
+        // surface, not grey filler.
+        <div className="mb-4 grid grid-cols-2 overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest sm:mb-6 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {tiles.map((k, i) => (
+            <div
+              key={k.label}
+              className={`-mb-px -me-px flex min-w-0 items-center gap-2.5 border-b border-e border-outline-variant px-3 py-3 sm:gap-3 sm:p-4 ${
+                // An odd last figure takes the whole row on a phone.
+                i === tiles.length - 1 && tiles.length % 2 ? 'col-span-2 sm:col-span-1' : ''
+              }`}
+            >
+              <span
+                className="material-symbols-outlined text-xl text-primary sm:text-2xl"
+                aria-hidden
+              >
+                {k.icon}
+              </span>
               <div className="min-w-0">
+                <p className="font-heading text-lg font-bold leading-tight tabular-nums sm:text-xl">
+                  {k.value}
+                </p>
                 <p className="truncate text-xs text-outline">{k.label}</p>
-                <p className="font-heading text-xl font-bold tabular-nums">{k.value}</p>
               </div>
             </div>
           ))}
         </div>
-      )}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      ) : null}
+      {/* Where to go next. A phone gets one grouped list of rows; a wider
+          screen keeps the cards. */}
+      <nav
+        aria-label={t('nav.centerDashboard')}
+        className="divide-y divide-outline-variant overflow-hidden rounded-xl border border-outline-variant bg-surface-container-lowest sm:hidden"
+      >
+        {cards.map((c) => (
+          <Link key={c.to} to={c.to} className="flex min-h-14 items-center gap-3 px-3 py-2.5">
+            <span className="material-symbols-outlined text-2xl text-primary" aria-hidden>
+              {c.icon}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-heading text-sm font-bold">{c.title}</span>
+              <span className="block truncate text-xs text-on-surface-variant">{c.sub}</span>
+            </span>
+            <span
+              className="material-symbols-outlined text-lg text-outline rtl:-scale-x-100"
+              aria-hidden
+            >
+              chevron_right
+            </span>
+          </Link>
+        ))}
+      </nav>
+      <div className="hidden gap-4 sm:grid sm:grid-cols-2 xl:grid-cols-3">
         {cards.map((c) => (
           <Link key={c.to} to={c.to} className="card card-hover flex items-start gap-4 p-5">
             <span className="material-symbols-outlined text-3xl text-primary">{c.icon}</span>

@@ -12,6 +12,7 @@ import {
 } from '../../components/ui';
 import { useOwnedAcademy } from '../../lib/academy';
 import { useRegistryAccess } from '../../lib/centerStudents';
+import { useDeskAccess } from '../../lib/desk';
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { askConfirm } from '../../lib/confirm';
 import { dateShort } from '../../lib/format';
@@ -23,6 +24,9 @@ import {
   PRESETS,
   PresetKey,
   presetOf,
+  ACADEMY_WIDE_GROUPS,
+  DESK_ONLY_GROUPS,
+  DESK_ONLY_PRESETS,
   REGISTRY_ONLY_GROUPS,
   REGISTRY_ONLY_PRESETS,
   TeamAssistant,
@@ -268,8 +272,10 @@ function AssistantEditor({
   );
   const preset = useMemo(() => presetOf(grant.permissions, grant.directContact), [grant]);
   // The register's preset and capabilities are offered only where it is on.
-  const registryOn = !!useRegistryAccess(useStaffAcademyStore((s) => s.academyId) ?? undefined).data
-    ?.enabled;
+  const selectedAcademy = useStaffAcademyStore((s) => s.academyId) ?? undefined;
+  const registryOn = !!useRegistryAccess(selectedAcademy).data?.enabled;
+  // …and the desk's (C3) where the desk is on.
+  const deskOn = !!useDeskAccess(selectedAcademy).data?.enabled;
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -300,7 +306,9 @@ function AssistantEditor({
       permissions: [...g.permissions.filter((x) => !OFFERED.has(x)), ...p.permissions],
       directContact: p.directContact,
       // The register is the whole academy's: it is never granted course by course.
-      ...(k === 'reception' ? { courseScope: 'ALL' as const, courseIds: [] } : {}),
+      ...(k === 'reception' || k === 'frontDesk'
+        ? { courseScope: 'ALL' as const, courseIds: [] }
+        : {}),
     }));
   };
   const noCourses = grant.courseScope === 'SELECTED' && !grant.courseIds.length;
@@ -378,8 +386,18 @@ function AssistantEditor({
             {t('team.startFrom')}
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {(['support', 'academic', 'operations', 'reception', 'custom'] as PresetKey[])
+            {(
+              [
+                'support',
+                'academic',
+                'operations',
+                'reception',
+                'frontDesk',
+                'custom',
+              ] as PresetKey[]
+            )
               .filter((k) => registryOn || !REGISTRY_ONLY_PRESETS.has(k))
+              .filter((k) => deskOn || !DESK_ONLY_PRESETS.has(k))
               .map((k) => (
                 <button
                   key={k}
@@ -485,61 +503,63 @@ function AssistantEditor({
             {t('team.whatCanTheyDo')}
           </legend>
           <div className="flex flex-col gap-4">
-            {CAPABILITY_GROUPS.filter((g) => registryOn || !REGISTRY_ONLY_GROUPS.has(g.key)).map(
-              (group) => (
-                <div key={group.key}>
-                  <p className="mb-1 text-xs font-bold uppercase tracking-wide text-outline">
-                    {t(`team.group.${group.key}`)}
+            {CAPABILITY_GROUPS.filter(
+              (g) =>
+                (registryOn || !REGISTRY_ONLY_GROUPS.has(g.key)) &&
+                (deskOn || !DESK_ONLY_GROUPS.has(g.key)),
+            ).map((group) => (
+              <div key={group.key}>
+                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-outline">
+                  {t(`team.group.${group.key}`)}
+                </p>
+                {ACADEMY_WIDE_GROUPS.has(group.key) && grant.courseScope === 'SELECTED' && (
+                  <p className="mb-1 text-xs text-on-surface-variant">
+                    {t('team.registerNeedsAll')}
                   </p>
-                  {group.key === 'register' && grant.courseScope === 'SELECTED' && (
-                    <p className="mb-1 text-xs text-on-surface-variant">
-                      {t('team.registerNeedsAll')}
-                    </p>
-                  )}
-                  {group.caps.map((c) => (
-                    <label
-                      key={c}
-                      className={`flex items-start gap-2 py-1 text-sm ${group.key === 'register' && grant.courseScope === 'SELECTED' ? 'opacity-50' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={has(c)}
-                        disabled={group.key === 'register' && grant.courseScope === 'SELECTED'}
-                        onChange={() => toggle(c)}
-                      />
-                      <span>
-                        <span className="block text-on-surface">{t(`team.cap.${c}.label`)}</span>
-                        <span className="block text-xs text-on-surface-variant">
-                          {t(`team.cap.${c}.hint`)}
-                        </span>
+                )}
+                {group.caps.map((c) => (
+                  <label
+                    key={c}
+                    className={`flex items-start gap-2 py-1 text-sm ${ACADEMY_WIDE_GROUPS.has(group.key) && grant.courseScope === 'SELECTED' ? 'opacity-50' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={has(c)}
+                      disabled={
+                        ACADEMY_WIDE_GROUPS.has(group.key) && grant.courseScope === 'SELECTED'
+                      }
+                      onChange={() => toggle(c)}
+                    />
+                    <span>
+                      <span className="block text-on-surface">{t(`team.cap.${c}.label`)}</span>
+                      <span className="block text-xs text-on-surface-variant">
+                        {t(`team.cap.${c}.hint`)}
                       </span>
-                    </label>
-                  ))}
-                  {group.key === 'messages' && (
-                    <label
-                      className={`flex items-start gap-2 py-1 text-sm ${has('message.reply') ? '' : 'opacity-50'}`}
-                    >
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        disabled={!has('message.reply')}
-                        checked={grant.directContact}
-                        onChange={() =>
-                          setGrant((g) => ({ ...g, directContact: !g.directContact }))
-                        }
-                      />
-                      <span>
-                        <span className="block text-on-surface">{t('team.direct.label')}</span>
-                        <span className="block text-xs text-on-surface-variant">
-                          {t('team.direct.hint')}
-                        </span>
+                    </span>
+                  </label>
+                ))}
+                {group.key === 'messages' && (
+                  <label
+                    className={`flex items-start gap-2 py-1 text-sm ${has('message.reply') ? '' : 'opacity-50'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      disabled={!has('message.reply')}
+                      checked={grant.directContact}
+                      onChange={() => setGrant((g) => ({ ...g, directContact: !g.directContact }))}
+                    />
+                    <span>
+                      <span className="block text-on-surface">{t('team.direct.label')}</span>
+                      <span className="block text-xs text-on-surface-variant">
+                        {t('team.direct.hint')}
                       </span>
-                    </label>
-                  )}
-                </div>
-              ),
-            )}
+                    </span>
+                  </label>
+                )}
+              </div>
+            ))}
           </div>
         </fieldset>
 

@@ -157,7 +157,8 @@
       "centerMembers": "Team",
       "courseBuilder": "Courses",
       "myStudents": "Students"
-    }
+    },
+    "desk": "Desk"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1039,6 +1040,10 @@
       "classOperations": {
         "label": "Classes & attendance",
         "hint": "Weekly timetables, real classes and per-class attendance (late, closing, makeup)"
+      },
+      "receptionDesk": {
+        "label": "Reception desk & QR cards",
+        "hint": "A QR card per student and a desk that checks them in by card or code in seconds (needs Classes & attendance)"
       }
     },
     "centersTitle": "Centers",
@@ -3249,7 +3254,19 @@
     "eRoomNotFound": "This room does not exist.",
     "eInvalidRange": "That range is not valid.",
     "eRoomConflict": "This room is already booked at that time.",
-    "eGroupConflict": "This group already has a session at that time."
+    "eGroupConflict": "This group already has a session at that time.",
+    "eCardNotFound": "This card is not recognised here.",
+    "eCardRevoked": "This card was cancelled.",
+    "eCardAlreadyActive": "This student already has an active card — replace it instead.",
+    "eCardChanged": "The card was changed from another screen. Refresh.",
+    "eDeskIdentityRequired": "Scan one card or type one code.",
+    "eStudentCodeInvalid": "That code is not right — check the digits.",
+    "eAttendanceClosed": "Attendance for this class is closed.",
+    "eClassEnded": "This class has ended.",
+    "eMakeupRequired": "This student is not in this class — confirm it is a makeup.",
+    "eClassesOff": "Classes are not on at this center.",
+    "eDeskTooManyMisses": "Too many unknown cards or codes — wait a few minutes.",
+    "eDeskSearchOff": "Name search is not available to you — scan the card or type the code."
   },
   "myStudio": {
     "title": "My Studio",
@@ -4928,6 +4945,10 @@
       "reception": {
         "title": "Reception",
         "hint": "Finds, registers and groups students — no money, no settings"
+      },
+      "frontDesk": {
+        "title": "Reception & desk",
+        "hint": "Student register + check-in by card + issuing cards — no money, no settings"
       }
     },
     "titleLabel": "Title students see",
@@ -4952,7 +4973,8 @@
       "teaching": "Teaching",
       "payments": "Payments",
       "guardians": "Parents",
-      "register": "Student register"
+      "register": "Student register",
+      "desk": "Reception desk"
     },
     "cap": {
       "student.view": {
@@ -5019,6 +5041,16 @@
         "short": "Registration",
         "label": "Registers and edits students",
         "hint": "New students, edits, withdraw and return, Excel import, and adding to a group."
+      },
+      "desk.checkin": {
+        "short": "Check-in",
+        "label": "Checks students in at the desk",
+        "hint": "By card, code or name, into a real class today. Cannot change a mark already made."
+      },
+      "card.manage": {
+        "short": "Cards",
+        "label": "Issues students’ QR cards",
+        "hint": "Issue a card, replace a lost or damaged one, and cancel it."
       }
     },
     "direct": {
@@ -5421,7 +5453,9 @@
     "actionsFor": "Actions for {{name}}",
     "emptyWithdrawn": "No withdrawn students",
     "emptyWithdrawnHint": "A student you withdraw appears here, and can be brought back at any time.",
-    "noGroupsToAddHint": "Ask the center to create a new group, then add them from here."
+    "noGroupsToAddHint": "Ask the center to create a new group, then add them from here.",
+    "backToDesk": "Continue at the desk",
+    "scannedCard": "That is a QR card number — scan it at the Desk, not in search."
   },
   "classes": {
     "off": "Classes are not on here",
@@ -5525,7 +5559,11 @@
     "cancelOneBody": "Only the class on {{date}} at {{time}} is cancelled. The weekly timetable and other classes do not change.",
     "cancelOneAction": "Cancel class",
     "legacyLink": "Earlier attendance by date",
-    "endedNote": "The class is over. Anything marked now is recorded as given (no automatic late). Close attendance when you are done."
+    "endedNote": "The class is over. Anything marked now is recorded as given (no automatic late). Close attendance when you are done.",
+    "via": {
+      "QR": "by card",
+      "CODE": "by code"
+    }
   },
   "timetable": {
     "title": "Weekly times",
@@ -5599,5 +5637,134 @@
     "note": "Their attendance in this group stays as it was.",
     "action": "Move",
     "short": "Move"
+  },
+  "desk": {
+    "title": "Desk",
+    "off": "The reception desk is not on here",
+    "offHint": "The platform team turns it on per center.",
+    "noAccess": "You cannot use the desk",
+    "noAccessHint": "The center owner can give you “Checks students in at the desk” on the Team screen.",
+    "rush": "Rush mode",
+    "rushHint": "Rush mode: scan a card and they are checked in on the spot when they have exactly one class open now. Anything else waits for you.",
+    "soundOn": "Turn sound on",
+    "soundOff": "Mute",
+    "scanButton": "Scan QR card",
+    "camera": "Camera",
+    "inputLabel": "Scan a card or type a code",
+    "inputPh": "Scan a card, or type a code, name or mobile",
+    "inputPhNoSearch": "Scan a card or type the student code",
+    "ready": "Ready for the next student",
+    "readyHint": "Scan the card with the scanner or camera, or type the code and press Enter.",
+    "newStudent": "New student",
+    "working": "One moment…",
+    "noMatch": "No student matches “{{q}}”",
+    "hasCard": "Has a card",
+    "noCard": "No card",
+    "issueCard": "Issue a card",
+    "choose": "They have more than one class open now — pick one.",
+    "withdrawn": "This student has withdrawn — they cannot be checked in.",
+    "classesOff": "Classes are not on at this center.",
+    "noClass": "No class of theirs is open now.",
+    "nextClass": "Next class {{time}} · {{group}} — check-in opens an hour before.",
+    "makeupOptions_one": "Makeup in another class (1 open)",
+    "makeupOptions_other": "Makeup in another class ({{count}} open)",
+    "makeupTitle": "Makeup attendance",
+    "makeupConfirm": "Check {{name}} in to {{group}} as a makeup? They stay in their own group.",
+    "makeupAction": "Makeup",
+    "pickHome": "{{name}} is in more than one group — which group’s class does {{group}} make up for?",
+    "seats": "{{seated}}/{{capacity}} seats",
+    "full": "Full",
+    "checkIn": "Check in",
+    "checkInLate": "Check in (late)",
+    "state": {
+      "OPEN": "Open",
+      "NOT_YET": "Later",
+      "ENDED": "Ended",
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
+    },
+    "done": {
+      "present": "Present ✓",
+      "late": "Late",
+      "already": "Already checked in ({{status}})"
+    },
+    "at": "at {{time}}",
+    "asMakeup": "makeup",
+    "next": "Next",
+    "offline": "No connection",
+    "offlineHint": "Nothing was recorded yet. Check the network and press Retry — it will not be recorded twice.",
+    "retry": "Retry",
+    "refusedGeneric": "That did not go through",
+    "recent": "Recent check-ins",
+    "recentEmpty": "Check-ins will show here.",
+    "hint": {
+      "CARD_REVOKED": "This card was cancelled (usually replaced by a new one). Type the student code.",
+      "CARD_NOT_FOUND": "Type the student code or name.",
+      "ATTENDANCE_CLOSED": "Corrections are made on the class page by someone who takes attendance.",
+      "CLASS_ENDED": "Marks after the class are made on the class page.",
+      "GROUP_FULL": "No seat left for a makeup in this class.",
+      "DESK_TOO_MANY_MISSES": "Wait a little and try again."
+    },
+    "scan": {
+      "title": "Scan QR card",
+      "hint": "Hold the card up to the camera, inside the square.",
+      "starting": "Starting the camera…",
+      "useKeyboard": "Type the code instead",
+      "err": {
+        "denied": {
+          "title": "Camera blocked",
+          "hint": "Allow this site to use the camera in the browser settings, or type the code."
+        },
+        "none": {
+          "title": "No camera",
+          "hint": "This device has no camera we can use. Use the scanner or type the code."
+        },
+        "busy": {
+          "title": "Camera in use",
+          "hint": "Another app is using it. Close it and try again."
+        },
+        "unsupported": {
+          "title": "This browser cannot use the camera",
+          "hint": "Try a recent Chrome or Safari, or type the code."
+        }
+      }
+    }
+  },
+  "card": {
+    "title": "QR card",
+    "state": {
+      "ACTIVE": "Active",
+      "NONE": "No card",
+      "REVOKED": "Cancelled"
+    },
+    "issuedOn": "Issued {{date}}",
+    "issue": "Issue card",
+    "reissue": "Replace card",
+    "revoke": "Cancel card",
+    "printAgainHint": "To print it again, use “Replace card” — the old one stops working.",
+    "reason": "Reason",
+    "reasons": {
+      "LOST": "Lost",
+      "DAMAGED": "Damaged",
+      "SECURITY": "Someone else is using it",
+      "REISSUED": "Replacement",
+      "MANUAL": "Management decision",
+      "OTHER": "Other"
+    },
+    "reissueTitle": "Replace the card",
+    "reissueBody": "The old card stops working immediately; the new one is printed now.",
+    "reissueConfirm": "Make a new card",
+    "revokeTitle": "Cancel the card",
+    "revokeBody": "The card stops working immediately. The student can check in by code until they get a new card.",
+    "revokeConfirm": "Cancel card",
+    "print": {
+      "title": "Print card",
+      "hint": "Print it now — once this screen closes, printing again needs a new card.",
+      "print": "Print",
+      "done": "Done",
+      "code": "Student code",
+      "kind": "Student card",
+      "note": "For use at the center only"
+    }
   }
 }

@@ -34,10 +34,13 @@ export const STATUS_PRESSED: Record<AttendanceStatus, string> = {
 export function StatusLabel({
   status,
   auto,
+  via,
   time,
 }: {
   status: AttendanceStatus | null;
   auto?: boolean;
+  /** How the desk identified them, when they were checked in there. */
+  via?: 'QR' | 'CODE' | null;
   time?: string | null;
 }) {
   const { t } = useTranslation();
@@ -57,6 +60,7 @@ export function StatusLabel({
       </span>
       {t(`classes.status.${status}`)}
       {auto && <span className="font-normal text-outline">· {t('classes.auto')}</span>}
+      {via && <span className="font-normal text-outline">· {t(`classes.via.${via}`)}</span>}
       {time && (
         <span className="font-normal tabular-nums text-outline" dir="ltr">
           {time}

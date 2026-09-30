@@ -125,6 +125,13 @@ export const REGISTRY_ITEM: NavItem = {
  * layout only where classes are switched on and the viewer may take
  * attendance (GET /class-ops/access).
  */
+/** The reception desk (C3): scan, find, check in. Shown where it is on and allowed. */
+export const DESK_ITEM: NavItem = {
+  to: '/desk',
+  icon: 'qr_code_scanner',
+  labelKey: 'nav.desk',
+};
+
 export const CLASSES_ITEM: NavItem = {
   to: '/classes',
   icon: 'co_present',
@@ -196,6 +203,7 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
   [Role.STAFF]: [
     '/center',
+    '/desk',
     '/classes',
     '/center/students',
     '/center/members',
@@ -204,6 +212,7 @@ export const BOTTOM_TABS: Record<string, string[]> = {
   ],
   ASSISTANT: [
     '/staff',
+    '/desk',
     '/classes',
     '/center/students',
     '/messages',

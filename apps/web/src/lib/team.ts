@@ -20,7 +20,9 @@ export type AssistantCapability =
   | 'payment.view'
   | 'guardian.manage'
   | 'student.directory'
-  | 'student.register';
+  | 'student.register'
+  | 'desk.checkin'
+  | 'card.manage';
 
 export interface AssistantGrant {
   title: string;
@@ -74,10 +76,13 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   { key: 'guardians', caps: ['guardian.manage'] },
   // The student register (Center Operations C1) — offered only where it is switched on.
   { key: 'register', caps: ['student.directory', 'student.register'] },
+  // The reception desk (C3) — offered only where it is switched on.
+  { key: 'desk', caps: ['desk.checkin', 'card.manage'] },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
-export type PresetKey = 'support' | 'academic' | 'operations' | 'reception' | 'custom';
+export type PresetKey =
+  'support' | 'academic' | 'operations' | 'reception' | 'frontDesk' | 'custom';
 
 const SUPPORT: AssistantCapability[] = [
   'student.view',
@@ -118,11 +123,28 @@ export const PRESETS: Record<
     permissions: ['student.view', 'student.directory', 'student.register'],
     directContact: false,
   },
+  // The reception desk (C3): the register plus checking learners in and
+  // their QR cards. Still nothing about money, courses, settings or teaching.
+  frontDesk: {
+    permissions: [
+      'student.view',
+      'student.directory',
+      'student.register',
+      'desk.checkin',
+      'card.manage',
+    ],
+    directContact: false,
+  },
 };
 
 /** Capability groups and presets that only mean something where the student register is on. */
 export const REGISTRY_ONLY_GROUPS = new Set(['register']);
 export const REGISTRY_ONLY_PRESETS = new Set<PresetKey>(['reception']);
+/** …and the ones that only mean something where the desk (C3) is on. */
+export const DESK_ONLY_GROUPS = new Set(['desk']);
+export const DESK_ONLY_PRESETS = new Set<PresetKey>(['frontDesk']);
+/** Groups that reach the whole academy, so never granted course by course. */
+export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk']);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
 export function presetOf(permissions: string[], directContact: boolean): PresetKey {

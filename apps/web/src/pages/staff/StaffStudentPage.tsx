@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import Avatar from '../../components/Avatar';
-import { Badge, EmptyState, Spinner } from '../../components/ui';
+import { Badge, EmptyState, Spinner, TabRail } from '../../components/ui';
 import { dateShort, egp } from '../../lib/format';
 import {
   useAssistantWorkspace,
@@ -129,22 +129,8 @@ export default function StaffStudentPage() {
 
       <RegistryCard academyId={academyId} studentId={s.id} />
 
-      <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist">
-        {tabs.map((k) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            onClick={() => setTab(k)}
-            className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
-              tab === k
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            {t(`care.tab.${k}`)}
-          </button>
-        ))}
+      <div className="mb-4">
+        <TabRail tabs={tabs} value={tab} onChange={setTab} labelOf={(k) => t(`care.tab.${k}`)} />
       </div>
 
       {tab === 'overview' && (

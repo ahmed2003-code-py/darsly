@@ -27,6 +27,7 @@ import {
   useSetStudentStatus,
   useUpdateStudent,
 } from '../../lib/centerStudents';
+import { looksLikeCard } from '../../lib/desk';
 import { confirmDelete } from '../../lib/confirm';
 import { errorMessage } from '../../lib/errorMessage';
 import { useToastStore } from '../../lib/toast';
@@ -45,7 +46,11 @@ export default function CenterStudentsPage() {
   const academyId = useRegistryAcademyId();
   const access = useRegistryAccess(academyId);
   const [q, setQ] = useState('');
-  const query = useDeferredValue(q.trim());
+  const typed = useDeferredValue(q.trim());
+  // A card scanned into this box is a card number, not a name: it must never
+  // travel in the search's query string (C3 keeps tokens to POST bodies).
+  const scannedCard = looksLikeCard(typed);
+  const query = scannedCard ? '' : typed;
   const [status, setStatus] = useState<RegistryStatus | 'ALL'>('ACTIVE');
   const [page, setPage] = useState(1);
   const canView = !!access.data?.canView;
@@ -164,7 +169,7 @@ export default function CenterStudentsPage() {
         <div className="relative flex-1">
           <span
             aria-hidden
-            className="material-symbols-outlined pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-xl text-outline"
+            className="material-symbols-outlined pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-xl text-outline [direction:inherit]"
           >
             search
           </span>
@@ -178,6 +183,11 @@ export default function CenterStudentsPage() {
             autoFocus
             enterKeyHint="search"
           />
+          {scannedCard && (
+            <p className="mt-2 text-sm text-on-surface-variant" role="status">
+              {t('registry.scannedCard')}
+            </p>
+          )}
         </div>
         <div
           role="tablist"
@@ -445,7 +455,16 @@ function StudentRow({
  * tap, an Enter while the first is out, or a retry after a lost response all
  * reach the server as the same attempt and get the same student back.
  */
-function NewStudentModal({ academyId, onClose }: { academyId: string; onClose: () => void }) {
+export function NewStudentModal({
+  academyId,
+  onClose,
+  onRegistered,
+}: {
+  academyId: string;
+  onClose: () => void;
+  /** The desk (C3): carry on with the learner just registered, there. */
+  onRegistered?: (student: RegistryStudent) => void;
+}) {
   const { t } = useTranslation();
   const groups = useRegistryGroups(academyId);
   const reg = useRegisterStudent(academyId);
@@ -528,7 +547,20 @@ function NewStudentModal({ academyId, onClose }: { academyId: string; onClose: (
             </p>
           )}
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-            <button className="btn-primary px-5 py-2.5" onClick={another} autoFocus>
+            {onRegistered && (
+              <button
+                className="btn-primary px-5 py-2.5"
+                onClick={() => onRegistered(done)}
+                autoFocus
+              >
+                {t('registry.backToDesk')}
+              </button>
+            )}
+            <button
+              className={onRegistered ? 'btn-secondary px-5 py-2.5' : 'btn-primary px-5 py-2.5'}
+              onClick={another}
+              autoFocus={!onRegistered}
+            >
               {t('registry.another')}
             </button>
             <Link

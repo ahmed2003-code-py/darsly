@@ -488,7 +488,12 @@ function RosterRow({
               {s.code}
             </span>
           )}
-          <StatusLabel status={s.status} auto={s.method === 'AUTO'} time={time} />
+          <StatusLabel
+            status={s.status}
+            auto={s.method === 'AUTO'}
+            via={s.method === 'QR' || s.method === 'CODE' ? s.method : null}
+            time={time}
+          />
         </p>
         {s.makeup && (
           <p className="mt-0.5 text-xs text-on-surface-variant">

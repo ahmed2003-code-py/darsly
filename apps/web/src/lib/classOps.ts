@@ -66,7 +66,8 @@ export interface RosterStudent {
   avatarUrl: string | null;
   expected: boolean;
   status: AttendanceStatus | null;
-  method: 'MANUAL' | 'AUTO' | null;
+  /** QR / CODE: checked in at the reception desk (C3). */
+  method: 'MANUAL' | 'AUTO' | 'QR' | 'CODE' | null;
   checkedInAt: string | null;
   makeup: {
     homeGroup: { id: string; name: string };

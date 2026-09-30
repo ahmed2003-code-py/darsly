@@ -24,11 +24,13 @@ import {
   navFor,
   REGISTRY_ITEM,
   CLASSES_ITEM,
+  DESK_ITEM,
   MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
 import { useRegistryAccess } from '../lib/centerStudents';
 import { useClassAccess, useMyClassAccess } from '../lib/classOps';
+import { useDeskAccess } from '../lib/desk';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -106,8 +108,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   const classes = useClassAccess(staffish);
   // …or in any other workspace of theirs (a Center teacher's home is their own academy).
   const myClasses = useMyClassAccess(staffish);
+  // The desk (C3): where it is on and this person may check learners in.
+  const desk = useDeskAccess(
+    staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
+  );
   const baseNav = [
     roleNav[0],
+    ...(desk.data?.canCheckIn ? [DESK_ITEM] : []),
     ...(classes.data?.canAttend || myClasses.data?.enabled ? [CLASSES_ITEM] : []),
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
     ...roleNav.slice(1),

@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Badge } from '../../components/ui';
 import { localPhone, useRegistryAccess, useRegistryRecord } from '../../lib/centerStudents';
+import { useDeskAccess } from '../../lib/desk';
+import CardPanel from '../desk/CardPanel';
 
 /**
  * Student 360's register strip: this academy's code for the learner and what
@@ -19,6 +21,7 @@ export default function RegistryCard({
   const { t, i18n } = useTranslation();
   const access = useRegistryAccess(academyId);
   const record = useRegistryRecord(academyId, studentId, !!access.data?.canView);
+  const desk = useDeskAccess(academyId);
   const r = record.data;
   if (!r) return null;
   const ar = i18n.language !== 'en';
@@ -82,6 +85,14 @@ export default function RegistryCard({
             </Badge>
           ))}
         </div>
+      )}
+      {/* The learner's QR card (C3), for whoever may issue cards here. */}
+      {desk.data?.canManageCards && (
+        <CardPanel
+          academyId={academyId}
+          academyStudentId={r.id}
+          withdrawn={r.status !== 'ACTIVE'}
+        />
       )}
     </section>
   );

@@ -40,6 +40,7 @@ const CenterStudentsPage = lazyPage(() => import('./pages/center/CenterStudentsP
 const StudentImportPage = lazyPage(() => import('./pages/center/StudentImportPage'));
 const ClassesTodayPage = lazyPage(() => import('./pages/classes/ClassesTodayPage'));
 const ClassPage = lazyPage(() => import('./pages/classes/ClassPage'));
+const DeskPage = lazyPage(() => import('./pages/desk/DeskPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -772,6 +773,16 @@ export default function App() {
             element={
               <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
                 <ClassPage />
+              </RequireAuth>
+            }
+          />
+          {/* The reception desk (Center Operations C3). The page and the API
+              check desk.checkin and the receptionDesk flag. */}
+          <Route
+            path="/desk"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <DeskPage />
               </RequireAuth>
             }
           />

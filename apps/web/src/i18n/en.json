@@ -149,7 +149,15 @@
     "assisting": "Assisting",
     "guardianHome": "My children",
     "centerStudents": "Students",
-    "classes": "Classes"
+    "classes": "Classes",
+    "short": {
+      "adminOverview": "Overview",
+      "adminTeachers": "Teachers",
+      "adminWallet": "Top-ups",
+      "centerMembers": "Team",
+      "courseBuilder": "Courses",
+      "myStudents": "Students"
+    }
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",

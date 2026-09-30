@@ -63,7 +63,7 @@ export default function BottomNav({
                 </span>
                 {!floating && (
                   <span className="w-full truncate text-center text-[11px] font-bold leading-tight">
-                    {t(item.labelKey)}
+                    {t(item.shortLabelKey ?? item.labelKey)}
                   </span>
                 )}
               </>

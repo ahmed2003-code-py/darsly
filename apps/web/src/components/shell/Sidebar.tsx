@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth';
 import type { NavItem } from './nav';
+import ColorModeToggle from '../ColorModeToggle';
+import { setLanguage } from '../../i18n';
 
 /**
  * The navigation, in whichever shape the theme asked for.
@@ -28,7 +30,7 @@ export default function Sidebar({
   roleLabel: string;
   onNavigate?: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuthStore();
 
   return (
@@ -47,7 +49,7 @@ export default function Sidebar({
         )}
       </div>
 
-      <nav className="shell-nav flex-1 space-y-0.5 px-3">
+      <nav className="shell-nav min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3">
         {nav.map((item) => (
           <NavLink
             key={item.to}
@@ -94,6 +96,24 @@ export default function Sidebar({
           </NavLink>
         ))}
       </nav>
+
+      {/* On a phone the top bar keeps only what is used every visit; light/dark
+          and language are here, in the drawer, with words beside them. */}
+      {labels && (
+        <div className="flex items-center gap-1 px-4 pt-2 sm:hidden">
+          <ColorModeToggle />
+          <button
+            type="button"
+            className="flex min-h-11 flex-1 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-on-surface-variant hover:bg-surface-container-low"
+            onClick={() => void setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>
+              translate
+            </span>
+            {i18n.language === 'ar' ? 'English' : 'العربية'}
+          </button>
+        </div>
+      )}
 
       {/* Account card at the foot → profile */}
       <div className="shell-account p-4">

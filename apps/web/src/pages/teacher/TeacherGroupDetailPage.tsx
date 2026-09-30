@@ -13,7 +13,7 @@ import {
   useUnassignStaff,
   useUpdateGroup,
 } from '../../lib/academyOps';
-import { Badge, EmptyState, ErrorNote, Modal, Skeleton } from '../../components/ui';
+import { Badge, EmptyState, ErrorNote, Modal, Skeleton, TabRail } from '../../components/ui';
 import { askConfirm } from '../../lib/confirm';
 import { confirmDelete } from '../../lib/confirm';
 import { useClassAccess } from '../../lib/classOps';
@@ -522,26 +522,13 @@ export default function TeacherGroupDetailPage() {
 
       <GroupChatCard groupId={groupId!} archived={data.status === 'ARCHIVED'} />
 
-      {/* One rail; on a phone it scrolls sideways rather than wrapping into rows. */}
-      <div
-        className="-mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
-        role="tablist"
-      >
-        {tabs.map((tb) => (
-          <button
-            key={tb}
-            role="tab"
-            aria-selected={tab === tb}
-            className={`min-h-11 shrink-0 whitespace-nowrap rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
-            }`}
-            onClick={() => setTab(tb)}
-          >
-            {t(`groups.detailTab.${tb}`)}
-          </button>
-        ))}
+      <div className="mb-6">
+        <TabRail
+          tabs={tabs}
+          value={tab}
+          onChange={setTab}
+          labelOf={(tb) => t(`groups.detailTab.${tb}`)}
+        />
       </div>
 
       {tab === 'students' && (

@@ -131,6 +131,70 @@ export function PageHeader({
   );
 }
 
+/**
+ * Section tabs that work on a phone: one row that scrolls sideways instead of
+ * wrapping or squeezing (a squeezed pill became a circle over a clipped
+ * label), every tab ≥44px tall, the selected one scrolled into view, and the
+ * arrow keys moving between tabs in the reading direction (RTL-aware).
+ */
+export function TabRail<T extends string>({
+  tabs,
+  value,
+  onChange,
+  labelOf,
+  label,
+}: {
+  tabs: readonly T[];
+  value: T;
+  onChange: (tab: T) => void;
+  labelOf: (tab: T) => string;
+  label?: string;
+}) {
+  const refs = useRef(new Map<T, HTMLButtonElement>());
+  useEffect(() => {
+    refs.current.get(value)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [value]);
+  const onKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
+    const step =
+      e.key === 'ArrowRight' ? (rtl ? -1 : 1) : e.key === 'ArrowLeft' ? (rtl ? 1 : -1) : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = tabs[(tabs.indexOf(value) + step + tabs.length) % tabs.length];
+    onChange(next);
+    refs.current.get(next)?.focus();
+  };
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      onKeyDown={onKey}
+      className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:gap-2"
+    >
+      {tabs.map((tb) => (
+        <button
+          key={tb}
+          ref={(el) => {
+            if (el) refs.current.set(tb, el);
+          }}
+          type="button"
+          role="tab"
+          aria-selected={value === tb}
+          tabIndex={value === tb ? 0 : -1}
+          onClick={() => onChange(tb)}
+          className={`min-h-11 shrink-0 whitespace-nowrap rounded-full px-4 font-heading text-sm font-bold transition sm:px-5 ${
+            value === tb
+              ? 'bg-primary text-on-primary'
+              : 'bg-surface-container-lowest text-on-surface-variant ring-1 ring-inset ring-outline-variant hover:bg-surface-container-low'
+          }`}
+        >
+          {labelOf(tb)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function EmptyState({ icon, title, hint }: { icon: string; title: string; hint?: string }) {
   return (
     <div className="card flex flex-col items-center gap-2 py-16 text-center">

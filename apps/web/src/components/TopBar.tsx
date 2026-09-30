@@ -252,19 +252,25 @@ export default function TopBar({
           </>
         )}
 
-        <div className="shell-header-controls flex shrink-0 items-center gap-2 sm:gap-1">
-          {/* Light or dark — the same switch the public academy page carries,
-              so the choice a visitor made out there is still theirs in here. */}
-          <ColorModeToggle />
+        <div className="shell-header-controls flex shrink-0 items-center gap-0.5 sm:gap-1">
+          {/* Light/dark and language. On a phone they live in the menu drawer
+              instead (Sidebar), so the bar keeps room for what is used
+              every visit — search, notifications, the account. */}
+          <div className="hidden items-center gap-1 sm:flex">
+            {/* Light or dark — the same switch the public academy page carries,
+                so the choice a visitor made out there is still theirs in here. */}
+            <ColorModeToggle />
 
-          {/* Language */}
-          <button
-            className="grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low"
-            onClick={() => void setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
-            title={t('common.language')}
-          >
-            <span className="material-symbols-outlined">translate</span>
-          </button>
+            {/* Language */}
+            <button
+              className="grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low"
+              onClick={() => void setLanguage(i18n.language === 'ar' ? 'en' : 'ar')}
+              title={t('common.language')}
+              aria-label={t('common.language')}
+            >
+              <span className="material-symbols-outlined">translate</span>
+            </button>
+          </div>
 
           {/* Notifications */}
           <div className="relative" ref={bellRef}>

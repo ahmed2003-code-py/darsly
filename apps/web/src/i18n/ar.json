@@ -149,7 +149,15 @@
     "assisting": "مساعدة",
     "guardianHome": "أولادي",
     "centerStudents": "الطلاب",
-    "classes": "الحصص"
+    "classes": "الحصص",
+    "short": {
+      "adminOverview": "الرئيسية",
+      "adminTeachers": "المعلمين",
+      "adminWallet": "الشحن",
+      "centerMembers": "الفريق",
+      "courseBuilder": "الدورات",
+      "myStudents": "طلابي"
+    }
   },
   "dashboardStudent": {
     "greeting": "مرحباً بك يا {{name}}",

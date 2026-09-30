@@ -328,7 +328,7 @@ export default function ClassPage() {
           </p>
           {canRest && (
             <button
-              className="btn-secondary min-h-11 flex-1 px-3 sm:flex-none sm:px-4"
+              className="btn-secondary min-h-11 flex-1 whitespace-nowrap px-3 sm:flex-none sm:px-4"
               onClick={restPresent}
             >
               {t('classes.restPresent')}
@@ -339,12 +339,15 @@ export default function ClassPage() {
           )}
           {data.canClose && (
             <button
-              className="btn-primary min-h-11 flex-1 px-3 sm:flex-none sm:px-4"
+              className="btn-primary min-h-11 flex-1 whitespace-nowrap px-3 sm:flex-none sm:px-4"
               onClick={closeSheet}
               disabled={close.isPending}
               aria-busy={close.isPending}
             >
-              <span className="material-symbols-outlined text-lg" aria-hidden>
+              <span
+                className="material-symbols-outlined hidden text-lg min-[400px]:inline"
+                aria-hidden
+              >
                 lock
               </span>
               {t('classes.close')}

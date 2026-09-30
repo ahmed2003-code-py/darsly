@@ -259,6 +259,12 @@ model Academy {
   /// Paper exams a teacher scanned in, waiting to become ordinary exams.
   paperImports PaperImport[]
 
+  /// Center Operations C1: the academy's own register of its learners.
+  students            AcademyStudent[]
+  studentImports      StudentImport[]
+  /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
+  provisionedStudents StudentProfile[] @relation("provisionedStudents")
+
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
   /// Darsly's versioned commercial agreement with this academy (Live sales).
@@ -617,6 +623,135 @@ model GroupSession {
   @@index([teacherUserId, startAt])
 }
 
+// ─────────────────────── Center Operations — Student Registry (C1) ─────────
+
+enum AcademyStudentStatus {
+  ACTIVE
+  /// Left the academy. Never a delete: the record, its code and every row that
+  /// points at the learner stay; reactivating brings the same record back.
+  WITHDRAWN
+}
+
+/// How a learner came onto the register.
+enum AcademyStudentSource {
+  /// Registered at the academy's desk.
+  DESK
+  /// A row of a spreadsheet import (StudentImport).
+  IMPORT
+  /// Enrolled online in one of the academy's courses (the Enrollment trigger).
+  ONLINE
+  /// Was already the academy's student when the register was introduced.
+  BACKFILL
+}
+
+/// The academy's own record of a learner — "the Center's file on Ahmed".
+///
+/// Not an identity: the learner is `studentId` (StudentProfile), exactly as in
+/// GroupMembership, AttendanceRecord and every other learner-facing table, so
+/// nothing downstream ever needs to accept a second kind of student id. What
+/// lives here is what is the academy's and nobody else's: its code for the
+/// learner, the contact numbers it keeps, the school and year as it knows
+/// them, and whether the learner is still with it. Two academies teaching the
+/// same learner hold two records that share one StudentProfile and know
+/// nothing of each other.
+///
+/// Phones here are contact details, never login handles and never unique —
+/// siblings share a guardian's number, and a child often gives a parent's.
+///
+/// DB-side (migration 20261031100000): `nameNormalized` is written by a
+/// trigger from `fullName` (academy_student_name_key — the one Arabic
+/// normaliser), `code` must be six digits with a valid Luhn check digit, and
+/// every new Enrollment registers its student here (source ONLINE).
+model AcademyStudent {
+  id              String               @id @default(cuid())
+  academyId       String
+  academy         Academy              @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  studentId       String
+  student         StudentProfile       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// Six digits: five random (first never 0, so a spreadsheet never eats it)
+  /// and a Luhn check digit that catches a mistyped digit before any lookup.
+  /// Unique per academy only — the same six digits mean nothing elsewhere. A
+  /// desk lookup key: it signs no one in and authorizes nothing.
+  code            String
+  /// The name as this academy spells it (for a shell, also its User.fullName).
+  fullName        String
+  /// Search key derived from fullName by trigger. Never written by the API.
+  nameNormalized  String               @default("")
+  /// Egyptian mobile numbers in E.164, as the academy recorded them.
+  studentPhone    String?
+  guardianName    String?
+  guardianPhone   String?
+  school          String?
+  gradeId         String?
+  grade           GradeLevel?          @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  status          AcademyStudentStatus @default(ACTIVE)
+  source          AcademyStudentSource
+  joinedAt        DateTime             @default(now())
+  /// When the learner was last withdrawn. Null while ACTIVE.
+  leftAt          DateTime?
+  /// The staff member who registered the learner (a plain id, as
+  /// GroupSession.createdBy: removing a staff account never touches records).
+  createdByUserId String?
+  /// Idempotency: the key of the request (or import row) that created this
+  /// record. A retried, double-clicked or concurrent repeat of the same action
+  /// collides here and gets the first record back instead of a second learner.
+  requestKey      String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@unique([academyId, studentId])
+  @@unique([academyId, code])
+  @@unique([academyId, requestKey])
+  @@index([academyId, status, nameNormalized])
+  @@index([academyId, studentPhone])
+  @@index([academyId, guardianPhone])
+  @@index([studentId])
+  @@index([gradeId])
+}
+
+enum StudentImportStatus {
+  /// Validated and waiting for the operator to commit it.
+  PREVIEWED
+  /// A commit holds the lease (leaseUntil) and is writing rows.
+  COMMITTING
+  COMMITTED
+}
+
+/// One spreadsheet import onto an academy's register.
+///
+/// The preview IS the batch: the server validates and normalises every row
+/// once, stores the result here, and commit writes exactly these rows — the
+/// browser only ever names the batch, so nothing it sends after the preview
+/// can change what is imported. Each row is created with requestKey
+/// `import:<id>:<row>`, so a commit that is retried, repeated or resumed
+/// after a crash writes each learner at most once.
+model StudentImport {
+  id              String              @id @default(cuid())
+  academyId       String
+  academy         Academy             @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  status          StudentImportStatus @default(PREVIEWED)
+  /// sha256 of the normalised rows — the content's identity, never the filename.
+  contentHash     String
+  fileName        String?
+  /// The validated rows to write. Holds names and phones, so it is cleared the
+  /// moment the import is committed; an abandoned preview is purged after a day.
+  rows            Json?
+  /// Per-row outcome after commit: { row, status, code?, error? } — no names, no phones.
+  results         Json?
+  totalRows       Int
+  validRows       Int
+  createdCount    Int                 @default(0)
+  skippedCount    Int                 @default(0)
+  createdByUserId String
+  leaseUntil      DateTime?
+  committedAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([academyId, createdAt])
+  @@index([academyId, contentHash])
+}
+
 // Single-use, hashed password-reset tokens (forgot-password flow).
 model PasswordResetToken {
   id        String    @id @default(cuid())
@@ -828,6 +963,17 @@ model StudentProfile {
   groupMemberships  GroupMembership[]
   attendanceRecords AttendanceRecord[]
 
+  /// Center Operations C1. Set when an academy's desk (or import) created this
+  /// profile for someone with no Darsly account — a "shell": its User has no
+  /// email, phone, username or password, so nothing can sign in as it. It is
+  /// provenance, never authority: tenancy stays AcademyStudent.academyId, and
+  /// what makes a shell unable to sign in is the absence of credentials, not
+  /// this column. Null for every self-registered student.
+  provisionedByAcademyId String?
+  provisionedByAcademy   Academy?         @relation("provisionedStudents", fields: [provisionedByAcademyId], references: [id], onDelete: SetNull)
+  /// The academies that keep this learner on their register.
+  academyRecords         AcademyStudent[]
+
   /// Soft delete: rows with deletedAt set are hidden from all reads.
   deletedAt DateTime?
 }
@@ -929,10 +1075,12 @@ model GradeLevel {
   /// every student sitting in one of its years.
   stage     EducationStage?
 
-  students   StudentProfile[]
-  courses    CourseGrade[]
-  teachers   TeacherGrade[]
-  challenges Challenge[]
+  students        StudentProfile[]
+  courses         CourseGrade[]
+  teachers        TeacherGrade[]
+  challenges      Challenge[]
+  /// The year an academy's register records for a learner (may differ from the profile's own).
+  academyStudents AcademyStudent[]
 }
 
 /// Which years a course is offered to.

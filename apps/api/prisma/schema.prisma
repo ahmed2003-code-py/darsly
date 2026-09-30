@@ -271,8 +271,10 @@ model Academy {
   /// Center Operations C1: the academy's own register of its learners.
   students            AcademyStudent[]
   studentImports      StudentImport[]
+  /// Center Operations C3: the QR cards this academy issued to its learners.
+  studentCards        AcademyStudentCard[]
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
-  provisionedStudents StudentProfile[] @relation("provisionedStudents")
+  provisionedStudents StudentProfile[]     @relation("provisionedStudents")
 
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
@@ -522,10 +524,15 @@ enum AttendanceStatus {
   EXCUSED
 }
 
-/// How a record came to be. C3 adds its scan methods here.
+/// How a record came to be. The server derives it from how the learner was
+/// identified — a client never sends it.
 enum AttendanceMethod {
   MANUAL
   AUTO
+  /// C3: checked in at the desk by scanning their card.
+  QR
+  /// C3: checked in at the desk by their student code.
+  CODE
 }
 
 // One attendance-taking occasion for a group, on one calendar date. The
@@ -827,6 +834,8 @@ model AcademyStudent {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
+  cards AcademyStudentCard[]
+
   @@unique([academyId, studentId])
   @@unique([academyId, code])
   @@unique([academyId, requestKey])
@@ -835,6 +844,47 @@ model AcademyStudent {
   @@index([academyId, guardianPhone])
   @@index([studentId])
   @@index([gradeId])
+}
+
+/// Why a card stopped working.
+enum CardRevokeReason {
+  LOST
+  DAMAGED
+  SECURITY
+  /// Replaced by a new card without a more specific reason.
+  REISSUED
+  MANUAL
+  OTHER
+}
+
+/// Center Operations C3 — a learner's QR card at one academy.
+///
+/// The QR holds an opaque random token and nothing else; only its SHA-256 is
+/// kept here, so this table cannot print or reproduce a card. The token is
+/// never authentication: it identifies a card to signed-in staff of this
+/// academy who hold desk.checkin, and nothing more.
+///
+/// At most one card per learner is active (revokedAt IS NULL) — a partial
+/// unique index. Cards are never deleted or reactivated: a revoked card stays
+/// as history, and a trigger refuses any change to a card's identity.
+model AcademyStudentCard {
+  id               String            @id @default(cuid())
+  academyId        String
+  academy          Academy           @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  academyStudentId String
+  academyStudent   AcademyStudent    @relation(fields: [academyStudentId], references: [id], onDelete: Cascade)
+  /// Lowercase hex SHA-256 of the token printed in the QR.
+  tokenHash        String            @unique
+  issuedAt         DateTime          @default(now())
+  /// Staff who issued it (a plain id, like GroupSession.createdBy).
+  issuedBy         String
+  revokedAt        DateTime?
+  revokedBy        String?
+  revokeReason     CardRevokeReason?
+  createdAt        DateTime          @default(now())
+
+  @@index([academyStudentId, issuedAt])
+  @@index([academyId])
 }
 
 enum StudentImportStatus {

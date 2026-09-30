@@ -50,6 +50,11 @@ export const CAPABILITIES = [
   // of their own courses and groups, and the desk is granted these by the owner.
   'student.directory', // look up and export the register: codes, names, phones, guardians
   'student.register', // register, edit, withdraw/reactivate, import, and enrol a register student into a group
+  // Center Operations C3 — the reception desk. Both reach every learner of the
+  // academy (a scan can be anyone), so neither is a TEACHER default: a Center
+  // teacher keeps C2's attendance for their own groups; the owner grants these.
+  'desk.checkin', // identify a learner (card, code, register search) and check them into a real class
+  'card.manage', // issue, reissue and revoke learners' QR cards
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -110,6 +115,8 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   // them off an assistant limited to some courses.
   'student.directory',
   'student.register',
+  'desk.checkin',
+  'card.manage',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -132,6 +139,8 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'chat.moderate',
   'student.directory',
   'student.register',
+  'desk.checkin',
+  'card.manage',
 ]);
 
 function isCapability(x: string): x is Capability {

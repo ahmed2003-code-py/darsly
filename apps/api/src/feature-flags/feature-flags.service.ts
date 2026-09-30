@@ -21,6 +21,9 @@ export const FEATURE_FLAG_KEYS = [
   // attendance (start, late, close, makeup). New to everyone, so OFF until a
   // platform admin turns it on per academy.
   'classOperations',
+  // Center Operations C3 — QR student cards and the reception desk. Its own
+  // switch: turning classOperations on never opens the desk.
+  'receptionDesk',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
@@ -35,6 +38,7 @@ const DEFAULT_ENABLED = true;
 const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
   'studentRegistry',
   'classOperations',
+  'receptionDesk',
 ]);
 
 function defaultFor(key: FeatureFlagKey): boolean {

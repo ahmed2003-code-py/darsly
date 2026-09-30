@@ -326,7 +326,7 @@ export default function StudentImportPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 font-semibold leading-snug [overflow-wrap:anywhere]">
-                    {r.data.fullName || '—'}
+                    <bdi>{r.data.fullName || '—'}</bdi>
                   </p>
                   <span className="shrink-0 text-xs text-outline">
                     {t('registry.imp.rowN', { n: r.row })}
@@ -339,7 +339,7 @@ export default function StudentImportPage() {
                     </span>
                   )}
                   {r.data.gradeName && <span>{r.data.gradeName}</span>}
-                  {r.data.groupName && <span>{r.data.groupName}</span>}
+                  {r.data.groupName && <bdi>{r.data.groupName}</bdi>}
                 </p>
                 <div className="mt-2">
                   <RowOutcome r={r} />
@@ -376,7 +376,7 @@ export default function StudentImportPage() {
                   <tr key={r.row} className={r.status === 'ERROR' ? 'bg-error-container/30' : ''}>
                     <td className="px-3 py-2 tabular-nums text-outline">{r.row}</td>
                     <td className="min-w-[9rem] px-3 py-2 font-semibold [overflow-wrap:anywhere]">
-                      {r.data.fullName || '—'}
+                      <bdi>{r.data.fullName || '—'}</bdi>
                     </td>
                     <td className="whitespace-nowrap px-3 py-2">
                       <span dir="ltr" className="tabular-nums">

@@ -317,7 +317,7 @@ function StudentRow({
             className="-my-2 block py-2 font-heading text-base font-bold leading-snug [overflow-wrap:anywhere] hover:underline"
             to={profile}
           >
-            {s.fullName}
+            <bdi>{s.fullName}</bdi>
           </Link>
           {(meta.length > 0 || withdrawn) && (
             <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant">
@@ -358,7 +358,7 @@ function StudentRow({
             <p className="mt-2 flex flex-wrap gap-1.5" aria-label={t('registry.groups')}>
               {s.groups.map((g) => (
                 <Badge key={g.id} tone="primary">
-                  {g.name}
+                  <bdi>{g.name}</bdi>
                 </Badge>
               ))}
             </p>
@@ -398,7 +398,7 @@ function StudentRow({
         )}
       </div>
       {menu && (
-        <Modal open title={s.fullName} onClose={() => setMenu(false)}>
+        <Modal open title={`\u2068${s.fullName}\u2069`} onClose={() => setMenu(false)}>
           <div className="grid gap-2">
             <Link className="btn-secondary justify-center py-3" to={profile}>
               {t('registry.openProfile')}
@@ -559,7 +559,7 @@ function NewStudentModal({ academyId, onClose }: { academyId: string; onClose: (
                     <span className="font-mono font-bold tabular-nums" dir="ltr">
                       {d.code}
                     </span>
-                    <span className="font-semibold">{d.fullName}</span>
+                    <bdi className="font-semibold">{d.fullName}</bdi>
                     {d.grade && <span>· {d.grade}</span>}
                     {d.status === 'WITHDRAWN' && (
                       <Badge tone="warn">{t('registry.status.WITHDRAWN')}</Badge>

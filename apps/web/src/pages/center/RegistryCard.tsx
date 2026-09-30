@@ -78,7 +78,7 @@ export default function RegistryCard({
           <span className="text-xs text-outline">{t('registry.groups')}</span>
           {r.groups.map((g) => (
             <Badge key={g.id} tone="primary">
-              {g.name}
+              <bdi>{g.name}</bdi>
             </Badge>
           ))}
         </div>

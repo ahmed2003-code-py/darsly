@@ -36,6 +36,8 @@ const CenterSubjectsPage = lazyPage(() => import('./pages/center/CenterSubjectsP
 const CenterSettingsPage = lazyPage(() => import('./pages/center/CenterSettingsPage'));
 const CenterStudioPage = lazyPage(() => import('./pages/center/CenterStudioPage'));
 const CenterActivityPage = lazyPage(() => import('./pages/center/CenterActivityPage'));
+const CenterStudentsPage = lazyPage(() => import('./pages/center/CenterStudentsPage'));
+const StudentImportPage = lazyPage(() => import('./pages/center/StudentImportPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -738,6 +740,25 @@ export default function App() {
             element={
               <RequireAuth role={Role.STAFF}>
                 <CenterActivityPage />
+              </RequireAuth>
+            }
+          />
+          {/* The student register: a Center's desk (owner or assistant) and a
+              teacher running their own academy. The page and the API both
+              check the capability and the studentRegistry flag. */}
+          <Route
+            path="/center/students"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <CenterStudentsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/students/import"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <StudentImportPage />
               </RequireAuth>
             }
           />

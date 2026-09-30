@@ -89,7 +89,10 @@
     "role": {
       "STUDENT": "Student",
       "TEACHER": "Teacher",
-      "SUPER_ADMIN": "Platform Admin"
+      "SUPER_ADMIN": "Platform Admin",
+      "STAFF": "Center team",
+      "GUARDIAN": "Guardian",
+      "GUEST": "Guest"
     },
     "phase1Note": "Foundation ready: database, authentication, and RBAC. Full screens arrive in the next phases.",
     "logout": "Sign out"
@@ -144,7 +147,8 @@
     "staffHome": "My students",
     "staffPayments": "Payments",
     "assisting": "Assisting",
-    "guardianHome": "My children"
+    "guardianHome": "My children",
+    "centerStudents": "Students"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1018,6 +1022,10 @@
       "adminStudio": {
         "label": "Admin Studio",
         "hint": "Platform-admin access to themes without purchase"
+      },
+      "studentRegistry": {
+        "label": "Student register",
+        "hint": "The desk registers students with a code, searches by name and phone, imports from Excel"
       }
     },
     "centersTitle": "Centers",
@@ -3201,7 +3209,18 @@
     "eAdmissionCooldown": "Wait a moment before asking again.",
     "eAdmissionLimit": "You've reached the most requests for this class.",
     "eAdmissionNotEligible": "Only signed-in students can ask to join.",
-    "eChatCursorInvalid": "We couldn't load older messages from that point. Reopen the class archive."
+    "eChatCursorInvalid": "We couldn't load older messages from that point. Reopen the class archive.",
+    "eStudentNotFound": "That student is not on this center’s register.",
+    "eStudentWithdrawn": "This student has withdrawn from the center — bring them back first.",
+    "eStudentPossibleDuplicate": "A student with the same name and phone number is already registered.",
+    "eStudentCodeUnavailable": "A student code could not be issued right now. Try again.",
+    "eGradeNotFound": "That school year does not exist.",
+    "eGradeMissing": "The school year is missing.",
+    "eNoPhone": "No phone number.",
+    "eDuplicateInFile": "This row is repeated in the file.",
+    "eImportNotFound": "That import no longer exists. Upload the file again.",
+    "eImportExpired": "This review is out of date (over a day old). Upload the file again.",
+    "eImportCommitInProgress": "This import is running now — wait for it to finish."
   },
   "myStudio": {
     "title": "My Studio",
@@ -4874,6 +4893,10 @@
       "custom": {
         "title": "Custom",
         "hint": "Pick exactly what they can do"
+      },
+      "reception": {
+        "title": "Reception",
+        "hint": "Finds, registers and groups students — no money, no settings"
       }
     },
     "titleLabel": "Title students see",
@@ -4897,7 +4920,8 @@
       "messages": "Messages",
       "teaching": "Teaching",
       "payments": "Payments",
-      "guardians": "Parents"
+      "guardians": "Parents",
+      "register": "Student register"
     },
     "cap": {
       "student.view": {
@@ -4954,6 +4978,16 @@
         "short": "Group chats",
         "label": "Take part in class group chats",
         "hint": "Chats of the groups you assign to them."
+      },
+      "student.directory": {
+        "short": "Register",
+        "label": "Searches the student register",
+        "hint": "Every student in the center by code, name and phone, and can export them."
+      },
+      "student.register": {
+        "short": "Registration",
+        "label": "Registers and edits students",
+        "hint": "New students, edits, withdraw and return, Excel import, and adding to a group."
       }
     },
     "direct": {
@@ -4961,7 +4995,8 @@
       "hint": "They appear in students' \"New conversation\" list. Off: only they can start one."
     },
     "save": "Save",
-    "createLink": "Create invitation link"
+    "createLink": "Create invitation link",
+    "registerNeedsAll": "The register covers the whole center, so it needs “all courses” above."
   },
   "staff": {
     "noAcademy": "You are not assisting in any academy",
@@ -5200,5 +5235,153 @@
     "freeNote": "Approving books them an extra seat in this class only.",
     "paidNote": "Approving lets them buy despite the full class — the seat is confirmed only after payment.",
     "approvedWaitingPayment": "Approved — waiting for payment"
+  },
+  "registry": {
+    "title": "Students",
+    "subtitle": "Every student in the center — search by code, name or phone.",
+    "new": "New student",
+    "import": "Import from Excel",
+    "export": "Export",
+    "searchPh": "Code, name or phone number",
+    "statusFilter": "Student status",
+    "status": {
+      "ACTIVE": "Active",
+      "WITHDRAWN": "Withdrawn",
+      "ALL": "All"
+    },
+    "source": {
+      "DESK": "Registered at the desk",
+      "IMPORT": "From an Excel file",
+      "ONLINE": "Joined online",
+      "BACKFILL": "Existing student"
+    },
+    "count_one": "{{count}} student",
+    "count_other": "{{count}} students",
+    "empty": "No students on the register yet",
+    "emptyHint": "Register the first student, or import them from an Excel file.",
+    "noMatch": "No student matches that",
+    "noMatchHint": "Try part of the name, the last digits of a phone, or switch the status to “All”.",
+    "off": "The student register is not switched on for this center",
+    "offHint": "Ask the Darsly team to enable it.",
+    "noAccess": "You cannot open the student register",
+    "noAccessHint": "The center owner can grant it from the Team page.",
+    "codeLabel": "Student code {{code}}",
+    "noAccount": "No account",
+    "guardian": "Guardian",
+    "studentPhone": "Student phone",
+    "groups": "Groups",
+    "noGroups": "Not in a group",
+    "addToGroup": "Add to group",
+    "addToGroupTitle": "Add {{name}} to a group",
+    "addedToGroup": "{{name}} added to {{group}}",
+    "noGroupsToAdd": "No other groups to add them to",
+    "pickGroup": "Choose a group",
+    "groupOption_one": "{{name}} — {{count}} student",
+    "groupOption_other": "{{name}} — {{count}} students",
+    "edit": "Edit",
+    "editTitle": "Edit student {{code}}",
+    "withdraw": "Withdraw",
+    "reactivate": "Bring back",
+    "withdrawTitle": "Withdraw this student?",
+    "withdrawBody": "{{name}} will be recorded as having left the center and taken out of their groups. Nothing is deleted: the code, attendance and history all stay, and you can bring them back any time.",
+    "withdrawn": "{{name}} withdrawn",
+    "reactivated": "{{name}} is back",
+    "register": "Register student",
+    "saving": "Saving…",
+    "another": "Register another",
+    "openProfile": "Open student profile",
+    "doneTitle": "Student registered",
+    "doneBody": "{{name}} is now on the center’s register.",
+    "codeIs": "Student code",
+    "doneGroup": "In group: {{name}}",
+    "dupTitle": "This student may already be registered",
+    "dupBody": "A student with the same name and phone number exists:",
+    "dupSame": "Same student — don’t register",
+    "dupDifferent": "No, a different student — register",
+    "card": "Center record",
+    "manage": "Student register",
+    "form": {
+      "fullName": "Student name",
+      "grade": "School year",
+      "guardianPhone": "Guardian phone",
+      "guardianName": "Guardian name",
+      "studentPhone": "Student phone",
+      "school": "School",
+      "group": "Group",
+      "groupHint": "You can add them to a group later too.",
+      "noGroup": "No group for now",
+      "phoneHint": "Siblings can share a guardian’s number."
+    },
+    "field": {
+      "fullName": "Name",
+      "studentPhone": "Student phone",
+      "guardianPhone": "Guardian phone",
+      "grade": "Year",
+      "group": "Group",
+      "row": "Row"
+    },
+    "issue": {
+      "NAME_REQUIRED": "Name missing",
+      "INVALID_PHONE": "{{field}}: not a valid Egyptian mobile number",
+      "GRADE_NOT_FOUND": "School year not recognised",
+      "GRADE_MISSING": "No school year",
+      "GROUP_NOT_FOUND": "No group with that name in this center",
+      "GROUP_AMBIGUOUS": "More than one group has that name",
+      "NO_PHONE": "No phone number at all",
+      "DUPLICATE_IN_FILE": "Repeated in the file (same name and number)",
+      "ALREADY_REGISTERED": "Already registered",
+      "GROUP_GONE": "The group closed before the import; registered without it"
+    },
+    "sheet": {
+      "EMPTY": "The file is empty — no rows with students.",
+      "NO_NAME_COLUMN": "No “student name” column found. Use the template or name the column that way.",
+      "DUPLICATE_COLUMNS": "Two columns mean the same thing: {{columns}}. Keep one.",
+      "TOO_MANY_ROWS_one": "The file has {{count}} student — the limit is {{max}} per file.",
+      "TOO_MANY_ROWS_other": "The file has {{count}} students — the limit is {{max}} per file. Split it into several files.",
+      "TOO_BIG": "The file is too large (over 5 MB).",
+      "BAD_TYPE": "The file must be Excel (.xlsx) or CSV.",
+      "UNREADABLE": "This file could not be read. Open it in Excel and save it again as .xlsx."
+    },
+    "imp": {
+      "title": "Import students from Excel",
+      "subtitle": "Up to {{max}} students per file. Nobody is registered until you review and press “Import”.",
+      "back": "Back to students",
+      "step1": "Download the template, or use your file if it has a “student name” column.",
+      "step2": "Upload it — you will see what happens to every row.",
+      "step3": "Review the errors, then press “Import”.",
+      "template": "Download template",
+      "choose": "Choose file",
+      "reading": "Reading the file…",
+      "ignored": "Columns not used: {{columns}}",
+      "previewTitle": "Review before importing",
+      "already": "This same file was imported before ({{date}}). Students already registered will not be repeated.",
+      "filter": "Show rows",
+      "f": {
+        "ALL": "All",
+        "OK": "Ready",
+        "WARNING": "Warning",
+        "ERROR": "Error",
+        "DUPLICATE": "Already registered"
+      },
+      "colRow": "Row",
+      "colName": "Name",
+      "colCode": "Code",
+      "colOutcome": "Outcome",
+      "ready_one": "{{count}} student ready to import",
+      "ready_other": "{{count}} students ready to import",
+      "nothing": "No rows are ready — fix the errors in the file and upload it again.",
+      "commit_one": "Import {{count}} student",
+      "commit_other": "Import {{count}} students",
+      "committing": "Importing…",
+      "retrySafe": "You can press “Import” again safely — nobody is registered twice.",
+      "doneTitle": "Import finished",
+      "doneCreated_one": "{{count}} student registered",
+      "doneCreated_other": "{{count}} students registered",
+      "doneSkipped_one": "{{count}} row skipped",
+      "doneSkipped_other": "{{count}} rows skipped",
+      "created": "Registered",
+      "downloadResult": "Download result with codes",
+      "toStudents": "Go to students"
+    }
   }
 }

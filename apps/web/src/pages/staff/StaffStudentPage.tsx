@@ -14,6 +14,7 @@ import {
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { AttendanceCard, CourseProgressList, LiveList } from '../care/CareViews';
 import GuardianManager from '../care/GuardianManager';
+import RegistryCard from '../center/RegistryCard';
 
 type Tab = 'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'care';
 
@@ -125,6 +126,8 @@ export default function StaffStudentPage() {
           )}
         </div>
       </div>
+
+      <RegistryCard academyId={academyId} studentId={s.id} />
 
       <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1" role="tablist">
         {tabs.map((k) => (

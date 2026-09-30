@@ -91,6 +91,18 @@ export function assistantNav(permissions: string[]): NavItem[] {
   ];
 }
 
+/**
+ * The student register (Center Operations C1). Not in any static list: the
+ * layout adds it only where the academy has the register switched on and the
+ * viewer may read it (GET /center-students/access) — a menu entry that led to
+ * "not available here" would only teach people to ignore the menu.
+ */
+export const REGISTRY_ITEM: NavItem = {
+  to: '/center/students',
+  icon: 'badge',
+  labelKey: 'nav.centerStudents',
+};
+
 /** A teacher who also assists in someone else's academy gets one door to that workspace. */
 export const ASSISTING_ITEM: NavItem = {
   to: '/staff',
@@ -133,8 +145,14 @@ export const BOTTOM_TABS: Record<string, string[]> = {
     '/teacher/wallet',
   ],
   [Role.SUPER_ADMIN]: ['/admin', '/admin/teachers', '/admin/payments', '/admin/wallet'],
-  [Role.STAFF]: ['/center', '/center/members', '/teacher/groups', '/teacher/schedule'],
-  ASSISTANT: ['/staff', '/messages', '/staff/grading', '/staff/payments'],
+  [Role.STAFF]: [
+    '/center',
+    '/center/students',
+    '/center/members',
+    '/teacher/groups',
+    '/teacher/schedule',
+  ],
+  ASSISTANT: ['/staff', '/center/students', '/messages', '/staff/grading', '/staff/payments'],
   [Role.GUARDIAN]: ['/guardian', '/messages'],
 };
 

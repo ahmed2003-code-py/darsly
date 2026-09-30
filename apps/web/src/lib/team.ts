@@ -18,7 +18,9 @@ export type AssistantCapability =
   | 'group.manage'
   | 'schedule.manage'
   | 'payment.view'
-  | 'guardian.manage';
+  | 'guardian.manage'
+  | 'student.directory'
+  | 'student.register';
 
 export interface AssistantGrant {
   title: string;
@@ -70,10 +72,12 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   },
   { key: 'payments', caps: ['payment.view'] },
   { key: 'guardians', caps: ['guardian.manage'] },
+  // The student register (Center Operations C1) — offered only where it is switched on.
+  { key: 'register', caps: ['student.directory', 'student.register'] },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
-export type PresetKey = 'support' | 'academic' | 'operations' | 'custom';
+export type PresetKey = 'support' | 'academic' | 'operations' | 'reception' | 'custom';
 
 const SUPPORT: AssistantCapability[] = [
   'student.view',
@@ -107,7 +111,18 @@ export const PRESETS: Record<
     ],
     directContact: false,
   },
+  // The desk: find, register and enrol students — and nothing about money,
+  // courses or settings. Needs every course in scope (the register is the
+  // whole academy's; a course-limited assistant is never granted it).
+  reception: {
+    permissions: ['student.view', 'student.directory', 'student.register'],
+    directContact: false,
+  },
 };
+
+/** Capability groups and presets that only mean something where the student register is on. */
+export const REGISTRY_ONLY_GROUPS = new Set(['register']);
+export const REGISTRY_ONLY_PRESETS = new Set<PresetKey>(['reception']);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
 export function presetOf(permissions: string[], directContact: boolean): PresetKey {

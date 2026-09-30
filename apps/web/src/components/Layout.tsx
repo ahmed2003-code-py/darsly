@@ -16,8 +16,17 @@ import NotificationToasts from './NotificationToasts';
 import { SectionErrorBoundary } from './ErrorBoundary';
 import BottomNav from './shell/BottomNav';
 import Footer from './shell/Footer';
-import { ASSISTING_ITEM, assistantNav, BOTTOM_TABS, NavItem, navFor } from './shell/nav';
+import {
+  ASSISTING_ITEM,
+  assistantNav,
+  BOTTOM_TABS,
+  NavItem,
+  navFor,
+  REGISTRY_ITEM,
+} from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
+import { useRegistryAccess } from '../lib/centerStudents';
+import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
 
@@ -76,11 +85,22 @@ export default function Layout({ children }: { children: ReactNode }) {
   useEffect(() => setDrawer(false), [location.pathname]);
 
   const assistantMode = ws.isAssistantAccount;
-  const baseNav = assistantMode
+  // The student register appears where it is switched on and readable — asked
+  // of the academy this person is acting in (the one they assist, or their
+  // selected workspace), the same academy every call below is sent to.
+  const selectedAcademy = useStaffAcademyStore((s) => s.academyId);
+  const staffish = user?.role === Role.STAFF || user?.role === Role.TEACHER;
+  const registry = useRegistryAccess(
+    staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
+  );
+  const roleNav = assistantMode
     ? assistantNav(staffMe.data?.permissions ?? [])
     : ws.assists && user?.role === Role.TEACHER
       ? [...navFor(user?.role), ASSISTING_ITEM]
       : navFor(user?.role);
+  const baseNav = registry.data?.canView
+    ? [roleNav[0], REGISTRY_ITEM, ...roleNav.slice(1)].filter(Boolean)
+    : roleNav;
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;
   const bottomTabs = (BOTTOM_TABS[assistantMode ? 'ASSISTANT' : (user?.role ?? Role.STUDENT)] ?? [])
     .map((to) => nav.find((n) => n.to === to))

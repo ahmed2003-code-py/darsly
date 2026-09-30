@@ -353,7 +353,7 @@ export default function ClassPage() {
               aria-busy={close.isPending}
             >
               <span
-                className="material-symbols-outlined hidden text-lg min-[400px]:inline"
+                className="material-symbols-outlined shrink-0 text-lg max-[399px]:!hidden"
                 aria-hidden
               >
                 lock

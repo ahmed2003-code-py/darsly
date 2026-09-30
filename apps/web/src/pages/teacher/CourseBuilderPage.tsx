@@ -2156,7 +2156,7 @@ function LessonRow({
         )}
         {(l.dripUnlockAt || l.dripAfterEnrollDays != null) && (
           <span
-            className="material-symbols-outlined hidden shrink-0 text-[18px] text-on-surface-variant sm:inline"
+            className="material-symbols-outlined shrink-0 text-[18px] text-on-surface-variant max-sm:!hidden"
             title="Drip"
           >
             lock_clock

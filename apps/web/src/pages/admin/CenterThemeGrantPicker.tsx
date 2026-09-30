@@ -67,13 +67,14 @@ export function CenterThemeGrantPicker({
           {t('centerStudio.grantCount', { count: selected.length })}
         </p>
       </div>
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
         {(['ALL', 'PRESET', 'CENTER', 'TEACHER', 'COSMETIC'] as Shelf[]).map((s) => (
           <button
             key={s}
             type="button"
             onClick={() => setShelf(s)}
-            className={`rounded-xl border px-3 py-1.5 text-xs font-bold ${
+            aria-pressed={shelf === s}
+            className={`min-h-10 shrink-0 whitespace-nowrap rounded-xl border px-3 text-xs font-bold ${
               shelf === s
                 ? 'border-primary bg-primary text-on-primary'
                 : 'border-outline-variant text-on-surface-variant'
@@ -84,7 +85,7 @@ export function CenterThemeGrantPicker({
         ))}
       </div>
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-40 rounded-2xl" />
           ))}
@@ -118,7 +119,7 @@ export function CenterThemeGrantEditor({ academyId }: { academyId: string }) {
       <div className="mt-4 flex justify-end">
         <button
           type="button"
-          className="btn-primary px-5 py-2.5"
+          className="btn-primary min-h-11 w-full px-5 py-2.5 sm:w-auto"
           disabled={save.isPending || catalog.isLoading}
           onClick={() => save.mutate(selected)}
         >

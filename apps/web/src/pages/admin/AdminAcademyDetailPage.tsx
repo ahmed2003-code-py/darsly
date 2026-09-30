@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AcademyKind, AcademyStatus } from '@darsly/shared-types';
@@ -20,7 +20,7 @@ import {
   useSetAcademyActive,
   useUpdateAcademyMember,
 } from '../../lib/adminStudio';
-import { Badge, ErrorNote, Field, Modal, Skeleton } from '../../components/ui';
+import { Badge, ErrorNote, Field, Modal, Skeleton, TabRail } from '../../components/ui';
 import { CenterThemeGrantEditor } from './CenterThemeGrantPicker';
 import { confirmDelete } from '../../lib/confirm';
 import CommercialTermsPanel from '../../components/admin/CommercialTermsPanel';
@@ -36,12 +36,98 @@ const TONE: Record<AcademyStatus, 'teal' | 'warn' | 'error' | 'neutral'> = {
   [AcademyStatus.ARCHIVED]: 'neutral',
 };
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+/**
+ * One cell of the academy's figures. The figures share one surface — a grid
+ * with hairline dividers, two columns on a phone — instead of each being its
+ * own full-width card: on a phone six cards were three screens of mostly
+ * padding before the first real row of information.
+ */
+function Stat({ label, value, icon }: { label: string; value: string | number; icon?: string }) {
   return (
-    <div className="card p-4 text-center">
-      <p className="font-heading text-2xl font-extrabold tabular-nums">{value}</p>
-      <p className="text-xs text-on-surface-variant">{label}</p>
+    <div className="flex min-w-0 items-center gap-2.5 bg-surface-container-lowest px-3 py-3 sm:px-4 sm:py-4">
+      {icon && (
+        <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-fixed text-on-primary-fixed min-[400px]:grid">
+          <span className="material-symbols-outlined text-xl" aria-hidden>
+            {icon}
+          </span>
+        </span>
+      )}
+      <div className="min-w-0">
+        <p className="truncate font-heading text-lg font-extrabold tabular-nums leading-tight sm:text-2xl">
+          {value}
+        </p>
+        <p className="truncate text-xs text-on-surface-variant">{label}</p>
+      </div>
     </div>
+  );
+}
+
+/**
+ * A feature switch that says what it does as soon as it is tapped. It used to
+ * show only the server's answer, so for the half-second of the round trip a
+ * tap looked ignored — and a second tap, sent as "the opposite of what is
+ * shown", switched the feature straight back off (production audit: enabled
+ * then disabled 0.75 s apart). Now the switch moves at once, sends the value
+ * the person chose (never "toggle"), and stays locked until the server has
+ * confirmed; a failure puts it back and says why.
+ */
+function FlagSwitch({
+  flagKey,
+  enabled,
+  label,
+  academyId,
+}: {
+  flagKey: string;
+  enabled: boolean;
+  label: string;
+  academyId: string;
+}) {
+  const setFlag = useSetFeatureFlag(academyId);
+  const [wanted, setWanted] = useState<boolean | null>(null);
+  /** An accidental double tap lands within a few hundred ms — on a fast
+   *  network the first change may already be confirmed by then, so being
+   *  "busy" is not enough: a tap inside this window after the last one is
+   *  ignored. A deliberate change a moment later still goes through. */
+  const settleUntil = useRef(0);
+  const shown = wanted ?? enabled;
+  const busy = wanted !== null && wanted !== enabled;
+  // The server's value caught up with the choice: the switch is free again.
+  useEffect(() => {
+    if (wanted !== null && wanted === enabled) setWanted(null);
+  }, [enabled, wanted]);
+  return (
+    <>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={shown}
+        aria-label={label}
+        aria-busy={busy}
+        disabled={busy}
+        onClick={() => {
+          if (Date.now() < settleUntil.current) return;
+          settleUntil.current = Date.now() + 800;
+          const next = !shown;
+          setWanted(next);
+          setFlag.mutate({ key: flagKey, enabled: next }, { onError: () => setWanted(null) });
+        }}
+        className="grid h-11 w-14 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 disabled:cursor-wait"
+      >
+        <span
+          className={`relative block h-7 w-12 rounded-full transition ${shown ? 'bg-primary' : 'bg-outline-variant'} ${busy ? 'opacity-70' : ''}`}
+        >
+          <span
+            className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
+            style={{ insetInlineStart: shown ? '1.625rem' : '0.25rem' }}
+          />
+        </span>
+      </button>
+      {setFlag.error ? (
+        <div className="basis-full">
+          <ErrorNote error={setFlag.error} />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -144,7 +230,7 @@ function DangerZone({
   const matches = typed.trim().toLowerCase() === slug.toLowerCase();
 
   return (
-    <div className="mt-6 rounded-xl border border-error/30 p-5">
+    <div className="mt-5 rounded-xl border border-error/30 p-3 sm:mt-6 sm:p-5">
       <h3 className="font-heading font-bold text-error">{t('admin.danger.title')}</h3>
       <p className="mt-1 text-sm text-on-surface-variant">{t('admin.danger.hint')}</p>
 
@@ -156,7 +242,7 @@ function DangerZone({
               <p className="text-sm text-on-surface-variant">{t('admin.danger.archiveHint')}</p>
             </div>
             <button
-              className="rounded-lg border border-outline px-4 py-2 text-sm font-bold"
+              className="min-h-11 rounded-lg border border-outline px-4 py-2 text-sm font-bold"
               disabled={setCenterStatus.isPending}
               onClick={() => setCenterStatus.mutate(AcademyStatus.ARCHIVED)}
             >
@@ -172,7 +258,7 @@ function DangerZone({
               <p className="text-sm text-on-surface-variant">{t('admin.danger.deleteHint')}</p>
             </div>
             <button
-              className="rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error"
+              className="min-h-11 rounded-lg bg-error px-4 py-2 text-sm font-bold text-on-error"
               onClick={() => {
                 setTyped('');
                 setOpen(true);
@@ -321,7 +407,6 @@ export default function AdminAcademyDetailPage() {
   const [confirmStatus, setConfirmStatus] = useState(false);
   const [revokeOwner, setRevokeOwner] = useState(false);
   const { data, isLoading, error } = useAdminAcademyDetail(id);
-  const setFlag = useSetFeatureFlag(id ?? '');
   const members = useAcademyMembers(data?.slug);
   const updateMember = useUpdateAcademyMember(data?.slug);
   const removeMember = useRemoveAcademyMember(data?.slug);
@@ -385,29 +470,31 @@ export default function AdminAcademyDetailPage() {
     <div className="page">
       <Link
         to="/admin/academies"
-        className="mb-3 inline-flex items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
+        className="mb-1 inline-flex min-h-11 items-center gap-1 text-sm text-on-surface-variant hover:text-on-surface"
       >
-        <span className="material-symbols-outlined text-lg">arrow_forward</span>
+        <span className="material-symbols-outlined text-lg rtl:rotate-180" aria-hidden>
+          arrow_back
+        </span>
         {t('admin.backToAcademies')}
       </Link>
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="font-heading text-2xl font-extrabold">{data.name}</h1>
-            <Badge tone={TONE[data.status]}>{t(`admin.academyStatus.${data.status}`)}</Badge>
-          </div>
-          <p className="text-sm text-outline" dir="ltr">
-            {data.slug}
-          </p>
+      {/* Who this is, in two lines on a phone: name + status, then the slug
+          and creation date in small print beside the one action. */}
+      <header className="mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="min-w-0 font-heading text-xl font-extrabold leading-snug [overflow-wrap:anywhere] sm:text-2xl">
+            <bdi>{data.name}</bdi>
+          </h1>
+          <Badge tone={TONE[data.status]}>{t(`admin.academyStatus.${data.status}`)}</Badge>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-on-surface-variant">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <p className="me-auto text-xs text-outline sm:text-sm">
+            <span dir="ltr">{data.slug}</span> ·{' '}
             {t('admin.createdOn', { date: dateShort(data.createdAt) })}
           </p>
           {canToggleStatus && (
             <button
-              className={`rounded-lg px-4 py-2 text-sm font-bold ${isActive ? 'border border-error/40 text-error hover:bg-error-container/40' : 'btn-primary'}`}
+              className={`min-h-11 rounded-lg px-4 text-sm font-bold ${isActive ? 'border border-error/40 text-error hover:bg-error-container/40' : 'btn-primary'}`}
               onClick={() => setConfirmStatus(true)}
             >
               {isActive
@@ -416,61 +503,41 @@ export default function AdminAcademyDetailPage() {
             </button>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label={t('admin.students')} value={data.studentsCount} />
-        <Stat label={t('admin.staff')} value={data.staff.length} />
+      {/* The figures: one surface, hairline dividers; 2 across on a phone,
+          3 on a tablet, 6 on a wide screen. */}
+      <section
+        aria-label={t('admin.academyTab.overview')}
+        className="mb-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-outline-variant bg-outline-variant sm:mb-6 sm:grid-cols-3 xl:grid-cols-6"
+      >
+        <Stat icon="school" label={t('admin.students')} value={data.studentsCount} />
+        <Stat icon="badge" label={t('admin.staff')} value={data.staff.length} />
         <Stat
+          icon="video_library"
           label={t('admin.courses')}
           value={`${data.publishedCoursesCount} / ${data.coursesCount}`}
         />
-        <Stat label={t('admin.totalEnrollments')} value={data.enrollmentsCount} />
-      </div>
+        <Stat icon="how_to_reg" label={t('admin.totalEnrollments')} value={data.enrollmentsCount} />
+        <Stat icon="payments" label={t('admin.netRevenue')} value={egp(data.netRevenueCents)} />
+        <Stat
+          icon="account_balance"
+          label={t('admin.platformFee')}
+          value={egp(data.platformFeeCents)}
+        />
+      </section>
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <div className="card flex items-center gap-4 p-5">
-          <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary-fixed text-on-primary-fixed">
-            <span className="material-symbols-outlined text-2xl">payments</span>
-          </span>
-          <div>
-            <p className="font-heading text-2xl font-extrabold tabular-nums">
-              {egp(data.netRevenueCents)}
-            </p>
-            <p className="text-sm text-on-surface-variant">{t('admin.netRevenue')}</p>
-          </div>
-        </div>
-        <div className="card flex items-center gap-4 p-5">
-          <span className="grid h-12 w-12 place-items-center rounded-xl bg-primary-fixed text-on-primary-fixed">
-            <span className="material-symbols-outlined text-2xl">account_balance</span>
-          </span>
-          <div>
-            <p className="font-heading text-2xl font-extrabold tabular-nums">
-              {egp(data.platformFeeCents)}
-            </p>
-            <p className="text-sm text-on-surface-variant">{t('admin.platformFee')}</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mb-6 flex gap-2">
-        {(isCenter ? TABS_CENTER : TABS_PERSONAL).map((tb) => (
-          <button
-            key={tb}
-            className={`rounded-full px-5 py-2 font-heading text-sm font-bold transition ${
-              tab === tb
-                ? 'bg-primary text-on-primary'
-                : 'bg-surface-container-lowest text-on-surface-variant shadow-card hover:bg-surface-container-low'
-            }`}
-            onClick={() => setTab(tb)}
-          >
-            {t(`admin.academyTab.${tb}`)}
-          </button>
-        ))}
+      <div className="mb-4 sm:mb-6">
+        <TabRail
+          tabs={isCenter ? TABS_CENTER : TABS_PERSONAL}
+          value={tab}
+          onChange={(tb) => setTab(tb as Tab)}
+          labelOf={(tb) => t(`admin.academyTab.${tb}`)}
+        />
       </div>
 
       {tab === 'overview' && (
-        <div className="card p-5">
+        <div className="card p-4 sm:p-5">
           <dl className="grid gap-4 sm:grid-cols-2">
             <div>
               <dt className="text-xs text-outline">
@@ -563,13 +630,13 @@ export default function AdminAcademyDetailPage() {
       {/* Darsly's commercial terms with this academy (Live sales), and — in a
           Center — what each teacher's split works out to. */}
       {tab === 'commerce' && (
-        <div className="card p-5">
+        <div className="sm:card sm:p-5">
           <CommercialTermsPanel academyId={data.id} />
         </div>
       )}
 
       {tab === 'studio' && isCenter && (
-        <div className="card p-5">
+        <div className="sm:card sm:p-5">
           <CenterThemeGrantEditor academyId={data.id} />
         </div>
       )}
@@ -578,7 +645,7 @@ export default function AdminAcademyDetailPage() {
         <div>
           <div className="mb-4 flex justify-end">
             <button
-              className="btn-primary px-4 py-2 text-sm"
+              className="btn-primary min-h-11 px-4 py-2 text-sm"
               onClick={() => setShowAddMember(true)}
             >
               {t('adminControlStudio.staff.add')}
@@ -589,7 +656,10 @@ export default function AdminAcademyDetailPage() {
               const isOwner = s.role === 'OWNER';
               const isInvited = s.status === 'INVITED';
               return (
-                <div key={s.id} className="card flex items-center gap-4 p-4">
+                <div
+                  key={s.id}
+                  className="card flex flex-wrap items-center gap-x-3 gap-y-2 p-3 sm:flex-nowrap sm:gap-4 sm:p-4"
+                >
                   <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-fixed font-heading font-bold text-on-primary-fixed">
                     {s.avatarUrl ? (
                       <img src={s.avatarUrl} alt="" className="h-full w-full object-cover" />
@@ -597,34 +667,40 @@ export default function AdminAcademyDetailPage() {
                       s.fullName?.trim()?.charAt(0)
                     )}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-heading font-bold">{s.fullName}</p>
+                  <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] sm:basis-auto">
+                    <p className="truncate font-heading font-bold">
+                      <bdi>{s.fullName}</bdi>
+                    </p>
                     <p className="truncate text-xs text-outline" dir="ltr">
                       {s.email}
                     </p>
                   </div>
-                  {isInvited && <Badge tone="warn">{t('adminControlStudio.staff.invited')}</Badge>}
-                  <Badge
-                    tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}
-                  >
-                    {t(`admin.staffRole.${s.role}`)}
-                  </Badge>
+                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                    {isInvited && (
+                      <Badge tone="warn">{t('adminControlStudio.staff.invited')}</Badge>
+                    )}
+                    <Badge
+                      tone={isOwner ? 'primary' : s.status === 'SUSPENDED' ? 'error' : 'neutral'}
+                    >
+                      {t(`admin.staffRole.${s.role}`)}
+                    </Badge>
+                  </div>
                   {/* The owner's access is revocable only by a platform admin,
                       and only together with a successor — hence its own action
                       rather than the plain "remove" the others get. */}
                   {isOwner && isCenter && (
                     <button
-                      className="rounded-lg px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                      className="ms-auto min-h-11 rounded-lg px-3 text-xs font-bold text-error hover:bg-error-container/40 sm:ms-0"
                       onClick={() => setRevokeOwner(true)}
                     >
                       {t('admin.revokeOwner.action')}
                     </button>
                   )}
                   {!isOwner && s.id && members.data && (
-                    <div className="flex items-center gap-1">
+                    <div className="ms-auto flex items-center gap-1 sm:ms-0">
                       {!isInvited && (
                         <button
-                          className="rounded-lg px-3 py-1.5 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
+                          className="min-h-11 rounded-lg px-3 text-xs font-bold text-on-surface-variant hover:bg-surface-container-low"
                           disabled={updateMember.isPending}
                           onClick={() =>
                             updateMember.mutate({
@@ -639,7 +715,7 @@ export default function AdminAcademyDetailPage() {
                         </button>
                       )}
                       <button
-                        className="rounded-lg px-3 py-1.5 text-xs font-bold text-error hover:bg-error-container/40"
+                        className="min-h-11 rounded-lg px-3 text-xs font-bold text-error hover:bg-error-container/40"
                         disabled={removeMember.isPending}
                         onClick={async () =>
                           (await confirmDelete({
@@ -681,25 +757,24 @@ export default function AdminAcademyDetailPage() {
       {tab === 'flags' && (
         <div className="card divide-y divide-outline-variant/50 p-0">
           {data.featureFlags.map((f) => (
-            <div key={f.key} className="flex items-center justify-between gap-4 p-4">
-              <div>
-                <p className="font-heading font-bold">{t(`admin.featureFlag.${f.key}.label`)}</p>
-                <p className="text-sm text-on-surface-variant">
+            <div
+              key={f.key}
+              className="flex flex-wrap items-center justify-between gap-x-3 px-3 py-2 sm:flex-nowrap sm:px-4 sm:py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-heading text-sm font-bold sm:text-base">
+                  {t(`admin.featureFlag.${f.key}.label`)}
+                </p>
+                <p className="text-xs leading-snug text-on-surface-variant sm:text-sm">
                   {t(`admin.featureFlag.${f.key}.hint`)}
                 </p>
               </div>
-              <button
-                role="switch"
-                aria-checked={f.enabled}
-                disabled={setFlag.isPending}
-                onClick={() => setFlag.mutate({ key: f.key, enabled: !f.enabled })}
-                className={`relative h-7 w-12 shrink-0 rounded-full transition ${f.enabled ? 'bg-primary' : 'bg-outline-variant'}`}
-              >
-                <span
-                  className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
-                  style={{ insetInlineStart: f.enabled ? '1.625rem' : '0.25rem' }}
-                />
-              </button>
+              <FlagSwitch
+                flagKey={f.key}
+                enabled={f.enabled}
+                label={t(`admin.featureFlag.${f.key}.label`)}
+                academyId={data.id}
+              />
             </div>
           ))}
         </div>
@@ -717,7 +792,7 @@ export default function AdminAcademyDetailPage() {
             </p>
           ) : (
             activity.data.map((row) => (
-              <div key={row.id} className="p-4">
+              <div key={row.id} className="px-3 py-2.5 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-heading text-sm font-bold" dir="ltr">
                     {row.action}

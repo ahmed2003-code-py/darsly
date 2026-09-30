@@ -168,14 +168,18 @@ export default function StudentForm({
         </Field>
       )}
       {rest && <ErrorNote error={error} fields={FIELDS} />}
-      <button
-        type="submit"
-        className="btn-primary mt-2 w-full py-3"
-        disabled={pending}
-        aria-busy={pending}
-      >
-        {pending ? t('registry.saving') : submitLabel}
-      </button>
+      {/* Kept in reach: on a phone the form is taller than the dialog, and a
+          register button below the fold is one the desk has to go looking for. */}
+      <div className="sticky -bottom-6 z-10 -mx-6 mt-2 bg-surface-container-lowest px-6 pb-6 pt-3">
+        <button
+          type="submit"
+          className="btn-primary w-full py-3"
+          disabled={pending}
+          aria-busy={pending}
+        >
+          {pending ? t('registry.saving') : submitLabel}
+        </button>
+      </div>
     </form>
   );
 }

@@ -210,32 +210,46 @@ export default function TopBar({
             <span className="material-symbols-outlined">search</span>
           </button>
         ) : (
-          <form
-            onSubmit={submitSearch}
-            className={`shell-search min-w-0 flex-1 ${
-              // With the nav in the row the search takes what is left; on its
-              // own it takes the middle (centered) or the start (standard).
-              nav
-                ? 'max-w-md'
-                : variant === 'centered'
-                  ? 'mx-auto max-w-xl'
-                  : variant === 'editorial'
-                    ? 'ms-auto max-w-xs'
-                    : 'me-auto max-w-md'
-            }`}
-          >
-            <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
-              <span className="material-symbols-outlined text-[20px] text-outline">search</span>
-              <input
-                className="w-full bg-transparent text-sm outline-none placeholder:text-outline"
-                placeholder={t('topbar.searchPlaceholder')}
-                value={q}
-                autoFocus={searchOpen}
-                onBlur={() => !q && setSearchOpen(false)}
-                onChange={(e) => setQ(e.target.value)}
-              />
-            </div>
-          </form>
+          <>
+            {/* On a phone the field, squeezed between five controls, showed
+              "ابحث عن أ" and nothing else: it folds to an icon there, the way
+              the compact layouts always do, and opens into the field on tap. */}
+            {!searchOpen && (
+              <button
+                className="shell-search-btn me-auto grid h-10 w-10 place-items-center rounded-full text-on-surface-variant transition hover:bg-surface-container-low sm:hidden"
+                onClick={() => setSearchOpen(true)}
+                aria-label={t('topbar.searchPlaceholder')}
+              >
+                <span className="material-symbols-outlined">search</span>
+              </button>
+            )}
+            <form
+              onSubmit={submitSearch}
+              className={`shell-search min-w-0 flex-1 ${searchOpen ? '' : 'hidden sm:block'} ${
+                // With the nav in the row the search takes what is left; on its
+                // own it takes the middle (centered) or the start (standard).
+                nav
+                  ? 'max-w-md'
+                  : variant === 'centered'
+                    ? 'mx-auto max-w-xl'
+                    : variant === 'editorial'
+                      ? 'ms-auto max-w-xs'
+                      : 'me-auto max-w-md'
+              }`}
+            >
+              <div className="flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container-lowest px-4 py-2 transition-[border-color,box-shadow] duration-150 ease-premium focus-within:border-accent-500 focus-within:ring-4 focus-within:ring-accent-500/10">
+                <span className="material-symbols-outlined text-[20px] text-outline">search</span>
+                <input
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-outline"
+                  placeholder={t('topbar.searchPlaceholder')}
+                  value={q}
+                  autoFocus={searchOpen}
+                  onBlur={() => !q && setSearchOpen(false)}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+            </form>
+          </>
         )}
 
         <div className="shell-header-controls flex shrink-0 items-center gap-2 sm:gap-1">

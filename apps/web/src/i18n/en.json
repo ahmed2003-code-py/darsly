@@ -5381,7 +5381,14 @@
       "doneSkipped_other": "{{count}} rows skipped",
       "created": "Registered",
       "downloadResult": "Download result with codes",
-      "toStudents": "Go to students"
-    }
+      "toStudents": "Go to students",
+      "rowN": "Row {{n}}",
+      "existingAs": "Registered as code"
+    },
+    "studentShort": "Student",
+    "actionsFor": "Actions for {{name}}",
+    "emptyWithdrawn": "No withdrawn students",
+    "emptyWithdrawnHint": "A student you withdraw appears here, and can be brought back at any time.",
+    "noGroupsToAddHint": "Ask the center to create a new group, then add them from here."
   }
 }

@@ -22,14 +22,15 @@ export default function RegistryCard({
   const r = record.data;
   if (!r) return null;
   const ar = i18n.language !== 'en';
-  const item = (label: string, value: string | null, ltr = false) => (
-    <div className="min-w-0">
-      <dt className="text-xs text-outline">{label}</dt>
-      <dd className="truncate font-semibold" dir={ltr && value ? 'ltr' : undefined}>
-        {value || <span className="font-normal text-outline">—</span>}
-      </dd>
-    </div>
-  );
+  // Only what the center actually recorded: a wall of labels over "—" said
+  // nothing on a phone and pushed the student's courses and chats below the fold.
+  const facts = [
+    [t('registry.form.grade'), r.grade ? (ar ? r.grade.nameAr : r.grade.nameEn) : null, false],
+    [t('registry.form.school'), r.school, false],
+    [t('registry.form.guardianName'), r.guardianName, false],
+    [t('registry.form.guardianPhone'), r.guardianPhone ? localPhone(r.guardianPhone) : null, true],
+    [t('registry.form.studentPhone'), r.studentPhone ? localPhone(r.studentPhone) : null, true],
+  ].filter((f): f is [string, string, boolean] => !!f[1]);
   return (
     <section aria-label={t('registry.card')} className="card mb-4 p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -47,21 +48,41 @@ export default function RegistryCard({
         {!r.hasAccount && <Badge tone="neutral">{t('registry.noAccount')}</Badge>}
         {access.data?.canRegister && (
           <Link
-            className="ms-auto text-sm font-semibold text-primary hover:underline"
+            className="-my-2 ms-auto inline-flex min-h-11 items-center px-1 text-sm font-semibold text-primary hover:underline"
             to={`/center/students?academy=${academyId}`}
           >
             {t('registry.manage')}
           </Link>
         )}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
-        {item(t('registry.form.grade'), r.grade ? (ar ? r.grade.nameAr : r.grade.nameEn) : null)}
-        {item(t('registry.form.school'), r.school)}
-        {item(t('registry.form.guardianName'), r.guardianName)}
-        {item(t('registry.form.guardianPhone'), localPhone(r.guardianPhone), true)}
-        {item(t('registry.form.studentPhone'), localPhone(r.studentPhone), true)}
-        {item(t('registry.groups'), r.groups.map((g) => g.name).join('، '))}
-      </dl>
+      {facts.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+          {facts.map(([label, value, ltr]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-xs text-outline">{label}</dt>
+              <dd className="font-semibold [overflow-wrap:anywhere]">
+                {ltr ? (
+                  <span dir="ltr" className="tabular-nums">
+                    {value}
+                  </span>
+                ) : (
+                  value
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {r.groups.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-outline">{t('registry.groups')}</span>
+          {r.groups.map((g) => (
+            <Badge key={g.id} tone="primary">
+              {g.name}
+            </Badge>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

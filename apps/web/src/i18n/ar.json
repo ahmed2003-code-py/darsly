@@ -5542,7 +5542,14 @@
       "doneSkipped_other": "{{count}} صف اتساب",
       "created": "اتسجل",
       "downloadResult": "تحميل النتيجة بالأكواد",
-      "toStudents": "روح للطلاب"
-    }
+      "toStudents": "روح للطلاب",
+      "rowN": "صف {{n}}",
+      "existingAs": "الطالب المسجّل بالكود"
+    },
+    "studentShort": "الطالب",
+    "actionsFor": "إجراءات {{name}}",
+    "emptyWithdrawn": "مفيش طلاب منسحبين",
+    "emptyWithdrawnHint": "أي طالب يتسجل انسحابه هيظهر هنا، وتقدر ترجّعه في أي وقت.",
+    "noGroupsToAddHint": "اطلب من إدارة السنتر تعمل مجموعة جديدة، وبعدين ضيفه منها."
   }
 }

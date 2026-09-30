@@ -328,7 +328,7 @@ export function Modal({
             {title}
           </h3>
           <button
-            className="grid h-9 w-9 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            className="-me-1.5 grid h-11 w-11 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
             onClick={onClose}
             aria-label={i18n.t('common.close')}
           >

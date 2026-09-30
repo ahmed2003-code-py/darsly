@@ -212,10 +212,22 @@ export default function CenterStudentsPage() {
         </div>
       ) : data.items.length === 0 ? (
         <EmptyState
-          icon={query ? 'person_search' : 'groups'}
-          title={query ? t('registry.noMatch') : t('registry.empty')}
+          icon={query ? 'person_search' : status === 'WITHDRAWN' ? 'how_to_reg' : 'groups'}
+          title={
+            query
+              ? t('registry.noMatch')
+              : status === 'WITHDRAWN'
+                ? t('registry.emptyWithdrawn')
+                : t('registry.empty')
+          }
           hint={
-            query ? t('registry.noMatchHint') : canRegister ? t('registry.emptyHint') : undefined
+            query
+              ? t('registry.noMatchHint')
+              : status === 'WITHDRAWN'
+                ? t('registry.emptyWithdrawnHint')
+                : canRegister
+                  ? t('registry.emptyHint')
+                  : undefined
           }
         />
       ) : (
@@ -280,103 +292,149 @@ function StudentRow({
   const { t, i18n } = useTranslation();
   const ar = i18n.language !== 'en';
   const withdrawn = s.status === 'WITHDRAWN';
-  // Two blocks, never squeezed: who the student is (code, name, year; then
-  // contacts and groups on their own line, wrapping as the width allows), and
-  // the desk's actions. Fixed-width columns side by side crushed the name to
-  // one letter per line on a laptop with the sidebar open.
+  const [menu, setMenu] = useState(false);
+  const profile = `/staff/students/${s.studentId}?academy=${academyId}`;
+  const meta = [s.grade ? (ar ? s.grade.nameAr : s.grade.nameEn) : null, s.school].filter(
+    (x): x is string => !!x,
+  );
+  // One compact card at every width: who (code, name), then only the facts
+  // this student actually has — no repeated labels, no "—" placeholders. A
+  // receptionist scanning dozens of students reads five or six per phone
+  // screen instead of two. Actions sit beside the card on a wide screen and
+  // behind one ⋯ button on a phone.
   return (
-    <li
-      className={`card flex flex-col gap-3 p-4 md:flex-row md:items-start ${withdrawn ? 'opacity-75' : ''}`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-3">
-          <span
-            className="shrink-0 rounded-xl bg-primary-fixed px-2.5 py-1.5 font-mono text-base font-bold tracking-wider text-on-primary-fixed tabular-nums"
-            dir="ltr"
-            aria-label={t('registry.codeLabel', { code: s.code })}
+    <li className={`card p-3.5 sm:p-4 ${withdrawn ? 'opacity-80' : ''}`}>
+      <div className="flex items-start gap-3">
+        <span
+          className="mt-0.5 shrink-0 rounded-lg bg-primary-fixed px-2 py-1 font-mono text-[0.95rem] font-bold tracking-wider text-on-primary-fixed tabular-nums"
+          dir="ltr"
+          aria-label={t('registry.codeLabel', { code: s.code })}
+        >
+          {s.code}
+        </span>
+        <div className="min-w-0 flex-1">
+          <Link
+            className="-my-2 block py-2 font-heading text-base font-bold leading-snug [overflow-wrap:anywhere] hover:underline"
+            to={profile}
           >
-            {s.code}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="font-heading text-base font-bold leading-snug [overflow-wrap:anywhere]">
-              <Link
-                className="hover:underline"
-                to={`/staff/students/${s.studentId}?academy=${academyId}`}
-              >
-                {s.fullName}
-              </Link>
-            </p>
-            <p className="mt-0.5 flex flex-wrap gap-x-3 gap-y-1 text-sm text-on-surface-variant">
-              {s.grade && <span>{ar ? s.grade.nameAr : s.grade.nameEn}</span>}
-              {s.school && <span className="[overflow-wrap:anywhere]">{s.school}</span>}
+            {s.fullName}
+          </Link>
+          {(meta.length > 0 || withdrawn) && (
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant">
+              {meta.map((m, i) => (
+                <span key={i} className="[overflow-wrap:anywhere]">
+                  {i > 0 && (
+                    <span aria-hidden className="me-2 text-outline">
+                      ·
+                    </span>
+                  )}
+                  {m}
+                </span>
+              ))}
               {withdrawn && <Badge tone="warn">{t('registry.status.WITHDRAWN')}</Badge>}
-              {!s.hasAccount && <Badge tone="neutral">{t('registry.noAccount')}</Badge>}
             </p>
-          </div>
-        </div>
-        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <div className="min-w-0">
-            <dt className="text-xs text-outline">{t('registry.guardian')}</dt>
-            <dd>
-              {s.guardianPhone ? (
-                <span dir="ltr" className="tabular-nums">
-                  {localPhone(s.guardianPhone)}
-                </span>
-              ) : (
-                <span className="text-outline">—</span>
-              )}
-              {s.guardianName && (
-                <span className="ms-2 text-xs text-on-surface-variant">{s.guardianName}</span>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-outline">{t('registry.studentPhone')}</dt>
-            <dd>
-              {s.studentPhone ? (
-                <span dir="ltr" className="tabular-nums">
-                  {localPhone(s.studentPhone)}
-                </span>
-              ) : (
-                <span className="text-outline">—</span>
-              )}
-            </dd>
-          </div>
-          <div className="min-w-0">
-            <dt className="text-xs text-outline">{t('registry.groups')}</dt>
-            <dd className="mt-0.5 flex flex-wrap gap-1.5">
-              {s.groups.length ? (
-                s.groups.map((g) => (
-                  <Badge key={g.id} tone="primary">
-                    {g.name}
-                  </Badge>
-                ))
-              ) : (
-                <span className="text-outline">{t('registry.noGroups')}</span>
-              )}
-            </dd>
-          </div>
-        </dl>
-      </div>
-      {canRegister && (
-        <div className="flex shrink-0 flex-wrap gap-1.5 md:w-40 md:flex-col md:items-stretch">
-          {!withdrawn && (
-            <button className="btn-secondary px-3 py-2 text-sm" onClick={onGroup}>
-              {t('registry.addToGroup')}
-            </button>
           )}
-          <button className="btn-ghost px-3 py-2 text-sm" onClick={onEdit}>
-            {t('registry.edit')}
-          </button>
-          <button
-            className="btn-ghost px-3 py-2 text-sm"
-            onClick={() => onStatus(withdrawn ? 'reactivate' : 'withdraw')}
-            disabled={busy}
-            aria-busy={busy}
-          >
-            {withdrawn ? t('registry.reactivate') : t('registry.withdraw')}
-          </button>
+          {(s.guardianPhone || s.studentPhone) && (
+            <p className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {s.guardianPhone && (
+                <span className="inline-flex items-baseline gap-1.5">
+                  <span className="text-xs text-outline">{t('registry.guardian')}</span>
+                  <span dir="ltr" className="tabular-nums">
+                    {localPhone(s.guardianPhone)}
+                  </span>
+                </span>
+              )}
+              {s.studentPhone && (
+                <span className="inline-flex items-baseline gap-1.5">
+                  <span className="text-xs text-outline">{t('registry.studentShort')}</span>
+                  <span dir="ltr" className="tabular-nums">
+                    {localPhone(s.studentPhone)}
+                  </span>
+                </span>
+              )}
+            </p>
+          )}
+          {s.groups.length > 0 && (
+            <p className="mt-2 flex flex-wrap gap-1.5" aria-label={t('registry.groups')}>
+              {s.groups.map((g) => (
+                <Badge key={g.id} tone="primary">
+                  {g.name}
+                </Badge>
+              ))}
+            </p>
+          )}
         </div>
+        {canRegister && (
+          <>
+            <button
+              className="-me-1.5 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-full text-on-surface-variant hover:bg-surface-container-low md:hidden"
+              onClick={() => setMenu(true)}
+              aria-label={t('registry.actionsFor', { name: s.fullName })}
+              aria-haspopup="dialog"
+            >
+              <span aria-hidden className="material-symbols-outlined">
+                more_vert
+              </span>
+            </button>
+            <div className="hidden shrink-0 flex-wrap items-center justify-end gap-1.5 md:flex">
+              {!withdrawn && (
+                <button className="btn-secondary px-3 py-2 text-sm" onClick={onGroup}>
+                  {t('registry.addToGroup')}
+                </button>
+              )}
+              <button className="btn-ghost px-3 py-2 text-sm" onClick={onEdit}>
+                {t('registry.edit')}
+              </button>
+              <button
+                className={`btn-ghost px-3 py-2 text-sm ${withdrawn ? '' : 'text-error'}`}
+                onClick={() => onStatus(withdrawn ? 'reactivate' : 'withdraw')}
+                disabled={busy}
+                aria-busy={busy}
+              >
+                {withdrawn ? t('registry.reactivate') : t('registry.withdraw')}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {menu && (
+        <Modal open title={s.fullName} onClose={() => setMenu(false)}>
+          <div className="grid gap-2">
+            <Link className="btn-secondary justify-center py-3" to={profile}>
+              {t('registry.openProfile')}
+            </Link>
+            {!withdrawn && (
+              <button
+                className="btn-secondary justify-center py-3"
+                onClick={() => {
+                  setMenu(false);
+                  onGroup();
+                }}
+              >
+                {t('registry.addToGroup')}
+              </button>
+            )}
+            <button
+              className="btn-secondary justify-center py-3"
+              onClick={() => {
+                setMenu(false);
+                onEdit();
+              }}
+            >
+              {t('registry.edit')}
+            </button>
+            <button
+              className={`btn-ghost justify-center py-3 ${withdrawn ? '' : 'text-error'}`}
+              onClick={() => {
+                setMenu(false);
+                onStatus(withdrawn ? 'reactivate' : 'withdraw');
+              }}
+              disabled={busy}
+            >
+              {withdrawn ? t('registry.reactivate') : t('registry.withdraw')}
+            </button>
+          </div>
+        </Modal>
       )}
     </li>
   );
@@ -395,6 +453,14 @@ function NewStudentModal({ academyId, onClose }: { academyId: string; onClose: (
   const [values, setValues] = useState<StudentFormValues>(EMPTY_STUDENT);
   const [formKey, setFormKey] = useState(0);
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[] | null>(null);
+  const dupRef = useRef<HTMLDivElement>(null);
+  // The warning appears at the top of the dialog while the operator is at its
+  // bottom, by the button they just pressed — bring it to them.
+  useEffect(() => {
+    if (!duplicates) return;
+    dupRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    dupRef.current?.focus({ preventScroll: true });
+  }, [duplicates]);
   const [done, setDone] = useState<RegistryStudent | null>(null);
 
   const send = (v: StudentFormValues, confirmDuplicate = false) => {
@@ -480,8 +546,10 @@ function NewStudentModal({ academyId, onClose }: { academyId: string; onClose: (
         <>
           {duplicates && (
             <div
+              ref={dupRef}
+              tabIndex={-1}
               role="alert"
-              className="mb-4 rounded-2xl border border-amber-600/20 bg-amber-50 p-4 text-amber-900"
+              className="mb-4 scroll-mt-2 rounded-2xl border border-amber-600/20 bg-amber-50 p-4 text-amber-900 outline-none"
             >
               <p className="mb-2 font-bold">{t('registry.dupTitle')}</p>
               <p className="mb-3 text-sm">{t('registry.dupBody')}</p>
@@ -598,7 +666,11 @@ function AddToGroupModal({
       {groups.isLoading ? (
         <Skeleton className="h-12 rounded-xl" />
       ) : !options.length ? (
-        <EmptyState icon="diversity_3" title={t('registry.noGroupsToAdd')} />
+        <EmptyState
+          icon="diversity_3"
+          title={t('registry.noGroupsToAdd')}
+          hint={t('registry.noGroupsToAddHint')}
+        />
       ) : (
         <form
           onSubmit={(e) => {

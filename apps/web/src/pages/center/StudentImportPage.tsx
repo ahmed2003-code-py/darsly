@@ -292,14 +292,14 @@ export default function StudentImportPage() {
           <div
             role="tablist"
             aria-label={t('registry.imp.filter')}
-            className="mb-3 flex flex-wrap gap-2"
+            className="-mx-1 mb-3 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]"
           >
             {(['ALL', 'OK', 'WARNING', 'ERROR', 'DUPLICATE'] as Filter[]).map((f) => (
               <button
                 key={f}
                 role="tab"
                 aria-selected={filter === f}
-                className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
+                className={`min-h-10 shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${
                   filter === f
                     ? 'bg-primary text-on-primary'
                     : 'bg-surface-container-low text-on-surface-variant'
@@ -315,7 +315,39 @@ export default function StudentImportPage() {
             ))}
           </div>
 
-          <div className="card overflow-x-auto p-0">
+          {/* One card per row below xl: the table's six columns squeezed into
+              a phone (or a laptop with the sidebar open) clipped the numbers
+              and pushed the reason off-screen. */}
+          <ul className="grid gap-2 xl:hidden">
+            {shown.slice((page - 1) * PAGE, page * PAGE).map((r) => (
+              <li
+                key={r.row}
+                className={`card p-3.5 ${r.status === 'ERROR' ? 'border-error/30 bg-error-container/20' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 font-semibold leading-snug [overflow-wrap:anywhere]">
+                    {r.data.fullName || '—'}
+                  </p>
+                  <span className="shrink-0 text-xs text-outline">
+                    {t('registry.imp.rowN', { n: r.row })}
+                  </span>
+                </div>
+                <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-on-surface-variant">
+                  {r.data.guardianPhone && (
+                    <span dir="ltr" className="tabular-nums">
+                      {localPhone(r.data.guardianPhone)}
+                    </span>
+                  )}
+                  {r.data.gradeName && <span>{r.data.gradeName}</span>}
+                  {r.data.groupName && <span>{r.data.groupName}</span>}
+                </p>
+                <div className="mt-2">
+                  <RowOutcome r={r} />
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="card hidden overflow-x-auto p-0 xl:block">
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-surface-container-low text-start text-xs text-on-surface-variant">
                 <tr>
@@ -343,41 +375,18 @@ export default function StudentImportPage() {
                 {shown.slice((page - 1) * PAGE, page * PAGE).map((r) => (
                   <tr key={r.row} className={r.status === 'ERROR' ? 'bg-error-container/30' : ''}>
                     <td className="px-3 py-2 tabular-nums text-outline">{r.row}</td>
-                    <td className="px-3 py-2 font-semibold">{r.data.fullName || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="min-w-[9rem] px-3 py-2 font-semibold [overflow-wrap:anywhere]">
+                      {r.data.fullName || '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2">
                       <span dir="ltr" className="tabular-nums">
                         {localPhone(r.data.guardianPhone) || '—'}
                       </span>
                     </td>
-                    <td className="px-3 py-2">{r.data.gradeName ?? '—'}</td>
-                    <td className="px-3 py-2">{r.data.groupName ?? '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.data.gradeName ?? '—'}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.data.groupName ?? '—'}</td>
                     <td className="px-3 py-2">
-                      <Badge
-                        tone={
-                          r.status === 'OK'
-                            ? 'primary'
-                            : r.status === 'ERROR'
-                              ? 'error'
-                              : r.status === 'DUPLICATE'
-                                ? 'neutral'
-                                : 'warn'
-                        }
-                      >
-                        {t(`registry.imp.f.${r.status}`)}
-                      </Badge>
-                      {r.issues.map((i) => (
-                        <span
-                          key={`${i.field}-${i.code}`}
-                          className="mt-1 block text-xs text-on-surface-variant"
-                        >
-                          {t(`registry.issue.${i.code}`, { field: t(`registry.field.${i.field}`) })}
-                          {i.code === 'ALREADY_REGISTERED' && r.existing && (
-                            <span dir="ltr" className="ms-1 font-mono">
-                              #{r.existing.code}
-                            </span>
-                          )}
-                        </span>
-                      ))}
+                      <RowOutcome r={r} />
                     </td>
                   </tr>
                 ))}
@@ -386,7 +395,7 @@ export default function StudentImportPage() {
           </div>
           <Pager page={page} pages={pages} onGo={setPage} />
 
-          <div className="sticky bottom-3 mt-6 flex flex-col items-stretch gap-2 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div className="sticky bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-10 mt-6 flex lg:bottom-3 flex-col items-stretch gap-2 rounded-2xl border border-outline-variant bg-surface-container-lowest p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-on-surface-variant">
               {p.validRows
                 ? t('registry.imp.ready', { count: p.validRows })
@@ -439,5 +448,39 @@ export default function StudentImportPage() {
         </section>
       )}
     </div>
+  );
+}
+
+/** A row's verdict and its reasons, in the operator's words — table and card alike. */
+function RowOutcome({ r }: { r: ImportPreviewRow }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Badge
+        tone={
+          r.status === 'OK'
+            ? 'primary'
+            : r.status === 'ERROR'
+              ? 'error'
+              : r.status === 'DUPLICATE'
+                ? 'neutral'
+                : 'warn'
+        }
+      >
+        {t(`registry.imp.f.${r.status}`)}
+      </Badge>
+      {r.issues.map((i) => (
+        <span key={`${i.field}-${i.code}`} className="mt-1 block text-xs text-on-surface-variant">
+          {i.code === 'ALREADY_REGISTERED' && r.existing ? (
+            <>
+              {t('registry.imp.existingAs')}{' '}
+              <bdi className="font-mono tabular-nums">{r.existing.code}</bdi>
+            </>
+          ) : (
+            t(`registry.issue.${i.code}`, { field: t(`registry.field.${i.field}`) })
+          )}
+        </span>
+      ))}
+    </>
   );
 }

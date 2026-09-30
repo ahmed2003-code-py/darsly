@@ -79,4 +79,13 @@ describe('FeatureFlagsService', () => {
     expect(await svc.isEnabled('acad1', 'studentRegistry')).toBe(true);
     expect(await svc.isEnabled('acad2', 'studentRegistry')).toBe(false);
   });
+
+  it('classOperations (C2) is off until a platform admin turns it on, per academy', async () => {
+    const prisma = makePrisma();
+    const svc = new FeatureFlagsService(prisma as any);
+    expect(await svc.isEnabled('acad1', 'classOperations')).toBe(false);
+    await svc.setFlag('acad1', 'classOperations', true, 'admin1');
+    expect(await svc.isEnabled('acad1', 'classOperations')).toBe(true);
+    expect(await svc.isEnabled('acad2', 'classOperations')).toBe(false);
+  });
 });

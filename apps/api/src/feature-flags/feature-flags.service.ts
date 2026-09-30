@@ -17,6 +17,10 @@ export const FEATURE_FLAG_KEYS = [
   // than a gate on today's behaviour, so it starts OFF and a platform admin
   // turns it on per academy (see DEFAULT_OFF).
   'studentRegistry',
+  // Center Operations C2 — weekly timetables, real class occurrences and their
+  // attendance (start, late, close, makeup). New to everyone, so OFF until a
+  // platform admin turns it on per academy.
+  'classOperations',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
@@ -28,7 +32,10 @@ const DEFAULT_ENABLED = true;
  * a feature that is new to everyone is the opposite case — nobody should
  * wake up to an unannounced screen — so it is listed here instead.
  */
-const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>(['studentRegistry']);
+const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
+  'studentRegistry',
+  'classOperations',
+]);
 
 function defaultFor(key: FeatureFlagKey): boolean {
   return DEFAULT_OFF.has(key) ? false : DEFAULT_ENABLED;

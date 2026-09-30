@@ -30,14 +30,17 @@ export interface UpdateSessionInput extends Partial<CreateSessionInput> {
   status?: 'SCHEDULED' | 'CANCELLED' | 'COMPLETED';
 }
 
-/** conflictingSessionId is included when known, so the frontend can link to it. */
+/** conflictingSessionId is included when known, so the frontend can link to
+ *  it; `date` (a local YYYY-MM-DD) when a weekly timetable line is refused,
+ *  so the desk can see which of its classes collides. */
 export class ScheduleConflictError extends ConflictException {
   constructor(
     public readonly code: ConflictCode,
     message: string,
     public readonly conflictingSessionId?: string,
+    public readonly date?: string,
   ) {
-    super({ message, code, conflictingSessionId });
+    super({ message, code, conflictingSessionId, ...(date ? { date } : {}) });
   }
 }
 
@@ -365,9 +368,24 @@ export class SessionsService {
     await this.access.assertGroupAccess(ctx, existing.groupId);
 
     if (dto.status === 'CANCELLED') {
-      const cancelled = await this.prisma.groupSession.update({
-        where: { id: sessionId },
-        data: { status: 'CANCELLED' },
+      // Under the class's row lock — the one taking attendance holds — so a
+      // cancel and a first mark cannot both win: a class somebody has
+      // attended, or whose sheet is closed, is history and stays.
+      const cancelled = await this.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "GroupSession" WHERE id = ${sessionId} FOR UPDATE`;
+        const sheet = await tx.attendanceSession.findFirst({
+          where: { groupSessionId: sessionId },
+          select: { closedAt: true, _count: { select: { records: true } } },
+        });
+        if (sheet && (sheet.closedAt || sheet._count.records > 0))
+          throw new ConflictException({
+            message: 'Attendance was already taken for this class',
+            code: 'SESSION_HAS_ATTENDANCE',
+          });
+        return tx.groupSession.update({
+          where: { id: sessionId },
+          data: { status: 'CANCELLED', ...(existing.slotId ? { customizedAt: new Date() } : {}) },
+        });
       });
       await this.audit.log({
         actorUserId: ctx.userId,
@@ -427,6 +445,9 @@ export class SessionsService {
           locationNote,
           joinUrl,
           ...(dto.status ? { status: dto.status } : {}),
+          // A class from the weekly timetable, changed on its own: a later
+          // edit of the timetable must leave this one as it now is.
+          ...(existing.slotId ? { customizedAt: new Date() } : {}),
         },
       });
       await this.audit.log({

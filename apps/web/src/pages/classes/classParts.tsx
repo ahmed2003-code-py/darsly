@@ -72,11 +72,14 @@ export function ClassStateChip({
   startedAt,
   closedAt,
   live,
+  ended = false,
 }: {
   status: ClassStatus;
   startedAt: string | null;
   closedAt: string | null;
   live: boolean;
+  /** Past its end time and not closed yet: attendance still to finish. */
+  ended?: boolean;
 }) {
   const { t } = useTranslation();
   const [icon, label, tone] =
@@ -88,17 +91,23 @@ export function ClassStateChip({
             t('classes.state.closed'),
             'bg-surface-container-high text-on-surface-variant',
           ]
-        : startedAt || live
+        : ended
           ? [
-              'play_circle',
-              t('classes.state.live'),
-              'bg-primary-fixed text-on-primary-fixed-variant',
+              'history',
+              t('classes.state.ended'),
+              'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/15 dark:text-amber-300',
             ]
-          : [
-              'schedule',
-              t('classes.state.upcoming'),
-              'bg-surface-container-high text-on-surface-variant',
-            ];
+          : startedAt || live
+            ? [
+                'play_circle',
+                t('classes.state.live'),
+                'bg-primary-fixed text-on-primary-fixed-variant',
+              ]
+            : [
+                'schedule',
+                t('classes.state.upcoming'),
+                'bg-surface-container-high text-on-surface-variant',
+              ];
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${tone}`}

@@ -174,6 +174,7 @@ export function ClassCard({
                 <bdi>{c.group.name}</bdi>
               </p>
               <ClassStateChip
+                ended={nowMs >= new Date(c.endAt).getTime()}
                 status={c.status}
                 startedAt={c.startedAt}
                 closedAt={c.closedAt}

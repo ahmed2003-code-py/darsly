@@ -128,7 +128,8 @@ export class ClassAttendanceService {
       const s = await this.lock(tx, sessionId);
       const now = await this.now(tx);
       this.assertOpen(s, now);
-      if (s.startedAt) return false;
+      // Already started, or already over: nothing to start.
+      if (s.startedAt || now >= s.endAt) return false;
       await tx.groupSession.update({
         where: { id: sessionId },
         data: { startedAt: now, startedBy: ctx.userId },
@@ -678,7 +679,11 @@ export class ClassAttendanceService {
       closedAt: sheet?.closedAt ?? null,
       canMark: !cancelled && now >= opensAt,
       canClose: !cancelled && !sheet?.closedAt && now >= full.startAt,
-      canStart: !cancelled && !full.startedAt && !sheet?.closedAt && now >= opensAt,
+      // Starting a class that has already ended means nothing; the sheet can
+      // still be filled in and closed.
+      canStart:
+        !cancelled && !full.startedAt && !sheet?.closedAt && now >= opensAt && now < full.endAt,
+      ended: now >= full.endAt,
       capacity: full.group.capacity,
       counts,
       students,

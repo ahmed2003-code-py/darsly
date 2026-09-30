@@ -155,6 +155,7 @@ export default function ClassPage() {
             startedAt={s.startedAt}
             closedAt={data.closedAt}
             live={live}
+            ended={data.ended}
           />
         </div>
         <p className="mt-1 text-sm text-on-surface-variant">
@@ -190,13 +191,18 @@ export default function ClassPage() {
           )}
         </p>
 
-        {!cancelled && !closed && data.canMark && (
+        {/* The late rule only means something while the class is on; after
+            its end, marks are records written afterwards (stored as given). */}
+        {!cancelled && !closed && data.canMark && !data.ended && (
           <p className="mt-3 rounded-xl bg-surface-container-low px-3 py-2 text-xs text-on-surface-variant">
             {t('classes.lateRule', {
               time: formatInstant(data.lateAfter, data.timezone, lang),
               count: data.graceMin,
             })}
           </p>
+        )}
+        {!cancelled && !closed && data.ended && (
+          <Banner tone="neutral" icon="history" text={t('classes.endedNote')} />
         )}
         {cancelled && <Banner tone="error" icon="block" text={t('classes.cancelledNote')} />}
         {closed && (

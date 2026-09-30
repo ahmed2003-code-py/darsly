@@ -942,6 +942,22 @@ describe('C2 — taking attendance', () => {
     }
   });
 
+  it('a class that ended but is not closed: no Start, marks recorded as given, still closable', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const { ids, cls } = await classWith(w, -120);
+    const r = await classes.roster(w.teacher1, cls.id);
+    expect(r).toMatchObject({ ended: true, canStart: false, canMark: true, canClose: true });
+    await classes.start(w.teacher1, cls.id);
+    expect(
+      (await prisma.groupSession.findUniqueOrThrow({ where: { id: cls.id } })).startedAt,
+    ).toBeNull();
+    const m = await classes.mark(w.teacher1, cls.id, {
+      records: [{ studentId: ids[0], status: 'PRESENT' }],
+    });
+    expect(m.students.find((x) => x.studentId === ids[0])?.status).toBe('PRESENT');
+  });
+
   it('starting a class is server-timed and repeat-safe', async () => {
     if (!guard()) return;
     const w = await world();
@@ -1497,5 +1513,62 @@ describe('C2 — a teacher reaches their classes from any workspace', () => {
     // Reception holds no attendance.mark anywhere: nothing.
     const accessR = await ctl.myAccess(jwt(w.receptionId, Role.STAFF));
     expect(accessR).toEqual({ enabled: false, academies: [] });
+  });
+});
+
+describe('C2 — transfer vs withdrawal, deterministically', () => {
+  it('a transfer waits on the register row a withdrawal holds, then refuses — never reopens a stint', async () => {
+    if (!guard()) return;
+    const w = await world();
+    const reg = await register.register(w.owner, {
+      requestKey: uniq(),
+      fullName: 'حتمي الترتيب',
+    });
+    const sid = reg.student.studentId;
+    await prisma.groupMembership.create({
+      data: {
+        groupId: w.A.gA.id,
+        studentId: sid,
+        academyId: w.A.acad.id,
+        addedAt: new Date(Date.now() - 60_000),
+      },
+    });
+    // The withdrawal, exactly as the desk runs it, held open at a gate we control.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const holding = new Promise<void>((r) => (locked = r));
+    const withdrawal = prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "AcademyStudent" WHERE id = ${reg.student.id} FOR UPDATE`;
+        await tx.academyStudent.update({
+          where: { id: reg.student.id },
+          data: { status: 'WITHDRAWN', leftAt: new Date() },
+        });
+        await groups.endMemberships(tx, w.A.acad.id, sid);
+        locked();
+        await gate;
+      },
+      { timeout: 20_000 },
+    );
+    await holding;
+    let settled = false;
+    const transfer = groups
+      .transfer(w.owner, w.A.gA.id, sid, w.A.gB.id)
+      .then(
+        () => 'MOVED',
+        (e) => codeOf(e),
+      )
+      .finally(() => (settled = true));
+    await new Promise((r) => setTimeout(r, 1500));
+    // Blocked on the register row the withdrawal holds.
+    expect(settled).toBe(false);
+    release();
+    await withdrawal;
+    // Refused either way: the stint the withdrawal ended is gone, or the learner is withdrawn.
+    expect(['MEMBERSHIP_NOT_FOUND', 'STUDENT_WITHDRAWN']).toContain(await transfer);
+    expect(await prisma.groupMembership.count({ where: { studentId: sid, deletedAt: null } })).toBe(
+      0,
+    );
   });
 });

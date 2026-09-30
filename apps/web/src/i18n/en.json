@@ -5460,7 +5460,8 @@
       "cancelled": "Cancelled",
       "closed": "Closed",
       "live": "On now",
-      "upcoming": "Upcoming"
+      "upcoming": "Upcoming",
+      "ended": "Ended"
     },
     "lateRule_one": "A new check-in after {{time}} ({{count}} minute grace) is marked Late.",
     "lateRule_other": "A new check-in after {{time}} ({{count}} minutes grace) is marked Late.",
@@ -5523,7 +5524,8 @@
     "cancelOneTitle": "Cancel one class",
     "cancelOneBody": "Only the class on {{date}} at {{time}} is cancelled. The weekly timetable and other classes do not change.",
     "cancelOneAction": "Cancel class",
-    "legacyLink": "Earlier attendance by date"
+    "legacyLink": "Earlier attendance by date",
+    "endedNote": "The class is over. Anything marked now is recorded as given (no automatic late). Close attendance when you are done."
   },
   "timetable": {
     "title": "Weekly times",

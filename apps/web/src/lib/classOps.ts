@@ -84,6 +84,8 @@ export interface ClassRoster {
   canMark: boolean;
   canClose: boolean;
   canStart: boolean;
+  /** Past its end time. */
+  ended: boolean;
   capacity: number | null;
   counts: Record<AttendanceStatus | 'UNMARKED' | 'MAKEUP', number>;
   students: RosterStudent[];

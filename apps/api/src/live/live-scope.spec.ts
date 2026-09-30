@@ -233,6 +233,7 @@ describe('membership removal — future live streams lose the teacher, history s
       groupAssignment: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
       groupSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       liveSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      groupScheduleSlot: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     };
     await new AcademyService(prisma).removeMember('centerA', 'm');
     const call = prisma.liveSession.updateMany.mock.calls[0][0];

@@ -643,6 +643,12 @@ export class AcademyService {
       where: { academyId, teacherUserId: userId, status: 'SCHEDULED', startAt: { gt: new Date() } },
       data: { teacherUserId: null },
     });
+    // …and the weekly timetable (C2), or its next generated classes would put
+    // them straight back.
+    await this.prisma.groupScheduleSlot.updateMany({
+      where: { academyId, teacherUserId: userId },
+      data: { teacherUserId: null },
+    });
     // Same for future live streams in this academy. tenantId (who authored it)
     // is history and stays; the teacher slot is what stops blocking their time.
     await this.prisma.liveSession.updateMany({

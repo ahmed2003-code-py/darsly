@@ -6,6 +6,7 @@ import {
   AddGroupMembersDto,
   AssignStaffDto,
   CreateGroupDto,
+  TransferMemberDto,
   UpdateGroupDto,
 } from './dto/academy-ops.dto';
 import { GroupsService } from './groups.service';
@@ -71,6 +72,17 @@ export class GroupsController {
     @Param('studentId') studentId: string,
   ) {
     return this.groups.removeMember(ctx, groupId, studentId);
+  }
+
+  @Post(':groupId/members/:studentId/transfer')
+  @ApiOperation({ summary: '[academy] Move a student to another group (one step, history kept)' })
+  transfer(
+    @CurrentAcademy() ctx: AcademyContext,
+    @Param('groupId') groupId: string,
+    @Param('studentId') studentId: string,
+    @Body() dto: TransferMemberDto,
+  ) {
+    return this.groups.transfer(ctx, groupId, studentId, dto.toGroupId);
   }
 
   @Post(':groupId/assignments')

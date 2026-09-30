@@ -13,6 +13,7 @@ function makePrisma() {
     groupAssignment: { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     groupSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     liveSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    groupScheduleSlot: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
   } as any;
 }
 

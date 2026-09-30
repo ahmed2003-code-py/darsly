@@ -56,6 +56,7 @@ export class GroupsService {
           description: true,
           status: true,
           createdAt: true,
+          capacity: true,
           _count: { select: { members: { where: { deletedAt: null } } } },
         },
       }),
@@ -82,6 +83,7 @@ export class GroupsService {
       status: g.status,
       createdAt: g.createdAt,
       studentsCount: g._count.members,
+      capacity: g.capacity,
       staff: byGroup.get(g.id) ?? [],
     }));
     // `groups` is the same array under its original name. It is the one key in
@@ -127,9 +129,10 @@ export class GroupsService {
       });
     }
 
+    const config = await this.classConfig(ctx.academyId, dto);
     const group = await this.prisma.$transaction(async (tx) => {
       const created = await tx.group.create({
-        data: { academyId: ctx.academyId, name, description: dto.description },
+        data: { academyId: ctx.academyId, name, description: dto.description, ...config },
       });
       if (ctx.role === 'TEACHER' || ctx.role === 'ASSISTANT') {
         await tx.groupAssignment.create({
@@ -161,7 +164,13 @@ export class GroupsService {
   async detail(ctx: AcademyContext, groupId: string) {
     await this.access.assertGroupAccess(ctx, groupId);
     const [group, members, assignments] = await Promise.all([
-      this.prisma.group.findUniqueOrThrow({ where: { id: groupId } }),
+      this.prisma.group.findUniqueOrThrow({
+        where: { id: groupId },
+        include: {
+          subject: { select: { id: true, nameAr: true, nameEn: true } },
+          grade: { select: { id: true, nameAr: true, nameEn: true } },
+        },
+      }),
       this.prisma.groupMembership.findMany({
         where: { groupId, deletedAt: null },
         orderBy: { addedAt: 'asc' },
@@ -191,6 +200,10 @@ export class GroupsService {
       description: group.description,
       status: group.status,
       createdAt: group.createdAt,
+      subject: group.subject,
+      grade: group.grade,
+      capacity: group.capacity,
+      lateGraceMin: group.lateGraceMin,
       members: members.map((m) => ({
         membershipId: m.id,
         addedAt: m.addedAt,
@@ -208,13 +221,29 @@ export class GroupsService {
 
   async update(ctx: AcademyContext, groupId: string, dto: UpdateGroupDto) {
     await this.access.assertGroupAccess(ctx, groupId);
-    const group = await this.prisma.group.update({
-      where: { id: groupId },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name } : {}),
-        ...(dto.description !== undefined ? { description: dto.description } : {}),
-        ...(dto.status ? { status: dto.status } : {}),
-      },
+    const config = await this.classConfig(ctx.academyId, dto);
+    const group = await this.prisma.$transaction(async (tx) => {
+      if (config.capacity != null) {
+        // Under the same lock seat-taking uses: a capacity below the students
+        // already in the group would describe a group that cannot exist.
+        await tx.$queryRaw`SELECT id FROM "Group" WHERE id = ${groupId} FOR UPDATE`;
+        const seated = await tx.groupMembership.count({ where: { groupId, deletedAt: null } });
+        if (seated > config.capacity)
+          throw new ConflictException({
+            message: 'More students are already in this group',
+            code: 'CAPACITY_BELOW_MEMBERS',
+            seated,
+          });
+      }
+      return tx.group.update({
+        where: { id: groupId },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name } : {}),
+          ...(dto.description !== undefined ? { description: dto.description } : {}),
+          ...(dto.status ? { status: dto.status } : {}),
+          ...config,
+        },
+      });
     });
     await this.audit.log({
       actorUserId: ctx.userId,
@@ -225,6 +254,69 @@ export class GroupsService {
       meta: { ...dto },
     });
     return group;
+  }
+
+  /**
+   * The class configuration a create/update may set (C2), validated against
+   * this academy: a Center may only name a subject it offers (the same rule as
+   * its courses; a PERSONAL academy is never gated), and a year must be a live
+   * one. Keys absent from the request are left out; null clears.
+   */
+  private async classConfig(
+    academyId: string,
+    dto: {
+      subjectId?: string | null;
+      gradeId?: string | null;
+      capacity?: number | null;
+      lateGraceMin?: number | null;
+    },
+  ): Promise<{
+    subjectId?: string | null;
+    gradeId?: string | null;
+    capacity?: number | null;
+    lateGraceMin?: number | null;
+  }> {
+    const out: Awaited<ReturnType<GroupsService['classConfig']>> = {};
+    if (dto.subjectId !== undefined) {
+      if (dto.subjectId) {
+        const [academy, subject] = await Promise.all([
+          this.prisma.academy.findUnique({ where: { id: academyId }, select: { kind: true } }),
+          this.prisma.subject.findFirst({ where: { id: dto.subjectId, isActive: true } }),
+        ]);
+        const offered =
+          !!subject &&
+          (academy?.kind !== 'CENTER' ||
+            !!(await this.prisma.academySubject.findFirst({
+              where: { academyId, subjectId: dto.subjectId, isActive: true },
+              select: { id: true },
+            })));
+        if (!offered)
+          throw new BadRequestException({
+            message: 'This academy does not offer that subject',
+            code: 'SUBJECT_NOT_OFFERED',
+            field: 'subjectId',
+          });
+      }
+      out.subjectId = dto.subjectId;
+    }
+    if (dto.gradeId !== undefined) {
+      if (dto.gradeId) {
+        const grade = await this.prisma.gradeLevel.findFirst({
+          where: { id: dto.gradeId, isActive: true },
+          select: { id: true },
+        });
+        if (!grade)
+          throw new BadRequestException({
+            message: 'Grade not found',
+            code: 'GRADE_NOT_FOUND',
+            field: 'gradeId',
+          });
+      }
+      out.gradeId = dto.gradeId;
+    }
+    if (dto.capacity !== undefined) out.capacity = dto.capacity;
+    if (dto.lateGraceMin !== undefined) out.lateGraceMin = dto.lateGraceMin;
+    return out;
   }
 
   async addMembers(ctx: AcademyContext, groupId: string, dto: AddGroupMembersDto) {
@@ -296,13 +388,18 @@ export class GroupsService {
 
   /**
    * The one place group memberships are written. Idempotent: an active
-   * member is left exactly as they are (the unique (groupId, studentId) pair
-   * makes a concurrent or repeated add a no-op), and a student removed earlier
-   * and added back starts a NEW membership — `addedAt` moves to now, because
-   * it is the start of what the group's chat lets them read; they must not
-   * come back into what was said while they were out. (The unique pair still
-   * holds the old row, so it is revived rather than created.) Returns the ids
-   * that were not already active members.
+   * member is left exactly as they are (the open-stint unique index makes a
+   * concurrent or repeated add a no-op), and a student removed earlier and
+   * added back starts a NEW stint — a new row from now, while the old one
+   * keeps the dates it covered (C2: who was in the group on a past class is
+   * what attendance is expected against). `addedAt` is also the start of what
+   * the group's chat lets them read, so they never come back into what was
+   * said while they were out.
+   *
+   * Seats (Group.capacity) are taken under a lock on the group's row: the
+   * count and the insert below see every other desk's add, so the last seat
+   * goes to exactly one of two concurrent requests and the other is refused
+   * with GROUP_FULL. Returns the ids that were not already active members.
    */
   async writeMemberships(
     tx: Prisma.TransactionClient,
@@ -311,21 +408,94 @@ export class GroupsService {
     studentIds: string[],
   ): Promise<string[]> {
     if (!studentIds.length) return [];
+    const [group] = await tx.$queryRaw<{ capacity: number | null }[]>`
+      SELECT capacity FROM "Group" WHERE id = ${groupId} AND "academyId" = ${academyId} FOR UPDATE`;
+    if (!group)
+      throw new NotFoundException({ message: 'Group not found', code: 'GROUP_NOT_FOUND' });
     const active = await tx.groupMembership.findMany({
       where: { groupId, studentId: { in: studentIds }, deletedAt: null },
       select: { studentId: true },
     });
     const already = new Set(active.map((m) => m.studentId));
-    const now = new Date();
-    await tx.groupMembership.updateMany({
-      where: { groupId, studentId: { in: studentIds }, deletedAt: { not: null } },
-      data: { deletedAt: null, addedAt: now },
-    });
+    const fresh = [...new Set(studentIds)].filter((id) => !already.has(id));
+    if (!fresh.length) return [];
+    if (group.capacity != null) {
+      const seated = await tx.groupMembership.count({ where: { groupId, deletedAt: null } });
+      if (seated + fresh.length > group.capacity) {
+        throw new ConflictException({
+          message: 'This group is full',
+          code: 'GROUP_FULL',
+          capacity: group.capacity,
+          seated,
+        });
+      }
+    }
     await tx.groupMembership.createMany({
-      data: studentIds.map((studentId) => ({ groupId, studentId, academyId })),
+      data: fresh.map((studentId) => ({ groupId, studentId, academyId })),
       skipDuplicates: true,
     });
-    return studentIds.filter((id) => !already.has(id));
+    return fresh;
+  }
+
+  /**
+   * Moves a learner from one group to another as one step: the stint in
+   * `fromGroupId` ends and one in `toGroupId` begins, in a single
+   * transaction, so they are never in both and never in neither. The old
+   * stint and every attendance taken under it stay as they were. The target's
+   * seats are checked under its lock like any add; both groups are locked in
+   * id order first, so two opposite transfers cannot deadlock.
+   */
+  async transfer(ctx: AcademyContext, fromGroupId: string, studentId: string, toGroupId: string) {
+    if (fromGroupId === toGroupId)
+      throw new BadRequestException({
+        message: 'Pick a different group',
+        code: 'TRANSFER_SAME_GROUP',
+      });
+    await this.access.assertGroupAccess(ctx, fromGroupId);
+    const target = await this.access.assertGroupAccess(ctx, toGroupId);
+    if (target.status !== 'ACTIVE')
+      throw new ConflictException({
+        message: 'That group is archived',
+        code: 'GROUP_ARCHIVED',
+      });
+    await this.prisma.$transaction(async (tx) => {
+      // The learner's register row first — the lock a withdrawal holds while
+      // it ends their memberships — then the groups: the same learner→group
+      // order the desk's add-to-group takes, so none of them can deadlock and
+      // a transfer can never reopen a stint for someone withdrawn meanwhile.
+      const [record] = await tx.$queryRaw<{ status: string }[]>`
+        SELECT status FROM "AcademyStudent"
+        WHERE "academyId" = ${ctx.academyId} AND "studentId" = ${studentId} FOR UPDATE`;
+      const ordered = [fromGroupId, toGroupId].sort();
+      await tx.$queryRaw`
+        SELECT id FROM "Group" WHERE id IN (${ordered[0]}, ${ordered[1]}) ORDER BY id FOR UPDATE`;
+      const stint = await tx.groupMembership.findFirst({
+        where: { groupId: fromGroupId, studentId, academyId: ctx.academyId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!stint)
+        throw new NotFoundException({
+          message: 'Membership not found',
+          code: 'MEMBERSHIP_NOT_FOUND',
+        });
+      if (record?.status === 'WITHDRAWN')
+        throw new ConflictException({
+          message: 'This student has withdrawn; reactivate them first',
+          code: 'STUDENT_WITHDRAWN',
+        });
+      await tx.groupMembership.update({ where: { id: stint.id }, data: { deletedAt: new Date() } });
+      await this.writeMemberships(tx, ctx.academyId, toGroupId, [studentId]);
+    });
+    await this.leaveGroupChats([fromGroupId], studentId);
+    await this.audit.log({
+      actorUserId: ctx.userId,
+      action: 'group.members.transfer',
+      entity: 'Group',
+      entityId: toGroupId,
+      academyId: ctx.academyId,
+      meta: { studentId, fromGroupId, toGroupId },
+    });
+    return this.detail(ctx, fromGroupId);
   }
 
   /**

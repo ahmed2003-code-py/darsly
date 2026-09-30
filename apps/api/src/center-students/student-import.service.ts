@@ -509,7 +509,36 @@ export class StudentImportService {
         requestKey: keyOf(m.r),
       })),
     });
-    const memberships = made.filter((m) => m.r.groupId && liveGroups.has(m.r.groupId));
+    // Seats (C2). Under the groups' own locks — the ones a desk add takes — a
+    // row whose group has no seat left still becomes a student, just not a
+    // member: the rest of the sheet is not refused for one full group.
+    const wanted = [...new Set(made.map((m) => m.r.groupId).filter((g) => g && liveGroups.has(g)))]
+      .map((g) => g!)
+      .sort();
+    const seatsLeft = new Map<string, number>();
+    if (wanted.length) {
+      const locked = await tx.$queryRaw<{ id: string; capacity: number | null }[]>`
+        SELECT id, capacity FROM "Group" WHERE id IN (${Prisma.join(wanted)}) ORDER BY id FOR UPDATE`;
+      for (const g of locked) {
+        if (g.capacity == null) continue;
+        const seated = await tx.groupMembership.count({
+          where: { groupId: g.id, deletedAt: null },
+        });
+        seatsLeft.set(g.id, Math.max(0, g.capacity - seated));
+      }
+    }
+    const full = new Set<number>();
+    const memberships = made.filter((m) => {
+      if (!m.r.groupId || !liveGroups.has(m.r.groupId)) return false;
+      const left = seatsLeft.get(m.r.groupId);
+      if (left === undefined) return true;
+      if (left <= 0) {
+        full.add(m.r.row);
+        return false;
+      }
+      seatsLeft.set(m.r.groupId, left - 1);
+      return true;
+    });
     if (memberships.length) {
       await tx.groupMembership.createMany({
         data: memberships.map((m) => ({
@@ -525,7 +554,11 @@ export class StudentImportService {
         row: m.r.row,
         status: 'CREATED',
         code: m.code,
-        ...(m.r.groupId && !liveGroups.has(m.r.groupId) ? { reason: 'GROUP_GONE' } : {}),
+        ...(m.r.groupId && !liveGroups.has(m.r.groupId)
+          ? { reason: 'GROUP_GONE' }
+          : full.has(m.r.row)
+            ? { reason: 'GROUP_FULL' }
+            : {}),
       });
     }
     return results.sort((a, b) => a.row - b.row);

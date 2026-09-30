@@ -5,25 +5,47 @@ import {
   IsArray,
   IsDateString,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { IsId, LIMITS } from '../../common/validation';
 
 const MAX_GROUP_BULK = 200;
 
-export class CreateGroupDto {
+/**
+ * A physical class's configuration (Center Operations C2). Every field is
+ * optional and nullable: `null` clears it, absent leaves it. Seats and grace
+ * are bounded here and again by CHECK constraints in the database.
+ */
+class GroupClassConfig {
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsId() subjectId?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsId() gradeId?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(1000) capacity?:
+    number | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(0) @Max(120) lateGraceMin?:
+    number | null;
+}
+
+export class CreateGroupDto extends GroupClassConfig {
   @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) name: string;
   @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) description?: string;
 }
 
-export class UpdateGroupDto {
+export class UpdateGroupDto extends GroupClassConfig {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(LIMITS.NAME) name?: string;
   @IsOptional() @IsString() @MaxLength(LIMITS.NOTE) description?: string;
   @IsOptional() @IsIn(['ACTIVE', 'ARCHIVED']) status?: 'ACTIVE' | 'ARCHIVED';
+}
+
+export class TransferMemberDto {
+  @IsId() toGroupId: string;
 }
 
 export class AddGroupMembersDto {

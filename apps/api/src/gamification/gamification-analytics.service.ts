@@ -174,7 +174,12 @@ export class GamificationAnalyticsService {
 
   private async streaks(tenantId: string | null) {
     const studentIds = tenantId ? await this.studentsOf(tenantId) : null;
-    const where: Prisma.StudentProfileWhereInput = studentIds ? { id: { in: studentIds } } : {};
+    // Platform-wide: learners who use Darsly themselves. A desk-registered
+    // learner (no password) has no streak to have and would only pull the
+    // average towards zero.
+    const where: Prisma.StudentProfileWhereInput = studentIds
+      ? { id: { in: studentIds } }
+      : { user: { passwordHash: { not: null } } };
     const [agg, alive] = await Promise.all([
       this.prisma.studentProfile.aggregate({
         where,

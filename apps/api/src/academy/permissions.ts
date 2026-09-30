@@ -44,6 +44,12 @@ export const CAPABILITIES = [
   'message.group',
   'guardian.manage', // (Guardian phase) link and manage a student's guardians
   'payment.view', // see payments for my courses — read only, never the wallet
+  // Center Operations C1 — the academy's student register. Both reach the
+  // WHOLE academy (every registered learner, with their contact numbers), so
+  // neither is a TEACHER default: a Center teacher keeps seeing the students
+  // of their own courses and groups, and the desk is granted these by the owner.
+  'student.directory', // look up and export the register: codes, names, phones, guardians
+  'student.register', // register, edit, withdraw/reactivate, import, and enrol a register student into a group
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -100,6 +106,10 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'attendance.mark',
   'group.manage',
   'schedule.manage',
+  // The desk (Reception preset). Academy-wide, so ACADEMY_WIDE below takes
+  // them off an assistant limited to some courses.
+  'student.directory',
+  'student.register',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -120,6 +130,8 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'analytics.read',
   'assessment.author',
   'chat.moderate',
+  'student.directory',
+  'student.register',
 ]);
 
 function isCapability(x: string): x is Capability {

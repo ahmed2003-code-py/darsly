@@ -81,9 +81,23 @@ export class StaffScopeService {
     return { id: '__none__' };
   }
 
-  /** Students of the courses in scope. */
+  /**
+   * Students of the courses in scope — and, for a member who sees the whole
+   * academy's register (the owner, the platform admin, or a holder of
+   * `student.directory`), every learner on that register too, which is how a
+   * learner registered at the desk with no course is reachable from Student
+   * 360. A course-scoped teacher or assistant is unchanged: their students
+   * are still exactly those of their courses.
+   */
   studentWhere(scope: StaffScope): Prisma.StudentProfileWhereInput {
-    return { enrollments: { some: { course: scope.courses } } };
+    const enrolled: Prisma.StudentProfileWhereInput = {
+      enrollments: { some: { course: scope.courses } },
+    };
+    const { ctx } = scope;
+    if (!(ctx.isPlatformAdmin || ctx.role === 'OWNER' || ctx.can('student.directory'))) {
+      return enrolled;
+    }
+    return { OR: [enrolled, { academyRecords: { some: { academyId: ctx.academyId } } }] };
   }
 
   /** Enrollments in the courses in scope — for listing what connects a student. */

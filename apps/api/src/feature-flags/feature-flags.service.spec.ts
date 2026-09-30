@@ -1,4 +1,4 @@
-import { FeatureFlagsService } from './feature-flags.service';
+import { FEATURE_FLAG_KEYS, FeatureFlagsService } from './feature-flags.service';
 
 function makePrisma() {
   const rows = new Map<
@@ -61,8 +61,22 @@ describe('FeatureFlagsService', () => {
     const svc = new FeatureFlagsService(prisma as any);
     await svc.setFlag('acad1', 'scheduling', false, 'admin1');
     const list = await svc.listForAcademy('acad1');
-    expect(list).toHaveLength(5);
+    expect(list).toHaveLength(FEATURE_FLAG_KEYS.length);
     expect(list.find((f) => f.key === 'scheduling')).toEqual({ key: 'scheduling', enabled: false });
     expect(list.find((f) => f.key === 'attendance')).toEqual({ key: 'attendance', enabled: true });
+    // A brand-new surface starts off: no row means OFF for it, unlike the gates on existing features.
+    expect(list.find((f) => f.key === 'studentRegistry')).toEqual({
+      key: 'studentRegistry',
+      enabled: false,
+    });
+  });
+
+  it('studentRegistry is off until a platform admin turns it on, per academy', async () => {
+    const prisma = makePrisma();
+    const svc = new FeatureFlagsService(prisma as any);
+    expect(await svc.isEnabled('acad1', 'studentRegistry')).toBe(false);
+    await svc.setFlag('acad1', 'studentRegistry', true, 'admin1');
+    expect(await svc.isEnabled('acad1', 'studentRegistry')).toBe(true);
+    expect(await svc.isEnabled('acad2', 'studentRegistry')).toBe(false);
   });
 });

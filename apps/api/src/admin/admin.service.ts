@@ -29,7 +29,9 @@ export class AdminService {
       totalAcademies,
       activeAcademies,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { role: 'STUDENT' } }),
+      // Online accounts only: a learner an academy registered at its desk (a
+      // credential-less shell) is that academy's student, not a platform signup.
+      this.prisma.user.count({ where: { role: 'STUDENT', passwordHash: { not: null } } }),
       this.prisma.teacherProfile.count({ where: { status: 'APPROVED' } }),
       this.prisma.teacherProfile.count({ where: { status: 'PENDING' } }),
       this.prisma.course.count({ where: { status: 'PUBLISHED' } }),

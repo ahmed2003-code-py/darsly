@@ -47,6 +47,8 @@ export class AdminAnalyticsService {
         SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS n
         FROM "User"
         WHERE role = 'STUDENT'
+          -- signups: a learner registered at an academy's desk (no password) is not one
+          AND "passwordHash" IS NOT NULL
           AND "createdAt" >= date_trunc('day', now()) - (${days}::int - 1) * INTERVAL '1 day'
           AND "deletedAt" IS NULL
         GROUP BY day

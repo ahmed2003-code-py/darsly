@@ -229,49 +229,139 @@ export class GroupsService {
 
   async addMembers(ctx: AcademyContext, groupId: string, dto: AddGroupMembersDto) {
     await this.access.assertGroupAccess(ctx, groupId);
-    // Every student must actually be enrolled in THIS academy — a group can
-    // never be used to smuggle in a student from elsewhere.
-    const validStudents = await this.prisma.studentProfile.findMany({
-      where: { id: { in: dto.studentIds }, enrollments: { some: { academyId: ctx.academyId } } },
-      select: { id: true },
-    });
-    const validIds = new Set(validStudents.map((s) => s.id));
-    const invalid = dto.studentIds.filter((id) => !validIds.has(id));
-    if (invalid.length) {
-      throw new BadRequestException({
-        message: 'Some students are not enrolled in this academy',
-        code: 'STUDENTS_NOT_ENROLLED',
-        invalid,
-      });
-    }
-
-    const ids = [...validIds];
-    const now = new Date();
-    await this.prisma.$transaction([
-      // A student removed earlier and added back starts a NEW membership:
-      // `addedAt` moves to now, because it is the start of what the group's
-      // chat lets them read — they must not come back into what was said
-      // while they were out. (The unique pair still holds the old row, so it
-      // is revived rather than created.) Members who are already active are
-      // left exactly as they are.
-      this.prisma.groupMembership.updateMany({
-        where: { groupId, studentId: { in: ids }, deletedAt: { not: null } },
-        data: { deletedAt: null, addedAt: now },
-      }),
-      this.prisma.groupMembership.createMany({
-        data: ids.map((studentId) => ({ groupId, studentId, academyId: ctx.academyId })),
-        skipDuplicates: true,
-      }),
-    ]);
+    // Every student must be on THIS academy's register — a group can never be
+    // used to smuggle in a student from elsewhere.
+    const ids = await this.admissible(ctx.academyId, [...new Set(dto.studentIds)]);
+    await this.prisma.$transaction((tx) => this.writeMemberships(tx, ctx.academyId, groupId, ids));
     await this.audit.log({
       actorUserId: ctx.userId,
       action: 'group.members.add',
       entity: 'Group',
       entityId: groupId,
       academyId: ctx.academyId,
-      meta: { studentIds: [...validIds] },
+      meta: { studentIds: ids },
     });
     return this.detail(ctx, groupId);
+  }
+
+  /**
+   * Which of these learners may join a group of this academy: those ACTIVE on
+   * its register (AcademyStudent). The register includes everyone enrolled in
+   * the academy's courses (the Enrollment trigger and the C1 backfill put them
+   * there), so no online student loses anything; a learner registered at the
+   * desk with no course at all is now admissible too, without a fake
+   * enrollment. Refuses the whole request, naming who is not admissible.
+   */
+  async admissible(academyId: string, studentIds: string[]): Promise<string[]> {
+    const rows = await this.prisma.academyStudent.findMany({
+      where: { academyId, studentId: { in: studentIds } },
+      select: { studentId: true, status: true },
+    });
+    const status = new Map(rows.map((r) => [r.studentId, r.status]));
+
+    // Belt and braces for the trigger: an enrolled learner the register somehow
+    // missed is registered now rather than refused.
+    const missing = studentIds.filter((id) => !status.has(id));
+    if (missing.length) {
+      const enrolled = await this.prisma.enrollment.findMany({
+        where: { academyId, studentId: { in: missing } },
+        select: { studentId: true },
+        distinct: ['studentId'],
+      });
+      for (const e of enrolled) {
+        await this.prisma
+          .$queryRaw`SELECT academy_student_ensure(${academyId}, ${e.studentId}, 'ONLINE'::"AcademyStudentSource", now()::timestamp)`;
+        status.set(e.studentId, 'ACTIVE');
+      }
+    }
+
+    const withdrawn = studentIds.filter((id) => status.get(id) === 'WITHDRAWN');
+    if (withdrawn.length) {
+      throw new BadRequestException({
+        message: 'Some students have withdrawn from this academy',
+        code: 'STUDENT_WITHDRAWN',
+        invalid: withdrawn,
+      });
+    }
+    const invalid = studentIds.filter((id) => !status.has(id));
+    if (invalid.length) {
+      throw new BadRequestException({
+        message: 'Some students are not students of this academy',
+        code: 'STUDENTS_NOT_ENROLLED',
+        invalid,
+      });
+    }
+    return studentIds;
+  }
+
+  /**
+   * The one place group memberships are written. Idempotent: an active
+   * member is left exactly as they are (the unique (groupId, studentId) pair
+   * makes a concurrent or repeated add a no-op), and a student removed earlier
+   * and added back starts a NEW membership — `addedAt` moves to now, because
+   * it is the start of what the group's chat lets them read; they must not
+   * come back into what was said while they were out. (The unique pair still
+   * holds the old row, so it is revived rather than created.) Returns the ids
+   * that were not already active members.
+   */
+  async writeMemberships(
+    tx: Prisma.TransactionClient,
+    academyId: string,
+    groupId: string,
+    studentIds: string[],
+  ): Promise<string[]> {
+    if (!studentIds.length) return [];
+    const active = await tx.groupMembership.findMany({
+      where: { groupId, studentId: { in: studentIds }, deletedAt: null },
+      select: { studentId: true },
+    });
+    const already = new Set(active.map((m) => m.studentId));
+    const now = new Date();
+    await tx.groupMembership.updateMany({
+      where: { groupId, studentId: { in: studentIds }, deletedAt: { not: null } },
+      data: { deletedAt: null, addedAt: now },
+    });
+    await tx.groupMembership.createMany({
+      data: studentIds.map((studentId) => ({ groupId, studentId, academyId })),
+      skipDuplicates: true,
+    });
+    return studentIds.filter((id) => !already.has(id));
+  }
+
+  /**
+   * Ends every active membership a learner holds in this academy's groups
+   * (the same soft delete as removeMember), inside the caller's transaction.
+   * Returns the groups, so the caller can evict the learner from their chats
+   * once the transaction has committed ({@link leaveGroupChats}).
+   */
+  async endMemberships(
+    tx: Prisma.TransactionClient,
+    academyId: string,
+    studentId: string,
+  ): Promise<string[]> {
+    const rows = await tx.groupMembership.findMany({
+      where: { academyId, studentId, deletedAt: null },
+      select: { groupId: true },
+    });
+    if (!rows.length) return [];
+    await tx.groupMembership.updateMany({
+      where: { academyId, studentId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+    return rows.map((r) => r.groupId);
+  }
+
+  /** An open chat tab must stop hearing these groups' rooms straight away. */
+  async leaveGroupChats(groupIds: string[], studentId: string) {
+    if (!groupIds.length) return;
+    const [student, chats] = await Promise.all([
+      this.prisma.studentProfile.findUnique({ where: { id: studentId }, select: { userId: true } }),
+      this.prisma.chatThread.findMany({
+        where: { groupId: { in: groupIds }, kind: 'GROUP' },
+        select: { id: true },
+      }),
+    ]);
+    if (student) for (const c of chats) this.realtime.leaveThread(c.id, student.userId);
   }
 
   async removeMember(ctx: AcademyContext, groupId: string, studentId: string) {

@@ -42,6 +42,8 @@ function makeDeps() {
       delete: jest.fn(),
     },
     studentProfile: { findMany: jest.fn() },
+    academyStudent: { findMany: jest.fn() },
+    enrollment: { findMany: jest.fn().mockResolvedValue([]) },
     academyMembership: { findFirst: jest.fn() },
     $transaction: jest.fn(async (arg: any) =>
       typeof arg === 'function' ? arg(prisma) : Promise.all(arg),
@@ -131,14 +133,25 @@ describe('GroupsService', () => {
   });
 
   describe('addMembers', () => {
-    it('rejects a student who is not enrolled in this academy', async () => {
+    it("rejects a student who is not on this academy's register", async () => {
       const { prisma, audit, access } = makeDeps();
       prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
-      prisma.studentProfile.findMany.mockResolvedValue([{ id: 's1' }]); // s2 not returned = not enrolled here
+      // s2 has no register row here and no enrollment = not this academy's student
+      prisma.academyStudent.findMany.mockResolvedValue([{ studentId: 's1', status: 'ACTIVE' }]);
       const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
       await expect(
         svc.addMembers(ctx({ role: 'OWNER' }), 'g1', { studentIds: ['s1', 's2'] }),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuses a student who withdrew from this academy (reactivate first)', async () => {
+      const { prisma, audit, access } = makeDeps();
+      prisma.group.findFirst.mockResolvedValue({ id: 'g1', academyId: 'a1' });
+      prisma.academyStudent.findMany.mockResolvedValue([{ studentId: 's1', status: 'WITHDRAWN' }]);
+      const svc = new GroupsService(prisma, access, audit, { leaveThread: () => undefined } as any);
+      await expect(
+        svc.addMembers(ctx({ role: 'OWNER' }), 'g1', { studentIds: ['s1'] }),
+      ).rejects.toMatchObject({ response: { code: 'STUDENT_WITHDRAWN' } });
     });
 
     it('refuses a teacher not assigned to the group before even checking students', async () => {
@@ -148,7 +161,7 @@ describe('GroupsService', () => {
       await expect(svc.addMembers(ctx(), 'g1', { studentIds: ['s1'] })).rejects.toBeInstanceOf(
         ForbiddenException,
       );
-      expect(prisma.studentProfile.findMany).not.toHaveBeenCalled();
+      expect(prisma.academyStudent.findMany).not.toHaveBeenCalled();
     });
   });
 

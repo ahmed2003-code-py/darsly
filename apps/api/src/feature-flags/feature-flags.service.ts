@@ -13,10 +13,26 @@ export const FEATURE_FLAG_KEYS = [
   'groups',
   'enrollmentApprovalMode',
   'adminStudio',
+  // Center Operations C1 — the student register. A new product surface rather
+  // than a gate on today's behaviour, so it starts OFF and a platform admin
+  // turns it on per academy (see DEFAULT_OFF).
+  'studentRegistry',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
 const DEFAULT_ENABLED = true;
+
+/**
+ * Flags whose missing row means OFF. The rule above ("missing = on") exists
+ * so gating an existing feature never changes what an academy already has;
+ * a feature that is new to everyone is the opposite case — nobody should
+ * wake up to an unannounced screen — so it is listed here instead.
+ */
+const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>(['studentRegistry']);
+
+function defaultFor(key: FeatureFlagKey): boolean {
+  return DEFAULT_OFF.has(key) ? false : DEFAULT_ENABLED;
+}
 
 /** How long a resolved flag is trusted before re-reading the DB. Short enough
  *  that a platform admin's toggle takes effect quickly; long enough that a
@@ -52,7 +68,7 @@ export class FeatureFlagsService {
       where: { academyId_key: { academyId, key } },
       select: { enabled: true },
     });
-    const enabled = row?.enabled ?? DEFAULT_ENABLED;
+    const enabled = row?.enabled ?? defaultFor(key);
     this.cache.set(ck, { enabled, expiresAt: Date.now() + CACHE_TTL_MS });
     return enabled;
   }
@@ -64,7 +80,7 @@ export class FeatureFlagsService {
       select: { key: true, enabled: true },
     });
     const byKey = new Map(rows.map((r) => [r.key, r.enabled]));
-    return FEATURE_FLAG_KEYS.map((key) => ({ key, enabled: byKey.get(key) ?? DEFAULT_ENABLED }));
+    return FEATURE_FLAG_KEYS.map((key) => ({ key, enabled: byKey.get(key) ?? defaultFor(key) }));
   }
 
   /** Platform-admin write. Invalidates this academy+key's cache entry immediately. */

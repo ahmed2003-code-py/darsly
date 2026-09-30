@@ -419,8 +419,19 @@ export class GuardianService {
   async overview(user: JwtPayload, linkId: string) {
     const link = await this.ownLink(user, linkId);
     // The academy's slice of this child, expressed as a scope over its courses.
+    // The link is the authorization; the "scope" only says which slice to read:
+    // the whole academy — every course, and its register (a child registered
+    // at the desk has no course and is still this academy's). A complete
+    // context with no capabilities, so nothing that asks can() is granted.
     const scope = {
-      ctx: { academyId: link.academyId } as any,
+      ctx: {
+        academyId: link.academyId,
+        userId: user.sub,
+        role: 'OWNER',
+        status: 'ACTIVE',
+        isPlatformAdmin: false,
+        can: () => false,
+      },
       courses: { academyId: link.academyId, deletedAt: null },
     } as StaffScope;
     const [courses, enrollments, attendance, live] = await Promise.all([

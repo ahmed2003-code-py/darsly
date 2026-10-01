@@ -75,6 +75,215 @@ export class CenterFeesService {
   }
 
   /** The compact picture (Desk, Student 360 header): owed, overdue, next due. */
+  // ── Reads for other Center Operations phases (C5) ──────────────────────
+  //
+  // C5 never touches a C4 model (center-fees.boundary.spec.ts): what it needs
+  // from the fees it asks here, so the balance has one definition and one
+  // owner. All three are reads; none takes a lock or writes.
+
+  /**
+   * Every learner in the academy with money still owed on a charge due BEFORE
+   * `dueBefore` (a local date), from the balance view: how much, and the
+   * oldest such charge. One set-based query — never per learner.
+   */
+  async overdueLearners(academyId: string, dueBefore: string) {
+    return this.prisma.$queryRaw<
+      {
+        academyStudentId: string;
+        overdueCents: number;
+        oldestChargeId: string;
+        oldestDueOn: string;
+      }[]
+    >`
+      SELECT DISTINCT ON (c."academyStudentId")
+             c."academyStudentId",
+             (sum(b."outstandingCents") OVER (PARTITION BY c."academyStudentId"))::int AS "overdueCents",
+             c.id AS "oldestChargeId",
+             c."dueOn"::text AS "oldestDueOn"
+      FROM "CenterChargeBalance" b JOIN "CenterCharge" c ON c.id = b."chargeId"
+      WHERE b."academyId" = ${academyId} AND c."voidedAt" IS NULL
+        AND b."outstandingCents" > 0 AND c."dueOn" < ${dueBefore}::date
+      ORDER BY c."academyStudentId", c."dueOn", c."createdAt", c.id`;
+  }
+
+  /**
+   * What a guardian may be shown when the academy chose to (C5): what is owed,
+   * what of it is overdue, and the receipts — number, date, amount, method,
+   * whether reversed. Never notes, reasons, who collected, adjustments or any
+   * other learner. Null when the learner has no fees here.
+   */
+  async guardianView(academyId: string, academyStudentId: string) {
+    const [rows, clock, currency, receipts] = await Promise.all([
+      this.balances(this.prisma, academyId, academyStudentId),
+      this.schedule.academyClock(academyId),
+      this.currencyOf(academyId),
+      this.prisma.centerCollection.findMany({
+        where: { academyId, academyStudentId },
+        orderBy: { receivedAt: 'desc' },
+        take: 20,
+        select: {
+          receiptNumber: true,
+          receivedAt: true,
+          amountCents: true,
+          currency: true,
+          method: true,
+          reversedAt: true,
+        },
+      }),
+    ]);
+    if (!rows.length && !receipts.length) return null;
+    const s = this.summarize(rows, clock.today, currency);
+    return {
+      currency: s.currency,
+      outstandingCents: s.outstandingCents,
+      overdueCents: s.overdueCents,
+      receipts: receipts.map((k) => ({
+        receiptNumber: k.receiptNumber,
+        localDate: wallClock(k.receivedAt, clock.timezone).date,
+        amountCents: k.amountCents,
+        currency: k.currency,
+        method: k.method,
+        reversed: !!k.reversedAt,
+      })),
+    };
+  }
+
+  /**
+   * A learner's fee events before `before`, newest first, at most `limit` —
+   * for the Student 360 timeline of a caller who holds fees.view (C5 checks
+   * that before it asks). Charges posted and voided, adjustments, collections
+   * and reversals; times are instants.
+   */
+  async timelineEvents(academyId: string, academyStudentId: string, before: Date, limit: number) {
+    const [charges, voids, adjustments, collections, reversals] = await Promise.all([
+      this.prisma.centerCharge.findMany({
+        where: { academyId, academyStudentId, createdAt: { lt: before } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          kind: true,
+          description: true,
+          period: true,
+          amountCents: true,
+          currency: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.centerCharge.findMany({
+        where: { academyId, academyStudentId, voidedAt: { lt: before } },
+        orderBy: { voidedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          description: true,
+          amountCents: true,
+          currency: true,
+          voidedAt: true,
+          voidReason: true,
+        },
+      }),
+      this.prisma.centerAdjustment.findMany({
+        where: { academyId, charge: { academyStudentId }, createdAt: { lt: before } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          kind: true,
+          deltaCents: true,
+          reason: true,
+          createdAt: true,
+          charge: { select: { description: true, currency: true } },
+        },
+      }),
+      this.prisma.centerCollection.findMany({
+        where: { academyId, academyStudentId, receivedAt: { lt: before } },
+        orderBy: { receivedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          receiptNumber: true,
+          amountCents: true,
+          currency: true,
+          method: true,
+          receivedAt: true,
+        },
+      }),
+      this.prisma.centerCollection.findMany({
+        where: { academyId, academyStudentId, reversedAt: { lt: before } },
+        orderBy: { reversedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          receiptNumber: true,
+          amountCents: true,
+          currency: true,
+          reversedAt: true,
+          reversalReason: true,
+        },
+      }),
+    ]);
+    return [
+      ...charges.map((c) => ({
+        at: c.createdAt,
+        kind: 'FEE_CHARGE' as const,
+        ref: c.id,
+        data: {
+          chargeKind: c.kind,
+          description: c.description,
+          period: c.period,
+          amountCents: c.amountCents,
+          currency: c.currency,
+        },
+      })),
+      ...voids.map((c) => ({
+        at: c.voidedAt!,
+        kind: 'FEE_VOID' as const,
+        ref: c.id,
+        data: {
+          description: c.description,
+          amountCents: c.amountCents,
+          currency: c.currency,
+          reason: c.voidReason,
+        },
+      })),
+      ...adjustments.map((a) => ({
+        at: a.createdAt,
+        kind: 'FEE_ADJUSTMENT' as const,
+        ref: a.id,
+        data: {
+          adjustmentKind: a.kind,
+          deltaCents: a.deltaCents,
+          currency: a.charge.currency,
+          description: a.charge.description,
+          reason: a.reason,
+        },
+      })),
+      ...collections.map((k) => ({
+        at: k.receivedAt,
+        kind: 'FEE_COLLECTION' as const,
+        ref: k.id,
+        data: {
+          receiptNumber: k.receiptNumber,
+          amountCents: k.amountCents,
+          currency: k.currency,
+          method: k.method,
+        },
+      })),
+      ...reversals.map((k) => ({
+        at: k.reversedAt!,
+        kind: 'FEE_REVERSAL' as const,
+        ref: k.id,
+        data: {
+          receiptNumber: k.receiptNumber,
+          amountCents: k.amountCents,
+          currency: k.currency,
+          reason: k.reversalReason,
+        },
+      })),
+    ];
+  }
+
   async summary(ctx: AcademyContext, academyStudentId: string) {
     const s = await this.studentIn(ctx, academyStudentId);
     const [rows, clock, currency] = await Promise.all([

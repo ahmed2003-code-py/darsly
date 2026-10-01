@@ -27,6 +27,9 @@ export const FEATURE_FLAG_KEYS = [
   // Center Operations C4 — the center's own fees, collections and receipts.
   // Its own switch, independent of the register, classes and the desk.
   'centerFees',
+  // Center Operations C5 — student follow-up and guardian connection. New to
+  // everyone, so OFF until a platform admin turns it on per academy.
+  'studentFollowUp',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
@@ -43,6 +46,7 @@ const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
   'classOperations',
   'receptionDesk',
   'centerFees',
+  'studentFollowUp',
 ]);
 
 function defaultFor(key: FeatureFlagKey): boolean {

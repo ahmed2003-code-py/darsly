@@ -277,8 +277,12 @@ model Academy {
   feePlans            CenterFeePlan[]
   feeCharges          CenterCharge[]
   feeCollections      CenterCollection[]
+  /// Center Operations C5: follow-up cases, contact history, settings.
+  followUps           StudentFollowUp[]
+  studentContacts     StudentContact[]
+  followUpSettings    AcademyFollowUpSettings?
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
-  provisionedStudents StudentProfile[]     @relation("provisionedStudents")
+  provisionedStudents StudentProfile[]         @relation("provisionedStudents")
 
   activationTokens AcademyActivationToken[]
   invitationLinks  AcademyInvitationLink[]
@@ -846,6 +850,9 @@ model AcademyStudent {
   /// C4: this learner's fees at this academy.
   feeCharges     CenterCharge[]
   feeCollections CenterCollection[]
+  /// C5: follow-up cases and contact history.
+  followUps      StudentFollowUp[]
+  contacts       StudentContact[]
 
   @@unique([academyId, studentId])
   @@unique([academyId, code])
@@ -2867,6 +2874,7 @@ model GuardianLink {
   revokedAt       DateTime?
   revokedById     String?
   tokens          GuardianAccessToken[]
+  contacts        StudentContact[]
 
   @@unique([guardianId, studentId, academyId])
   @@index([studentId, academyId])
@@ -5282,4 +5290,127 @@ model CenterReceiptCounter {
   last      Int
 
   @@id([academyId, year])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Center Operations C5 — Student Follow-up & Guardian Connection.
+//
+// C5 owns ONLY follow-up cases and contact history. Who needs follow-up is a
+// signal derived on read from C2 attendance and C4 balances (never stored);
+// guardians stay the Guardian domain's. See docs/STUDENT-FOLLOW-UP.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum FollowUpReason {
+  ABSENT_TODAY
+  ABSENT_STREAK
+  LATE_STREAK
+  FEES_OVERDUE
+  MANUAL
+}
+
+enum FollowUpStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum ContactChannel {
+  PHONE_CALL
+  WHATSAPP
+  IN_PERSON
+  APP_MESSAGE
+  OTHER
+}
+
+enum ContactOutcome {
+  REACHED
+  NO_ANSWER
+  WRONG_NUMBER
+  MESSAGE_SENT
+  OTHER
+}
+
+enum ContactParty {
+  GUARDIAN_LINK
+  REGISTER_GUARDIAN
+  STUDENT
+  OTHER
+}
+
+/// A follow-up case for one learner: opened by staff (from a signal or by
+/// hand), assigned, then closed once — RESOLVED or DISMISSED. Never deleted.
+model StudentFollowUp {
+  id               String           @id @default(uuid())
+  academyId        String
+  academy          Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academyStudentId String
+  academyStudent   AcademyStudent   @relation(fields: [academyStudentId], references: [id], onDelete: Restrict)
+  reason           FollowUpReason
+  /// Which occurrence of a derived signal this case is about (e.g. the class
+  /// a streak started on); null for a MANUAL case. One OPEN case per
+  /// (learner, reason, signalKey) — a partial unique index.
+  signalKey        String?
+  /// Why it was opened by hand (MANUAL); bounded, staff-only.
+  note             String?
+  status           FollowUpStatus   @default(OPEN)
+  assignedToUserId String?
+  dueOn            DateTime?        @db.Date
+  openedBy         String
+  openedAt         DateTime         @default(now())
+  closedAt         DateTime?
+  closedBy         String?
+  closeReason      String?
+  requestKey       String
+  contacts         StudentContact[]
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, status, openedAt])
+  @@index([academyStudentId])
+}
+
+/// One contact attempt with a learner's family (or the learner). Append-only:
+/// never edited, never deleted.
+model StudentContact {
+  id               String           @id @default(uuid())
+  academyId        String
+  academy          Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academyStudentId String
+  academyStudent   AcademyStudent   @relation(fields: [academyStudentId], references: [id], onDelete: Restrict)
+  followUpId       String?
+  followUp         StudentFollowUp? @relation(fields: [followUpId], references: [id], onDelete: Restrict)
+  party            ContactParty
+  guardianLinkId   String?
+  guardianLink     GuardianLink?    @relation(fields: [guardianLinkId], references: [id], onDelete: Restrict)
+  channel          ContactChannel
+  outcome          ContactOutcome
+  /// Staff-only, bounded; never in the audit log, application logs, the
+  /// guardian portal, the desk or a card.
+  note             String?
+  contactedAt      DateTime         @default(now())
+  contactedBy      String
+  requestKey       String
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, contactedAt])
+  @@index([academyStudentId, contactedAt])
+  @@index([followUpId])
+}
+
+/// The few knobs C5 has, per academy. Absent row = the defaults. Changing a
+/// threshold changes derived signals only — never attendance, fees, contacts
+/// or historical cases.
+model AcademyFollowUpSettings {
+  academyId           String   @id
+  academy             Academy  @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  /// Consecutive unexcused absences in a group that raise a signal (2–10).
+  absenceStreak       Int      @default(3)
+  /// Consecutive late arrivals in a group that raise a signal (2–10).
+  lateStreak          Int      @default(3)
+  /// A charge overdue by MORE than this many days raises a signal (0–90).
+  overdueDays         Int      @default(7)
+  /// Whether guardians see this learner's balance, overdue amount and receipts
+  /// in the guardian portal. Independent of centerFees; default OFF.
+  guardianFeesVisible Boolean  @default(false)
+  updatedAt           DateTime @updatedAt
+  updatedBy           String?
 }

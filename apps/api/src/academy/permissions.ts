@@ -64,6 +64,9 @@ export const CAPABILITIES = [
   'fees.adjust', // discounts and corrections, with a reason
   'fees.reverse', // reverse a collection recorded by mistake
   'fees.report', // the day's collections for everyone, totals, exports
+  // Center Operations C5 — student follow-up (academy-wide, not a teacher default).
+  'followup.view', // who needs follow-up, cases, contact history and its notes, the timeline
+  'followup.manage', // open, assign and close cases; log a contact with a family
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -132,6 +135,8 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'fees.adjust',
   'fees.reverse',
   'fees.report',
+  'followup.view',
+  'followup.manage',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -162,6 +167,8 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'fees.adjust',
   'fees.reverse',
   'fees.report',
+  'followup.view',
+  'followup.manage',
 ]);
 
 function isCapability(x: string): x is Capability {

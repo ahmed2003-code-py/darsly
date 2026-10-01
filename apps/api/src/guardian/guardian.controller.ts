@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GuardianAllowed } from '../common/decorators/guardian-allowed.decorator';
 import { Public } from '../common/decorators/public.decorator';
+import { GuardianFeesView } from '../follow-up/guardian-fees.view';
 import { GuardianService } from './guardian.service';
 
 class AddGuardianDto {
@@ -110,7 +111,10 @@ export class GuardianStaffController {
 @ApiTags('guardians')
 @Controller()
 export class GuardianController {
-  constructor(private readonly guardians: GuardianService) {}
+  constructor(
+    private readonly guardians: GuardianService,
+    private readonly guardianFees: GuardianFeesView,
+  ) {}
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 600_000 } })
@@ -137,7 +141,9 @@ export class GuardianController {
   @ApiBearerAuth()
   @Get('guardian/children/:linkId')
   @ApiOperation({ summary: "[guardian] One child's progress and activity in that academy" })
-  overview(@CurrentUser() u: JwtPayload, @Param('linkId') linkId: string) {
-    return this.guardians.overview(u, linkId);
+  async overview(@CurrentUser() u: JwtPayload, @Param('linkId') linkId: string) {
+    const view = await this.guardians.overview(u, linkId);
+    // C5: fees only where the academy chose to show guardians (default off).
+    return { ...view, fees: await this.guardianFees.forChild(view.academy.id, view.student.id) };
   }
 }

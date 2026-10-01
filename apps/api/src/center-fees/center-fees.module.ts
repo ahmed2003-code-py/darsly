@@ -16,5 +16,7 @@ import { FeePlansService } from './fee-plans.service';
   imports: [AcademyModule, ClassOpsModule, FeatureFlagsModule],
   controllers: [CenterFeesController],
   providers: [CenterFeesService, FeePlansService, CenterFeesWorker],
+  // C5 reads fees only through CenterFeesService (never the models).
+  exports: [CenterFeesService],
 })
 export class CenterFeesModule {}

@@ -64,12 +64,23 @@ export class GuardianService {
         },
       },
     });
+    // C5: a link is CONNECTED once one of its links was really opened (the
+    // existing sign-in flow is the only proof); INVITED until then.
+    const used = links.length
+      ? await this.prisma.guardianAccessToken.groupBy({
+          by: ['linkId'],
+          where: { linkId: { in: links.map((l) => l.id) }, useCount: { gt: 0 } },
+          _count: true,
+        })
+      : [];
+    const opened = new Set(used.map((u) => u.linkId));
     return links.map((l) => ({
       id: l.id,
       name: l.guardian.user.fullName,
       phone: l.guardian.user.phone,
       relationship: l.relationship,
       status: l.status,
+      state: l.status !== 'ACTIVE' ? 'REVOKED' : opened.has(l.id) ? 'CONNECTED' : 'INVITED',
       createdAt: l.createdAt,
       revokedAt: l.revokedAt,
       link: l.tokens[0]
@@ -451,6 +462,7 @@ export class GuardianService {
         take: 60,
         select: {
           status: true,
+          homeGroupId: true,
           session: { select: { date: true, group: { select: { name: true } } } },
         },
       }),
@@ -535,6 +547,8 @@ export class GuardianService {
               date: a.session.date,
               group: a.session.group.name,
               status: a.status,
+              // A makeup visit to another group's class (C2).
+              makeup: !!a.homeGroupId,
             })),
           }
         : null,

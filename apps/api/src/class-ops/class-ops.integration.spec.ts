@@ -1433,8 +1433,10 @@ describe('C2 — scale', () => {
     expect(forced).toBe(0);
     expect(total).toBe(created);
     t = Date.now();
+    // From tomorrow: today's early classes may already have ended (and are,
+    // rightly, not generated), which made this count depend on the hour it ran.
     let busiest = today0;
-    for (let d = 0; d < 7; d++)
+    for (let d = 1; d < 8; d++)
       if ([0, 2, 4].includes(weekdayOf(addDays(today0, d)))) {
         busiest = addDays(today0, d);
         break;

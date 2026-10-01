@@ -156,6 +156,38 @@ for (const file of sources) {
   }
 }
 
+// Keys the server chooses.
+//
+// Admin → Features draws `t(`admin.featureFlag.${f.key}.label`)` for every key
+// the API returns. A template literal is invisible to the checks above — they
+// read quoted strings — so the list of keys lives only on the server, and a
+// flag added there without copy here would be drawn as its raw key. The API's
+// own list is therefore the source of truth: every flag it can return must
+// have a label and a hint in both languages, and copy for a flag the server
+// no longer has is reported as dead.
+const API = fileURLToPath(new URL('../apps/api/', import.meta.url));
+const flagSource = readFileSync(join(API, 'src/feature-flags/feature-flags.service.ts'), 'utf8');
+const flagList = /export const FEATURE_FLAG_KEYS = \[([\s\S]*?)\] as const/.exec(flagSource);
+if (!flagList) fail.push('i18n: FEATURE_FLAG_KEYS not found in the API — update this check');
+const flagKeys = flagList
+  ? [...flagList[1].replace(/\/\/.*$/gm, '').matchAll(/'([A-Za-z]\w*)'/g)].map((m) => m[1])
+  : [];
+for (const flag of flagKeys)
+  for (const part of ['label', 'hint'])
+    for (const [lang, dict] of [
+      ['ar', ar],
+      ['en', en],
+    ]) {
+      const key = `admin.featureFlag.${flag}.${part}`;
+      if (typeof dict[key] !== 'string' || !dict[key].trim())
+        fail.push(`i18n: feature flag "${flag}" has no ${part} in ${lang}.json (${key})`);
+    }
+for (const key of Object.keys(ar).filter((k) => k.startsWith('admin.featureFlag.'))) {
+  const flag = key.split('.')[2];
+  if (!flagKeys.includes(flag))
+    fail.push(`i18n: "${key}" is copy for a flag the API does not have`);
+}
+
 // ── report ───────────────────────────────────────────────────────────────────
 if (fail.length) {
   console.error(`✗ ${fail.length} problem(s):`);
@@ -164,5 +196,5 @@ if (fail.length) {
 }
 console.log(
   `✓ ${routes.length} routes, ${links.size} internal links, ` +
-    `${Object.keys(ar).length} translation keys — all consistent`,
+    `${Object.keys(ar).length} translation keys, ${flagKeys.length} feature flags — all consistent`,
 );

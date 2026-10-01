@@ -1044,11 +1044,11 @@
       },
       "receptionDesk": {
         "label": "Reception desk & QR cards",
-        "hint": "A QR card per student and a desk that checks them in by card or code in seconds (needs Classes & attendance)"
+        "hint": "Check students in by code or QR card and manage student cards from the reception desk"
       },
       "centerFees": {
         "label": "Center fees & collections",
-        "hint": "Fee plans, what each student owes, collections with receipts, and who still owes — the center's own money, not Darsly payments"
+        "hint": "Manage student fees, outstanding balances, collections and receipts for the center"
       }
     },
     "centersTitle": "Centers",

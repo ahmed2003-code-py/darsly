@@ -106,7 +106,11 @@ whose plan is P".
   - joins after the anchor day → nothing automatic; "**This month's fee**"
     (fees.manage) posts it on purpose, once;
   - leaves / transfers mid-month → keeps the month already posted in the old
-    group; the new group charges from the next month;
+    group; the new group charges from the next month. A transfer made **on**
+    the anchor day itself (e.g. on the 1st) follows the same rule — the old
+    group keeps the month, the new one starts next month — whichever plan
+    posts first; someone brand new on the 1st, or adding a second group
+    without leaving the first, is charged as usual;
   - withdrawn → no further months; existing debt stays.
 - **PER_SESSION** — one charge per **C2 class actually attended** (PRESENT or
   LATE) in the plan's own group, from the plan's start. Not charged: absence,

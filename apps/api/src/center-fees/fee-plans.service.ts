@@ -265,7 +265,11 @@ export class FeePlansService {
     const anchor = startDay.slice(0, 7) === period ? startDay : `${period}-01`;
     if (anchor > today) return 0;
     const { start, end } = localDayBounds(anchor, timezone);
-    // In the group at some moment of the anchor day, and not withdrawn before it.
+    // In the group at some moment of the anchor day, and not withdrawn before it —
+    // except a learner TRANSFERRED in on the anchor day itself: they joined
+    // during the day while leaving a group they were in before it. The group
+    // they left keeps the month and this one charges from the next, as for a
+    // transfer on any other day; otherwise both groups would charge the month.
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT DISTINCT s.id
       FROM "GroupMembership" m
@@ -273,7 +277,18 @@ export class FeePlansService {
       WHERE m."groupId" = ${plan.groupId} AND m."academyId" = ${plan.academyId}
         AND m."addedAt" < (${utc(end)}::timestamptz AT TIME ZONE 'UTC')
         AND (m."deletedAt" IS NULL OR m."deletedAt" > (${utc(start)}::timestamptz AT TIME ZONE 'UTC'))
-        AND (s.status = 'ACTIVE' OR s."leftAt" > (${utc(start)}::timestamptz AT TIME ZONE 'UTC'))`;
+        AND (s.status = 'ACTIVE' OR s."leftAt" > (${utc(start)}::timestamptz AT TIME ZONE 'UTC'))
+        AND NOT (
+          m."addedAt" >= (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
+          AND EXISTS (
+            SELECT 1 FROM "GroupMembership" o
+            WHERE o."academyId" = m."academyId" AND o."studentId" = m."studentId"
+              AND o."groupId" <> m."groupId"
+              AND o."addedAt" < (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
+              AND o."deletedAt" >= (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
+              AND o."deletedAt" < (${utc(end)}::timestamptz AT TIME ZONE 'UTC')
+          )
+        )`;
     if (!rows.length) return 0;
     const res = await this.prisma.centerCharge.createMany({
       data: rows.map((r) => this.monthlyRow(plan, r.id, period, anchor)),

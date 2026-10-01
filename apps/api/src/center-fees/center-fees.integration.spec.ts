@@ -463,6 +463,53 @@ describe('C4 — plans and the charges they post', () => {
     expect(await owed(w, s.id)).toBe(EGP(950));
   });
 
+  // Found in production acceptance on 1 October: a transfer made ON the 1st left
+  // the learner in both groups "at some moment of the anchor day", so both
+  // groups charged October.
+  it('transfer ON the anchor day: still one month, in the old group — whichever plan posts first', async () => {
+    if (!guard()) return;
+    for (const order of ['old-first', 'new-first'] as const) {
+      const w = await world();
+      const pA = await oldPlan(w, w.A.gA.id, 'MONTHLY', EGP(500));
+      const pB = await oldPlan(w, w.A.gB.id, 'MONTHLY', EGP(450));
+      const moved = new Date('2026-03-01T09:00:00Z'); // 11:00 in Cairo on the 1st
+      const s = await student(w.A.acad.id, `منقول يوم 1 (${order})`);
+      await stint(w.A.acad.id, w.A.gA.id, s.studentId, new Date('2026-01-01T08:00:00Z'), moved);
+      await stint(w.A.acad.id, w.A.gB.id, s.studentId, moved);
+      // Still charged by a new group: someone brand new on the 1st, and someone
+      // who adds a second subject on the 1st without leaving the first.
+      const fresh = await student(w.A.acad.id, `جديد يوم 1 (${order})`);
+      await stint(w.A.acad.id, w.A.gB.id, fresh.studentId, moved);
+      const both = await student(w.A.acad.id, `مادتين (${order})`);
+      await stint(w.A.acad.id, w.A.gA.id, both.studentId, new Date('2026-01-01T08:00:00Z'));
+      await stint(w.A.acad.id, w.A.gB.id, both.studentId, moved);
+      const plansInOrder = order === 'old-first' ? [pA, pB] : [pB, pA];
+      for (const p of plansInOrder) await plans.generatePlan(p, { today: '2026-03-01' });
+      for (const p of plansInOrder) await plans.generatePlan(p, { today: '2026-04-02' });
+      const of = async (id: string) =>
+        (
+          await prisma.centerCharge.findMany({
+            where: { academyStudentId: id },
+            orderBy: [{ period: 'asc' }, { amountCents: 'desc' }],
+          })
+        ).map((c) => [c.period, c.planId === pA.id ? 'A' : 'B']);
+      expect(await of(s.id)).toEqual([
+        ['2026-03', 'A'],
+        ['2026-04', 'B'],
+      ]);
+      expect(await of(fresh.id)).toEqual([
+        ['2026-03', 'B'],
+        ['2026-04', 'B'],
+      ]);
+      expect(await of(both.id)).toEqual([
+        ['2026-03', 'A'],
+        ['2026-03', 'B'],
+        ['2026-04', 'A'],
+        ['2026-04', 'B'],
+      ]);
+    }
+  });
+
   it('changing a plan through the screen leaves posted charges exactly as they were', async () => {
     if (!guard()) return;
     const w = await world();

@@ -4967,7 +4967,8 @@
       },
       "frontDesk": {
         "title": "Reception & desk",
-        "hint": "Student register + check-in by card + issuing cards — no money, no settings"
+        "hint": "Student register + check-in by card + issuing cards — no money, no settings",
+        "hintFees": "Student register + check-in by card + cards + sees student fees and takes payments with a receipt — no plans, discounts or settings"
       }
     },
     "titleLabel": "Title students see",

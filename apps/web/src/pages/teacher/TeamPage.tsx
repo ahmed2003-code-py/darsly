@@ -433,7 +433,10 @@ function AssistantEditor({
                     {t(`team.preset.${k}.title`)}
                   </span>
                   <span className="block text-xs text-on-surface-variant">
-                    {t(`team.preset.${k}.hint`)}
+                    {/* Where fees are on, the desk preset also takes money — say so. */}
+                    {k === 'frontDesk' && feesOn
+                      ? t('team.preset.frontDesk.hintFees')
+                      : t(`team.preset.${k}.hint`)}
                   </span>
                 </button>
               ))}

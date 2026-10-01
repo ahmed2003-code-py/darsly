@@ -143,7 +143,8 @@ export const PRESETS: Record<
     directContact: false,
   },
   // The reception desk (C3): the register plus checking learners in and
-  // their QR cards. Still nothing about money, courses, settings or teaching.
+  // their QR cards. Nothing about courses, settings or teaching; where C4 is
+  // on, the fees a desk needs (its hint says so: team.preset.frontDesk.hintFees).
   frontDesk: {
     permissions: [
       'student.view',

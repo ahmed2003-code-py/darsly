@@ -20,18 +20,28 @@ export default function GuardianManager({
   academyId,
   studentId,
   studentName,
+  registerContact,
 }: {
   academyId: string;
   studentId: string;
   studentName: string;
+  /** C5: the guardian contact the register holds for this learner, if any. */
+  registerContact?: { name: string | null; phone: string | null } | null;
 }) {
   const { t } = useTranslation();
   const list = useStudentGuardians(academyId, studentId);
   const actions = useGuardianActions(academyId, studentId);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState<boolean | { name: string; phone: string }>(false);
   const [link, setLink] = useState<{ url: string; name: string } | null>(null);
 
   const rows = list.data ?? [];
+  const digits = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '');
+  // The register contact, unless that number is already an active guardian here.
+  const contact =
+    registerContact?.phone &&
+    !rows.some((g) => g.status === 'ACTIVE' && digits(g.phone) === digits(registerContact.phone))
+      ? registerContact
+      : null;
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -69,6 +79,11 @@ export default function GuardianManager({
                     ) : g.link?.expired ? (
                       <Badge tone="warn">{t('care.linkExpired')}</Badge>
                     ) : null}
+                    {g.status === 'ACTIVE' && g.state && (
+                      <Badge tone={g.state === 'CONNECTED' ? 'primary' : 'neutral'}>
+                        {t(`care.guardianState.${g.state}`)}
+                      </Badge>
+                    )}
                   </span>
                 </div>
                 <p className="truncate text-xs text-on-surface-variant" dir="auto">
@@ -115,8 +130,38 @@ export default function GuardianManager({
         <ErrorNote error={actions.rotate.error ?? actions.revoke.error} />
       )}
 
+      {/* C5: the phone typed at registration is a CONTACT — it signs no one in
+          and proves nothing. It becomes a guardian only by this explicit invite. */}
+      {contact && !list.isLoading && (
+        <div className="mt-3 rounded-2xl border border-dashed border-outline-variant p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-center gap-1.5">
+                <bdi className="truncate font-bold">
+                  {contact.name || t('care.registerContact')}
+                </bdi>
+                <Badge tone="neutral">{t('care.guardianState.CONTACT_ONLY')}</Badge>
+              </span>
+              <span className="block text-xs text-on-surface-variant" dir="ltr">
+                {contact.phone}
+              </span>
+            </span>
+            <button
+              type="button"
+              className="btn-secondary min-h-11"
+              onClick={() => setAdding({ name: contact.name ?? '', phone: contact.phone ?? '' })}
+            >
+              <span className="material-symbols-outlined text-[18px]">person_add</span>
+              {t('care.inviteContact')}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-on-surface-variant">{t('care.registerContactHint')}</p>
+        </div>
+      )}
+
       {adding && (
         <AddGuardian
+          initial={adding === true ? undefined : adding}
           studentName={studentName}
           onClose={() => setAdding(false)}
           onAdd={async (body) => {
@@ -142,6 +187,7 @@ export default function GuardianManager({
 }
 
 function AddGuardian({
+  initial,
   studentName,
   onClose,
   onAdd,
@@ -149,6 +195,8 @@ function AddGuardian({
   busy,
   onEdit,
 }: {
+  /** Pre-filled from the register contact; still edited and confirmed by staff. */
+  initial?: { name: string; phone: string };
   studentName: string;
   onClose: () => void;
   /** Called on any edit, so a refusal about the old value does not linger. */
@@ -158,8 +206,8 @@ function AddGuardian({
   busy: boolean;
 }) {
   const { t } = useTranslation();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [phone, setPhone] = useState(initial?.phone ?? '');
   const [relationship, setRelationship] = useState<GuardianRelationship>('FATHER');
   // A refusal about one input goes under that input (PHONE_IN_USE on the
   // phone, a too-short name on the name); the note below says only the rest.

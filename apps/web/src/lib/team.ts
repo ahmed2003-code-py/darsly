@@ -28,7 +28,9 @@ export type AssistantCapability =
   | 'fees.manage'
   | 'fees.adjust'
   | 'fees.reverse'
-  | 'fees.report';
+  | 'fees.report'
+  | 'followup.view'
+  | 'followup.manage';
 
 export interface AssistantGrant {
   title: string;
@@ -97,6 +99,8 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
       'fees.report',
     ],
   },
+  // Student follow-up (C5) — offered only where it is switched on.
+  { key: 'followup', caps: ['followup.view', 'followup.manage'] },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
@@ -156,6 +160,11 @@ export const PRESETS: Record<
       // receipt — never plans, discounts, reversals or the center's totals.
       'fees.view',
       'fees.collect',
+      // C5: follow up with families — see who needs it, call or open
+      // WhatsApp, log what happened, invite a register contact as a guardian.
+      'guardian.manage',
+      'followup.view',
+      'followup.manage',
     ],
     directContact: false,
   },
@@ -169,8 +178,10 @@ export const DESK_ONLY_GROUPS = new Set(['desk']);
 export const DESK_ONLY_PRESETS = new Set<PresetKey>(['frontDesk']);
 /** …and the center's fees (C4). */
 export const FEES_ONLY_GROUPS = new Set(['fees']);
+/** …and student follow-up (C5). */
+export const FOLLOWUP_ONLY_GROUPS = new Set(['followup']);
 /** Groups that reach the whole academy, so never granted course by course. */
-export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees']);
+export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees', 'followup']);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
 export function presetOf(

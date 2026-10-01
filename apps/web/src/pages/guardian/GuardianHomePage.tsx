@@ -2,7 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import Avatar from '../../components/Avatar';
 import { EmptyState, ErrorNote, Skeleton, Spinner } from '../../components/ui';
-import { useGuardianChildren, useGuardianOverview } from '../../lib/guardian';
+import { GuardianOverview, useGuardianChildren, useGuardianOverview } from '../../lib/guardian';
+import { dayLabel, Money } from '../fees/feeParts';
 import { ActivityList, AttendanceCard, CourseProgressList, LiveList } from '../care/CareViews';
 
 /**
@@ -117,11 +118,71 @@ export default function GuardianHomePage() {
             <CourseProgressList courses={o.courses} />
           </section>
           <AttendanceCard attendance={o.attendance} />
+          {/* C5: only when the academy chose to show guardians fees (off by default). */}
+          {o.fees && <GuardianFeesCard fees={o.fees} />}
           <LiveList live={o.live} />
           <ActivityList activity={o.activity} />
           <p className="px-1 text-center text-xs text-outline">{t('guardian.privacyNote')}</p>
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What this child owes the center and their receipts — what the academy chose
+ * to share, nothing internal (no notes, no discounts' reasons, no collector).
+ */
+function GuardianFeesCard({ fees }: { fees: NonNullable<GuardianOverview['fees']> }) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language === 'en' ? 'en' : 'ar';
+  return (
+    <article className="card p-4">
+      <h2 className="mb-3 font-heading text-lg font-bold text-on-surface">
+        {t('guardian.fees.title')}
+      </h2>
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <div className="min-w-0 rounded-xl bg-surface-container-low p-3">
+          <p className="text-xs text-on-surface-variant">{t('guardian.fees.owed')}</p>
+          <Money
+            cents={fees.outstandingCents}
+            currency={fees.currency}
+            className="block font-extrabold"
+          />
+        </div>
+        <div className="min-w-0 rounded-xl bg-surface-container-low p-3">
+          <p className="text-xs text-on-surface-variant">{t('guardian.fees.overdue')}</p>
+          <Money
+            cents={fees.overdueCents}
+            currency={fees.currency}
+            className="block font-extrabold"
+          />
+        </div>
+      </div>
+      {fees.receipts.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">{t('guardian.fees.noReceipts')}</p>
+      ) : (
+        <ul className="divide-y divide-outline-variant/40 text-sm">
+          {fees.receipts.map((r) => (
+            <li key={r.receiptNumber} className="flex items-center gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block font-mono text-xs" dir="ltr">
+                  {r.receiptNumber}
+                </span>
+                <span className="block text-xs text-on-surface-variant">
+                  {dayLabel(r.localDate, lang)} · {t(`fees.method.${r.method}`)}
+                  {r.reversed && ` · ${t('guardian.fees.reversed')}`}
+                </span>
+              </span>
+              <Money
+                cents={r.amountCents}
+                currency={r.currency}
+                className={`shrink-0 font-bold ${r.reversed ? 'line-through opacity-60' : ''}`}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
   );
 }

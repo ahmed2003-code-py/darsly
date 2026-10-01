@@ -14,6 +14,7 @@ import { useOwnedAcademy } from '../../lib/academy';
 import { useRegistryAccess } from '../../lib/centerStudents';
 import { useDeskAccess } from '../../lib/desk';
 import { useFeesAccess } from '../../lib/centerFees';
+import { useFollowUpAccess } from '../../lib/followUp';
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { askConfirm } from '../../lib/confirm';
 import { dateShort } from '../../lib/format';
@@ -29,6 +30,7 @@ import {
   DESK_ONLY_GROUPS,
   DESK_ONLY_PRESETS,
   FEES_ONLY_GROUPS,
+  FOLLOWUP_ONLY_GROUPS,
   REGISTRY_ONLY_GROUPS,
   REGISTRY_ONLY_PRESETS,
   TeamAssistant,
@@ -278,15 +280,18 @@ function AssistantEditor({
   // …and the desk's (C3) where the desk is on, and fees (C4) where they are on.
   const deskOn = !!useDeskAccess(selectedAcademy).data?.enabled;
   const feesOn = !!useFeesAccess(selectedAcademy).data?.enabled;
+  // …and student follow-up (C5) where it is on.
+  const followUpOn = !!useFollowUpAccess(selectedAcademy).data?.enabled;
   const groupShown = (key: string) =>
     (registryOn || !REGISTRY_ONLY_GROUPS.has(key)) &&
     (deskOn || !DESK_ONLY_GROUPS.has(key)) &&
-    (feesOn || !FEES_ONLY_GROUPS.has(key));
+    (feesOn || !FEES_ONLY_GROUPS.has(key)) &&
+    (followUpOn || !FOLLOWUP_ONLY_GROUPS.has(key));
   /** Capabilities of a feature that is off here: never granted by a preset, ignored when matching one. */
   const hidden = useMemo(
     () => new Set(CAPABILITY_GROUPS.filter((g) => !groupShown(g.key)).flatMap((g) => g.caps)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [registryOn, deskOn, feesOn],
+    [registryOn, deskOn, feesOn, followUpOn],
   );
   const preset = useMemo(
     () => presetOf(grant.permissions, grant.directContact, hidden),

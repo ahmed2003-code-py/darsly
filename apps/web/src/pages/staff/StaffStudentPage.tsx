@@ -17,9 +17,12 @@ import GuardianManager from '../care/GuardianManager';
 import { useRegistryRecord } from '../../lib/centerStudents';
 import { useFeesAccess } from '../../lib/centerFees';
 import StudentFeesPanel from '../fees/StudentFeesPanel';
+import { useFollowUpAccess } from '../../lib/followUp';
+import StudentFollowUpPanel from '../followup/StudentFollowUpPanel';
 import RegistryCard from '../center/RegistryCard';
 
-type Tab = 'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'fees' | 'care';
+type Tab =
+  'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'fees' | 'followup' | 'care';
 
 /**
  * Student 360 — one student, as far as the viewer's reach goes.
@@ -44,8 +47,15 @@ export default function StaffStudentPage() {
   const [tab, setTab] = useState<Tab>('overview');
   // The center's own fees (C4) — separate from the platform's course payments above.
   const feesAccess = useFeesAccess(academyId);
-  const record = useRegistryRecord(academyId, id, !!feesAccess.data?.canView);
+  // Student follow-up (C5) — cases, contacts and the timeline.
+  const followUpAccess = useFollowUpAccess(academyId);
+  const record = useRegistryRecord(
+    academyId,
+    id,
+    !!feesAccess.data?.canView || !!followUpAccess.data?.canView,
+  );
   const feesFor = feesAccess.data?.canView ? record.data?.id : undefined;
+  const followUpFor = followUpAccess.data?.canView ? record.data?.id : undefined;
 
   const tabs = useMemo(
     () =>
@@ -57,12 +67,13 @@ export default function StaffStudentPage() {
           ['guardians', !!s?.can.guardians],
           ['payments', !!s?.can.payments],
           ['fees', !!feesFor],
+          ['followup', !!followUpFor],
           ['care', true],
         ] as [Tab, boolean][]
       )
         .filter(([, ok]) => ok)
         .map(([k]) => k),
-    [s, feesFor],
+    [s, feesFor, followUpFor],
   );
 
   if (ws.isLoading || student.isLoading) {
@@ -197,7 +208,17 @@ export default function StaffStudentPage() {
         ))}
 
       {tab === 'guardians' && (
-        <GuardianManager academyId={academyId} studentId={s.id} studentName={s.name} />
+        <GuardianManager
+          academyId={academyId}
+          studentId={s.id}
+          studentName={s.name}
+          // C5: the register's guardian contact, offered for an explicit invitation.
+          registerContact={
+            followUpFor && record.data?.guardianPhone
+              ? { name: record.data.guardianName, phone: record.data.guardianPhone }
+              : null
+          }
+        />
       )}
 
       {tab === 'payments' &&
@@ -229,6 +250,14 @@ export default function StaffStudentPage() {
 
       {tab === 'fees' && feesFor && academyId && (
         <StudentFeesPanel academyId={academyId} academyStudentId={feesFor} />
+      )}
+      {tab === 'followup' && followUpFor && academyId && (
+        <StudentFollowUpPanel
+          academyId={academyId}
+          academyStudentId={followUpFor}
+          canManage={!!followUpAccess.data?.canManage}
+          onGoGuardians={s.can.guardians ? () => setTab('guardians') : undefined}
+        />
       )}
       {tab === 'care' &&
         (!care.data?.conversations.length ? (

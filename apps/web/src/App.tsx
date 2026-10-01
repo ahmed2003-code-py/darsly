@@ -42,6 +42,7 @@ const ClassesTodayPage = lazyPage(() => import('./pages/classes/ClassesTodayPage
 const ClassPage = lazyPage(() => import('./pages/classes/ClassPage'));
 const DeskPage = lazyPage(() => import('./pages/desk/DeskPage'));
 const CenterFeesPage = lazyPage(() => import('./pages/fees/CenterFeesPage'));
+const FollowUpPage = lazyPage(() => import('./pages/followup/FollowUpPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -794,6 +795,16 @@ export default function App() {
             element={
               <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
                 <CenterFeesPage />
+              </RequireAuth>
+            }
+          />
+          {/* Student follow-up (Center Operations C5). The page and the API check
+              followup.* and the studentFollowUp flag. */}
+          <Route
+            path="/center/follow-up"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <FollowUpPage />
               </RequireAuth>
             }
           />

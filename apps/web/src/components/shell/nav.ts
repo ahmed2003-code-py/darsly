@@ -139,6 +139,12 @@ export const FEES_ITEM: NavItem = {
   labelKey: 'nav.centerFees',
 };
 
+export const FOLLOW_UP_ITEM: NavItem = {
+  to: '/center/follow-up',
+  icon: 'support_agent',
+  labelKey: 'nav.followUp',
+};
+
 export const CLASSES_ITEM: NavItem = {
   to: '/classes',
   icon: 'co_present',

@@ -26,6 +26,7 @@ import {
   CLASSES_ITEM,
   DESK_ITEM,
   FEES_ITEM,
+  FOLLOW_UP_ITEM,
   MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
@@ -33,6 +34,7 @@ import { useRegistryAccess } from '../lib/centerStudents';
 import { useClassAccess, useMyClassAccess } from '../lib/classOps';
 import { useDeskAccess } from '../lib/desk';
 import { useFeesAccess } from '../lib/centerFees';
+import { useFollowUpAccess } from '../lib/followUp';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -118,12 +120,17 @@ export default function Layout({ children }: { children: ReactNode }) {
   const fees = useFeesAccess(
     staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
   );
+  // Student follow-up (C5): where it is on and this person may read it.
+  const followUp = useFollowUpAccess(
+    staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
+  );
   const baseNav = [
     roleNav[0],
     ...(desk.data?.canCheckIn ? [DESK_ITEM] : []),
     ...(classes.data?.canAttend || myClasses.data?.enabled ? [CLASSES_ITEM] : []),
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
     ...(fees.data?.canView ? [FEES_ITEM] : []),
+    ...(followUp.data?.canView ? [FOLLOW_UP_ITEM] : []),
     ...roleNav.slice(1),
   ].filter(Boolean);
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;

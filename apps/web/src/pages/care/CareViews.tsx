@@ -93,7 +93,10 @@ export function AttendanceCard({ attendance }: { attendance: AttendanceSummary |
       </div>
       <ul className="divide-y divide-outline-variant/40 text-sm">
         {attendance.recent.map((r, i) => (
-          <Row key={i} label={`${r.group} · ${dateShort(r.date)}`}>
+          <Row
+            key={i}
+            label={`${r.group} · ${dateShort(r.date)}${r.makeup ? ` · ${t('care.att.makeup')}` : ''}`}
+          >
             <Badge
               tone={r.status === 'ABSENT' ? 'error' : r.status === 'LATE' ? 'warn' : 'primary'}
             >

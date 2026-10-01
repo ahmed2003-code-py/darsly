@@ -45,7 +45,8 @@ export interface AttendanceSummary {
   ABSENT: number;
   LATE: number;
   EXCUSED: number;
-  recent: { date: string; group: string; status: string }[];
+  /** makeup: a visit to another group's class (C2). */
+  recent: { date: string; group: string; status: string; makeup?: boolean }[];
 }
 
 export interface GuardianOverview {
@@ -58,6 +59,23 @@ export interface GuardianOverview {
   })[];
   attendance: AttendanceSummary | null;
   live: { title: string; startsAt: string; minutes: number }[];
+  /**
+   * C5: the child's center fees — only where the academy chose to show
+   * guardians (off by default). What is owed and the receipts; nothing internal.
+   */
+  fees?: {
+    currency: string;
+    outstandingCents: number;
+    overdueCents: number;
+    receipts: {
+      receiptNumber: string;
+      localDate: string;
+      amountCents: number;
+      currency: string;
+      method: string;
+      reversed: boolean;
+    }[];
+  } | null;
   activity: {
     kind: 'QUIZ' | 'ASSIGNMENT' | 'ATTENDANCE' | 'LIVE';
     at: string;
@@ -75,6 +93,8 @@ export interface StaffGuardian {
   phone: string | null;
   relationship: GuardianRelationship;
   status: 'ACTIVE' | 'REVOKED';
+  /** INVITED until one of their links was really opened (CONNECTED); REVOKED when removed. */
+  state?: 'INVITED' | 'CONNECTED' | 'REVOKED';
   createdAt: string;
   revokedAt: string | null;
   link: { expiresAt: string; lastUsedAt: string | null; issuedAt: string; expired: boolean } | null;

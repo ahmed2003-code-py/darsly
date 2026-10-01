@@ -159,7 +159,8 @@
       "myStudents": "Students"
     },
     "desk": "Desk",
-    "centerFees": "Fees"
+    "centerFees": "Fees",
+    "followUp": "Student follow-up"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1049,6 +1050,10 @@
       "centerFees": {
         "label": "Center fees & collections",
         "hint": "Manage student fees, outstanding balances, collections and receipts for the center"
+      },
+      "studentFollowUp": {
+        "label": "Student & guardian follow-up",
+        "hint": "Who needs follow-up from absences, lateness and fees, logging contacts with families, and inviting a guardian from the registration number"
       }
     },
     "centersTitle": "Centers",
@@ -3285,7 +3290,14 @@
     "eIdempotencyKeyReused": "This was already recorded with a different amount — start again.",
     "eChargeVoid": "That charge is void.",
     "eAdjustmentBelowPaid": "That would owe less than was paid — reverse the collection first.",
-    "eChargeHasPayments": "Money was collected against this charge — reverse that first."
+    "eChargeHasPayments": "Money was collected against this charge — reverse that first.",
+    "eSignalNotFound": "That signal is no longer raised for this student — refresh the page.",
+    "eSignalKeyNotAllowed": "A manual case has no signal.",
+    "eCaseAlreadyClosed": "This case is already closed.",
+    "eCaseNotFound": "This case does not exist.",
+    "eAssigneeInvalid": "That person cannot work on follow-up here.",
+    "eContactGuardianNotFound": "That guardian is not linked to this student (or was removed).",
+    "eContactPartyMismatch": "Pick a guardian only when the guardian is the one you contacted."
   },
   "myStudio": {
     "title": "My Studio",
@@ -4967,8 +4979,8 @@
       },
       "frontDesk": {
         "title": "Reception & desk",
-        "hint": "Student register + check-in by card + issuing cards — no money, no settings",
-        "hintFees": "Student register + check-in by card + cards + sees student fees and takes payments with a receipt — no plans, discounts or settings"
+        "hint": "Student register + check-in by card + issuing cards + guardians — no money, no settings",
+        "hintFees": "Student register + check-in by card + cards + guardians and follow-up + sees student fees and takes payments with a receipt — no plans, discounts or settings"
       }
     },
     "titleLabel": "Title students see",
@@ -4995,7 +5007,8 @@
       "guardians": "Parents",
       "register": "Student register",
       "desk": "Reception desk",
-      "fees": "Center fees"
+      "fees": "Center fees",
+      "followup": "Student follow-up"
     },
     "cap": {
       "student.view": {
@@ -5102,6 +5115,16 @@
         "short": "Fee reports",
         "label": "Sees everyone’s collections and totals",
         "hint": "The day’s collections for all staff, and exports."
+      },
+      "followup.view": {
+        "short": "Sees follow-up",
+        "label": "Sees student follow-up",
+        "hint": "Who needs follow-up, the cases, and contacts with families including notes."
+      },
+      "followup.manage": {
+        "short": "Follows up",
+        "label": "Follows up with families",
+        "hint": "Opens and closes cases and logs contacts with families."
       }
     },
     "direct": {
@@ -5176,7 +5199,14 @@
     },
     "contact": "Contact the academy",
     "courses": "Courses",
-    "privacyNote": "You see what the academy records for this child here. Payments and account details are not shown."
+    "privacyNote": "You see what the academy records for this child here. Payments and account details are not shown.",
+    "fees": {
+      "title": "Center fees",
+      "owed": "Owed",
+      "overdue": "Overdue",
+      "noReceipts": "No receipts yet.",
+      "reversed": "reversed"
+    }
   },
   "care": {
     "noProgress": "No course progress yet",
@@ -5191,7 +5221,8 @@
       "PRESENT": "Present",
       "ABSENT": "Absent",
       "LATE": "Late",
-      "EXCUSED": "Excused"
+      "EXCUSED": "Excused",
+      "makeup": "makeup"
     },
     "live": "Live classes attended",
     "minutes_one": "{{count}} min",
@@ -5237,7 +5268,8 @@
       "guardians": "Guardians",
       "payments": "Payments",
       "care": "Conversations",
-      "fees": "Center fees"
+      "fees": "Center fees",
+      "followup": "Follow-up"
     },
     "tile": {
       "courses": "Courses",
@@ -5257,7 +5289,15 @@
       "GROUP": "Group chat"
     },
     "withGuardian": "with guardian",
-    "open": "Open"
+    "open": "Open",
+    "guardianState": {
+      "INVITED": "Invited — link not opened yet",
+      "CONNECTED": "Connected",
+      "CONTACT_ONLY": "Registration number"
+    },
+    "registerContact": "Guardian (from registration)",
+    "inviteContact": "Invite as guardian",
+    "registerContactHint": "This number was typed at registration — just a number, not an account. Inviting creates a sign-in link for the guardian; they become connected once they open it."
   },
   "groupChat": {
     "title": "Group chat",
@@ -6037,5 +6077,179 @@
       "charges_one": "1 charge",
       "charges_other": "{{count}} charges"
     }
+  },
+  "followUp": {
+    "off": "Student follow-up is not on here",
+    "offHint": "The platform admin turns it on per center.",
+    "noAccess": "You don't have access to student follow-up",
+    "noAccessHint": "The center owner can grant it from the Team screen.",
+    "page": {
+      "title": "Student follow-up",
+      "sub": "Whose family to contact today, open cases, and who was contacted. Hints only — nothing here changes attendance or money, and nothing is sent by itself.",
+      "tab": {
+        "today": "Today",
+        "cases": "Cases",
+        "contacts": "Contacted",
+        "settings": "Settings"
+      },
+      "notContacted": "Only those nobody contacted today",
+      "noSignals": "Nobody needs follow-up right now",
+      "noSignalsHint": "Absences, lateness and overdue fees show up here by themselves.",
+      "contactedToday": "Contacted today",
+      "caseOpen": "Case open",
+      "filter": "Filter",
+      "mine": "Only cases assigned to me",
+      "noCases": "No cases here",
+      "noContactsToday": "Nobody has been contacted yet today"
+    },
+    "reason": {
+      "ABSENT_TODAY": "Absent today",
+      "ABSENT_STREAK": "Absences in a row",
+      "LATE_STREAK": "Late in a row",
+      "FEES_OVERDUE": "Fees overdue",
+      "MANUAL": "Manual follow-up"
+    },
+    "detail": {
+      "absentToday": "Missed today's {{group}} class",
+      "absentStreak_one": "Absent once in {{group}} since {{date}}",
+      "absentStreak_other": "Absent {{count}} classes in a row in {{group}} since {{date}}",
+      "lateStreak_one": "Late once in {{group}} since {{date}}",
+      "lateStreak_other": "Late {{count}} classes in a row in {{group}} since {{date}}",
+      "feesOverdue_one": "Fees overdue for {{count}} day",
+      "feesOverdue_other": "Fees overdue for {{count}} days"
+    },
+    "relationship": {
+      "FATHER": "Father",
+      "MOTHER": "Mother",
+      "GUARDIAN": "Guardian",
+      "OTHER": "Relative"
+    },
+    "state": {
+      "INVITED": "Invited — link not opened yet",
+      "CONNECTED": "Connected",
+      "REVOKED": "Removed",
+      "CONTACT_ONLY": "Number only — not a connected guardian"
+    },
+    "party": {
+      "registerGuardian": "Guardian (from registration)",
+      "GUARDIAN_LINK": "Guardian",
+      "REGISTER_GUARDIAN": "Guardian (registration number)",
+      "STUDENT": "The student",
+      "OTHER": "Someone else"
+    },
+    "contact": {
+      "title": "Log a contact",
+      "who": "Who did you contact?",
+      "call": "Call",
+      "whatsapp": "WhatsApp",
+      "handoffHint": "Call and WhatsApp open on your own phone — nothing is sent automatically. The ready message has no details about the student.",
+      "channel": "How?",
+      "outcome": "What happened?",
+      "note": "Note (optional)",
+      "noteHint": "Staff only — guardians never see it. Do not write secrets or sensitive details.",
+      "save": "Log contact",
+      "log": "Log contact"
+    },
+    "channel": {
+      "PHONE_CALL": "Phone call",
+      "WHATSAPP": "WhatsApp",
+      "IN_PERSON": "In person",
+      "APP_MESSAGE": "In-app message",
+      "OTHER": "Other"
+    },
+    "outcome": {
+      "REACHED": "Reached",
+      "NO_ANSWER": "No answer",
+      "WRONG_NUMBER": "Wrong number",
+      "MESSAGE_SENT": "Message sent",
+      "OTHER": "Other"
+    },
+    "case": {
+      "openTitle": "Open a case",
+      "why": "Why?",
+      "noteOptional": "Note (optional)",
+      "assignTo": "Assigned to",
+      "nobody": "Nobody yet",
+      "dueOn": "Due by (optional)",
+      "open": "Open case",
+      "closeTitle": "Close the case",
+      "do": {
+        "RESOLVED": "Resolved",
+        "DISMISSED": "Not needed"
+      },
+      "how": "How was it resolved?",
+      "whyDismiss": "Why is it not needed?",
+      "assignTitle": "Who has this case",
+      "assignedTo": "With {{name}}",
+      "dueLabel": "By {{date}}",
+      "closedWith": "{{by}}: {{reason}}",
+      "newManual": "New case",
+      "assign": "Assign",
+      "close": "Close"
+    },
+    "status": {
+      "OPEN": "Open",
+      "RESOLVED": "Resolved",
+      "DISMISSED": "Dismissed"
+    },
+    "panel": {
+      "reach": "Who to reach",
+      "noOne": "No family number is recorded for this student.",
+      "contactOnlyHint": "The guardian number typed at registration is just a number — not an account, not a verified guardian.",
+      "goGuardians": "Invite as guardian",
+      "openCases": "Open cases",
+      "noOpen": "No open cases.",
+      "contacts": "Contacts",
+      "noContacts": "Nobody has contacted the family yet.",
+      "closedCases": "Closed cases"
+    },
+    "timeline": {
+      "title": "What happened",
+      "empty": "Nothing yet",
+      "more": "Show older",
+      "makeup": "makeup"
+    },
+    "attendance": {
+      "PRESENT": "Present",
+      "LATE": "Late",
+      "ABSENT": "Absent",
+      "EXCUSED": "Excused"
+    },
+    "tl": {
+      "REGISTERED": "Registered at the center",
+      "WITHDRAWN": "Withdrew",
+      "REACTIVATED": "Came back",
+      "JOINED_GROUP": "Joined {{group}}",
+      "LEFT_GROUP": "Left {{group}}",
+      "TRANSFERRED": "Moved from {{from}} to {{to}}",
+      "ATTENDANCE": "{{group}} class",
+      "CARD_ISSUED": "Card issued",
+      "CARD_REVOKED": "Card revoked",
+      "GUARDIAN_LINKED": "Guardian added: {{name}}",
+      "GUARDIAN_REMOVED": "Guardian removed: {{name}}",
+      "CASE_OPENED": "Case opened",
+      "CASE_RESOLVED": "Case resolved",
+      "CASE_DISMISSED": "Case dismissed",
+      "CONTACT": "Family contacted",
+      "FEE_CHARGE": "Charge: {{description}}",
+      "FEE_VOID": "Charge voided: {{description}}",
+      "FEE_ADJUSTMENT": "Discount/correction: {{description}}",
+      "FEE_COLLECTION": "Payment — receipt {{receipt}}",
+      "FEE_REVERSAL": "Collection reversed — receipt {{receipt}}"
+    },
+    "settings": {
+      "absenceStreak": "Absences in a row that raise a signal",
+      "absenceStreakHint": "{{min}} to {{max}}. Excused absences never count.",
+      "lateStreak": "Late arrivals in a row that raise a signal",
+      "lateStreakHint": "{{min}} to {{max}}.",
+      "overdueDays": "Fees raise a signal when overdue by more than (days)",
+      "overdueDaysHint": "{{min}} to {{max}} days.",
+      "guardianFeesVisible": "Guardians see what is owed and their receipts",
+      "guardianFeesHint": "Off by default. When on, a connected guardian sees only the amount owed, the overdue part and their receipts — no notes, no discounts, no collector.",
+      "rewriteHint": "Changing these changes signals only — never attendance, money or past cases.",
+      "saved": "Saved ✓"
+    },
+    "offline": "No connection — nothing was recorded. When you are back online press Try again (it will not be recorded twice).",
+    "retry": "Try again"
   }
 }

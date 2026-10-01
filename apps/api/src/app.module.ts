@@ -58,6 +58,7 @@ import { AcademyOpsModule } from './academy-ops/academy-ops.module';
 import { CenterStudentsModule } from './center-students/center-students.module';
 import { ClassOpsModule } from './class-ops/class-ops.module';
 import { DeskModule } from './desk/desk.module';
+import { CenterFeesModule } from './center-fees/center-fees.module';
 import { PaperImportModule } from './paper-import/paper-import.module';
 import { DraftsModule } from './drafts/drafts.module';
 
@@ -145,6 +146,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     CenterStudentsModule,
     ClassOpsModule,
     DeskModule,
+    CenterFeesModule,
     PaperImportModule,
     DraftsModule,
     DeviceModule,

@@ -273,6 +273,10 @@ model Academy {
   studentImports      StudentImport[]
   /// Center Operations C3: the QR cards this academy issued to its learners.
   studentCards        AcademyStudentCard[]
+  /// Center Operations C4: the center's own fees — never platform money.
+  feePlans            CenterFeePlan[]
+  feeCharges          CenterCharge[]
+  feeCollections      CenterCollection[]
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
   provisionedStudents StudentProfile[]     @relation("provisionedStudents")
 
@@ -460,6 +464,8 @@ model Group {
   scheduleSlots      GroupScheduleSlot[]
   /// Makeup attendance recorded elsewhere for students whose home is this group.
   makeupRecords      AttendanceRecord[]
+  /// Center Operations C4: what the center charges for this group.
+  feePlans           CenterFeePlan[]
 
   @@index([academyId, status])
 }
@@ -750,6 +756,8 @@ model GroupSession {
 
   attendance    AttendanceSession?
   makeupRecords AttendanceRecord[] @relation("makeupFor")
+  /// C4: per-session fees posted for this class.
+  feeCharges    CenterCharge[]
 
   @@index([slotId, occurrenceDate])
   @@index([academyId, startAt])
@@ -834,7 +842,10 @@ model AcademyStudent {
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @updatedAt
 
-  cards AcademyStudentCard[]
+  cards          AcademyStudentCard[]
+  /// C4: this learner's fees at this academy.
+  feeCharges     CenterCharge[]
+  feeCollections CenterCollection[]
 
   @@unique([academyId, studentId])
   @@unique([academyId, code])
@@ -5080,4 +5091,195 @@ model AiCallLog {
   @@index([createdAt])
   @@index([liveSessionId])
   @@index([aiJobId])
+}
+
+// ─────────────────────────── Center Operations C4 ───────────────────────────
+//
+// THE CENTER'S OWN MONEY. A center charging its learners tuition for its own
+// physical classes, and recording what it collected at its desk. Darsly is not
+// a party to this money: no commission, no ledger account, no payout, no
+// wallet. Nothing here references Payment, PaymentEvent, LedgerTransaction,
+// LedgerEntry, WalletTransaction, PayoutRequest or LivePurchase, and nothing
+// there references this. (Cash a center takes for a DARSLY course is still a
+// platform Payment — payment.collect, Phase 7 — and never lands here.)
+//
+// Money is integer piasters (…Cents), in the academy's currency, frozen on
+// every row. The balance has one definition — the CenterChargeBalance view —
+// and the database refuses deletes, rewritten history, over-allocation and a
+// negative balance (triggers in migration 20261103100000_center_fees).
+
+enum CenterFeePlanType {
+  /// One charge per learner per local calendar month.
+  MONTHLY
+  /// One charge per class a learner attended (PRESENT / LATE) in the group.
+  PER_SESSION
+}
+
+enum CenterFeePlanStatus {
+  ACTIVE
+  /// Posts nothing more; what it posted stays.
+  ARCHIVED
+}
+
+enum CenterChargeKind {
+  MONTHLY
+  PER_SESSION
+  ONE_TIME
+}
+
+enum CenterAdjustmentKind {
+  /// Lowers what is owed (a sibling, promotional or special discount).
+  DISCOUNT
+  /// A signed correction of what is owed, with its reason.
+  CORRECTION
+}
+
+enum CenterCollectionMethod {
+  CASH
+  /// A card paid on the center's own POS terminal — recorded, never processed.
+  CARD_EXTERNAL
+  BANK_TRANSFER
+  OTHER
+}
+
+/// What a center intends to charge a group's learners.
+model CenterFeePlan {
+  id          String              @id @default(cuid())
+  academyId   String
+  academy     Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  groupId     String
+  group       Group               @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  name        String
+  type        CenterFeePlanType
+  /// Charged from now on; posted charges keep the amount they were posted with.
+  amountCents Int
+  currency    String
+  /// MONTHLY: the day of the month a charge falls due (1–28).
+  dueDay      Int?
+  /// First local date the plan charges for (never before the day it was made).
+  startsOn    DateTime            @db.Date
+  status      CenterFeePlanStatus @default(ACTIVE)
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  charges CenterCharge[]
+
+  @@index([academyId, status])
+  @@index([groupId])
+}
+
+/// One thing a learner owes: posted once, never rewritten. Discounts and
+/// corrections are CenterAdjustment rows; a charge posted by mistake is voided.
+model CenterCharge {
+  id               String           @id @default(cuid())
+  academyId        String
+  academy          Academy          @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academyStudentId String
+  academyStudent   AcademyStudent   @relation(fields: [academyStudentId], references: [id], onDelete: Restrict)
+  kind             CenterChargeKind
+  planId           String?
+  plan             CenterFeePlan?   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  /// MONTHLY: the local month, 'YYYY-MM'.
+  period           String?
+  /// PER_SESSION: the class attended.
+  groupSessionId   String?
+  groupSession     GroupSession?    @relation(fields: [groupSessionId], references: [id], onDelete: Restrict)
+  description      String
+  /// What was owed when posted (> 0).
+  amountCents      Int
+  currency         String
+  dueOn            DateTime         @db.Date
+  /// Who posted it; null when the generator did.
+  createdBy        String?
+  /// Idempotency of a one-time charge (a retried or double-tapped request).
+  requestKey       String?
+  createdAt        DateTime         @default(now())
+  voidedAt         DateTime?
+  voidedBy         String?
+  voidReason       String?
+
+  adjustments CenterAdjustment[]
+  allocations CenterAllocation[]
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, academyStudentId])
+  @@index([academyId, dueOn])
+  @@index([planId])
+  @@index([groupSessionId])
+}
+
+/// A discount or a correction of one charge: signed, with its reason, never edited.
+model CenterAdjustment {
+  id         String               @id @default(cuid())
+  academyId  String
+  chargeId   String
+  charge     CenterCharge         @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+  kind       CenterAdjustmentKind
+  /// Change to what is owed: negative lowers it (every discount), positive raises it.
+  deltaCents Int
+  /// A percentage discount as asked, in basis points (1000 = 10%) — for display.
+  percentBps Int?
+  reason     String
+  createdBy  String
+  requestKey String
+  createdAt  DateTime             @default(now())
+
+  @@unique([academyId, requestKey])
+  @@index([chargeId])
+}
+
+/// Money the center received — and its receipt. Never deleted or edited; a
+/// mistake is reversed (reversedAt), which keeps the receipt and its number.
+model CenterCollection {
+  id                String                 @id @default(cuid())
+  academyId         String
+  academy           Academy                @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  academyStudentId  String
+  academyStudent    AcademyStudent         @relation(fields: [academyStudentId], references: [id], onDelete: Restrict)
+  amountCents       Int
+  currency          String
+  method            CenterCollectionMethod
+  note              String?
+  /// Database time of the collection, and who took the money.
+  receivedAt        DateTime               @default(now())
+  receivedBy        String
+  /// Academy-scoped, per local year: '2026-000123'.
+  receiptNumber     String
+  /// The learner's outstanding right after this collection (printed on the receipt).
+  balanceAfterCents Int
+  requestKey        String
+  reversedAt        DateTime?
+  reversedBy        String?
+  reversalReason    String?
+
+  allocations CenterAllocation[]
+
+  @@unique([academyId, receiptNumber])
+  @@unique([academyId, requestKey])
+  @@index([academyId, receivedAt])
+  @@index([academyStudentId])
+}
+
+/// How much of one collection paid one charge.
+model CenterAllocation {
+  id           String           @id @default(cuid())
+  academyId    String
+  collectionId String
+  collection   CenterCollection @relation(fields: [collectionId], references: [id], onDelete: Restrict)
+  chargeId     String
+  charge       CenterCharge     @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+  amountCents  Int
+
+  @@unique([collectionId, chargeId])
+  @@index([chargeId])
+}
+
+/// The next receipt number per academy and local year (an atomic counter).
+model CenterReceiptCounter {
+  academyId String
+  year      Int
+  last      Int
+
+  @@id([academyId, year])
 }

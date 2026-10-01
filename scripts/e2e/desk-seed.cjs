@@ -96,7 +96,13 @@ function code() {
         isHome: true,
       },
     });
-    for (const key of ['studentRegistry', 'classOperations', 'receptionDesk', 'centerFees'])
+    for (const key of [
+      'studentRegistry',
+      'classOperations',
+      'receptionDesk',
+      'centerFees',
+      'studentFollowUp',
+    ])
       await p.academyFeatureFlag.create({ data: { academyId: academy.id, key, enabled: true } });
     return { owner, academy };
   }
@@ -129,6 +135,10 @@ function code() {
     'card.manage',
     'fees.view',
     'fees.collect',
+    // C5: the Reception & desk preset follows up with families too.
+    'guardian.manage',
+    'followup.view',
+    'followup.manage',
   ];
   const reception = await staff('reception', 'منى الاستقبال', FRONT_DESK);
   const reception2 = await staff('reception2', 'هالة الاستقبال', FRONT_DESK);

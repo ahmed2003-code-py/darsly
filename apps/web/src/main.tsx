@@ -10,6 +10,7 @@ import { Role } from '@darsly/shared-types';
 import AppToasts from './components/AppToasts';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { bootAdminTheme } from './lib/adminTheme';
+import BuildFreshness from './components/BuildFreshness';
 import { bootColorMode } from './lib/colorMode';
 import { bootStudio } from './lib/studio';
 import { queryClient } from './lib/queryClient';
@@ -47,6 +48,9 @@ void initI18n().then(() => {
         <LazyMotion features={domAnimation} strict>
           <BrowserRouter>
             <App />
+            {/* A tab open across a deploy moves to the new build on its next
+              navigation, so it never draws new server data with old strings. */}
+            <BuildFreshness />
             {/* At the root, not inside the app shell: a sign-in, an activation or
               a public academy page can fail too, and those render no shell. */}
             <AppToasts />

@@ -267,9 +267,10 @@ export class FeePlansService {
     const { start, end } = localDayBounds(anchor, timezone);
     // In the group at some moment of the anchor day, and not withdrawn before it —
     // except a learner TRANSFERRED in on the anchor day itself: they joined
-    // during the day while leaving a group they were in before it. The group
-    // they left keeps the month and this one charges from the next, as for a
-    // transfer on any other day; otherwise both groups would charge the month.
+    // during the day after a stint in another group that ended that day (even
+    // one that only began that day: registered and moved on the 1st). The
+    // group they left keeps the month and this one charges from the next, as
+    // for a transfer on any other day; otherwise both would charge the month.
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       SELECT DISTINCT s.id
       FROM "GroupMembership" m
@@ -284,7 +285,7 @@ export class FeePlansService {
             SELECT 1 FROM "GroupMembership" o
             WHERE o."academyId" = m."academyId" AND o."studentId" = m."studentId"
               AND o."groupId" <> m."groupId"
-              AND o."addedAt" < (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
+              AND o."addedAt" <= m."addedAt"
               AND o."deletedAt" >= (${utc(start)}::timestamptz AT TIME ZONE 'UTC')
               AND o."deletedAt" < (${utc(end)}::timestamptz AT TIME ZONE 'UTC')
           )

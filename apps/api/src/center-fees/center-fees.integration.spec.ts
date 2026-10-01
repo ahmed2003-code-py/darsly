@@ -483,6 +483,16 @@ describe('C4 — plans and the charges they post', () => {
       const both = await student(w.A.acad.id, `مادتين (${order})`);
       await stint(w.A.acad.id, w.A.gA.id, both.studentId, new Date('2026-01-01T08:00:00Z'));
       await stint(w.A.acad.id, w.A.gB.id, both.studentId, moved);
+      // The production case: registered into A on the 1st, moved to B the same day.
+      const sameDay = await student(w.A.acad.id, `سجّل واتنقل يوم 1 (${order})`);
+      await stint(
+        w.A.acad.id,
+        w.A.gA.id,
+        sameDay.studentId,
+        new Date('2026-03-01T07:00:00Z'),
+        moved,
+      );
+      await stint(w.A.acad.id, w.A.gB.id, sameDay.studentId, moved);
       const plansInOrder = order === 'old-first' ? [pA, pB] : [pB, pA];
       for (const p of plansInOrder) await plans.generatePlan(p, { today: '2026-03-01' });
       for (const p of plansInOrder) await plans.generatePlan(p, { today: '2026-04-02' });
@@ -494,6 +504,10 @@ describe('C4 — plans and the charges they post', () => {
           })
         ).map((c) => [c.period, c.planId === pA.id ? 'A' : 'B']);
       expect(await of(s.id)).toEqual([
+        ['2026-03', 'A'],
+        ['2026-04', 'B'],
+      ]);
+      expect(await of(sameDay.id)).toEqual([
         ['2026-03', 'A'],
         ['2026-04', 'B'],
       ]);

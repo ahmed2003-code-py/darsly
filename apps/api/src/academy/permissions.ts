@@ -55,6 +55,15 @@ export const CAPABILITIES = [
   // teacher keeps C2's attendance for their own groups; the owner grants these.
   'desk.checkin', // identify a learner (card, code, register search) and check them into a real class
   'card.manage', // issue, reissue and revoke learners' QR cards
+  // Center Operations C4 — the center's OWN fees (never platform money: a
+  // Darsly course paid in cash at a Center stays payment.collect). Every one
+  // reaches every learner of the academy, so none is a TEACHER default.
+  'fees.view', // see a learner's fees, statement, receipts and who owes what
+  'fees.collect', // record money received and print its receipt
+  'fees.manage', // fee plans, one-time charges, voiding a charge posted by mistake
+  'fees.adjust', // discounts and corrections, with a reason
+  'fees.reverse', // reverse a collection recorded by mistake
+  'fees.report', // the day's collections for everyone, totals, exports
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -117,6 +126,12 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'student.register',
   'desk.checkin',
   'card.manage',
+  'fees.view',
+  'fees.collect',
+  'fees.manage',
+  'fees.adjust',
+  'fees.reverse',
+  'fees.report',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -141,6 +156,12 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'student.register',
   'desk.checkin',
   'card.manage',
+  'fees.view',
+  'fees.collect',
+  'fees.manage',
+  'fees.adjust',
+  'fees.reverse',
+  'fees.report',
 ]);
 
 function isCapability(x: string): x is Capability {

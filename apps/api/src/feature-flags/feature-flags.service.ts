@@ -24,6 +24,9 @@ export const FEATURE_FLAG_KEYS = [
   // Center Operations C3 — QR student cards and the reception desk. Its own
   // switch: turning classOperations on never opens the desk.
   'receptionDesk',
+  // Center Operations C4 — the center's own fees, collections and receipts.
+  // Its own switch, independent of the register, classes and the desk.
+  'centerFees',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
@@ -39,6 +42,7 @@ const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
   'studentRegistry',
   'classOperations',
   'receptionDesk',
+  'centerFees',
 ]);
 
 function defaultFor(key: FeatureFlagKey): boolean {

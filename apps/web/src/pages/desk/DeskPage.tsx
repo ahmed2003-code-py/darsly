@@ -21,6 +21,7 @@ import {
 import { errorMessage } from '../../lib/errorMessage';
 import { NewStudentModal } from '../center/CenterStudentsPage';
 import CardPanel from './CardPanel';
+import DeskFeeStrip from '../fees/DeskFeeStrip';
 
 const QrScanner = lazy(() => import('./QrScanner'));
 
@@ -744,6 +745,8 @@ function StudentView({
   return (
     <div className={compact ? '' : 'card p-4 sm:p-5'}>
       <StudentHeader view={view} lang={lang} />
+      {/* The center's fees (C4): shown beside, never in the way of, checking in. */}
+      {!compact && <DeskFeeStrip academyId={academyId} academyStudentId={view.student.id} />}
       {note && (
         <p
           className={`mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${

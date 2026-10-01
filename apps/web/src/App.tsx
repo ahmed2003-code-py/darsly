@@ -41,6 +41,7 @@ const StudentImportPage = lazyPage(() => import('./pages/center/StudentImportPag
 const ClassesTodayPage = lazyPage(() => import('./pages/classes/ClassesTodayPage'));
 const ClassPage = lazyPage(() => import('./pages/classes/ClassPage'));
 const DeskPage = lazyPage(() => import('./pages/desk/DeskPage'));
+const CenterFeesPage = lazyPage(() => import('./pages/fees/CenterFeesPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -783,6 +784,16 @@ export default function App() {
             element={
               <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
                 <DeskPage />
+              </RequireAuth>
+            }
+          />
+          {/* The center's own fees (Center Operations C4). The page and the API
+              check fees.* and the centerFees flag. */}
+          <Route
+            path="/center/fees"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <CenterFeesPage />
               </RequireAuth>
             }
           />

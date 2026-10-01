@@ -14,9 +14,12 @@ import {
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { AttendanceCard, CourseProgressList, LiveList } from '../care/CareViews';
 import GuardianManager from '../care/GuardianManager';
+import { useRegistryRecord } from '../../lib/centerStudents';
+import { useFeesAccess } from '../../lib/centerFees';
+import StudentFeesPanel from '../fees/StudentFeesPanel';
 import RegistryCard from '../center/RegistryCard';
 
-type Tab = 'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'care';
+type Tab = 'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'fees' | 'care';
 
 /**
  * Student 360 — one student, as far as the viewer's reach goes.
@@ -39,6 +42,10 @@ export default function StaffStudentPage() {
   const care = useStaffCare(academyId, s ? id : undefined);
   const payments = useStudentPayments(academyId, id, !!s?.can.payments);
   const [tab, setTab] = useState<Tab>('overview');
+  // The center's own fees (C4) — separate from the platform's course payments above.
+  const feesAccess = useFeesAccess(academyId);
+  const record = useRegistryRecord(academyId, id, !!feesAccess.data?.canView);
+  const feesFor = feesAccess.data?.canView ? record.data?.id : undefined;
 
   const tabs = useMemo(
     () =>
@@ -49,12 +56,13 @@ export default function StaffStudentPage() {
           ['groups', true],
           ['guardians', !!s?.can.guardians],
           ['payments', !!s?.can.payments],
+          ['fees', !!feesFor],
           ['care', true],
         ] as [Tab, boolean][]
       )
         .filter(([, ok]) => ok)
         .map(([k]) => k),
-    [s],
+    [s, feesFor],
   );
 
   if (ws.isLoading || student.isLoading) {
@@ -219,6 +227,9 @@ export default function StaffStudentPage() {
           </ul>
         ))}
 
+      {tab === 'fees' && feesFor && academyId && (
+        <StudentFeesPanel academyId={academyId} academyStudentId={feesFor} />
+      )}
       {tab === 'care' &&
         (!care.data?.conversations.length ? (
           <EmptyState icon="forum" title={t('care.noConversations')} />

@@ -22,7 +22,13 @@ export type AssistantCapability =
   | 'student.directory'
   | 'student.register'
   | 'desk.checkin'
-  | 'card.manage';
+  | 'card.manage'
+  | 'fees.view'
+  | 'fees.collect'
+  | 'fees.manage'
+  | 'fees.adjust'
+  | 'fees.reverse'
+  | 'fees.report';
 
 export interface AssistantGrant {
   title: string;
@@ -78,6 +84,19 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   { key: 'register', caps: ['student.directory', 'student.register'] },
   // The reception desk (C3) — offered only where it is switched on.
   { key: 'desk', caps: ['desk.checkin', 'card.manage'] },
+  // The center's own fees (C4) — offered only where they are switched on.
+  // Never platform money: that is payment.view / the wallet, above.
+  {
+    key: 'fees',
+    caps: [
+      'fees.view',
+      'fees.collect',
+      'fees.manage',
+      'fees.adjust',
+      'fees.reverse',
+      'fees.report',
+    ],
+  },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
@@ -132,6 +151,10 @@ export const PRESETS: Record<
       'student.register',
       'desk.checkin',
       'card.manage',
+      // C4, where fees are on: see what is owed, take money, print the
+      // receipt — never plans, discounts, reversals or the center's totals.
+      'fees.view',
+      'fees.collect',
     ],
     directContact: false,
   },
@@ -143,17 +166,25 @@ export const REGISTRY_ONLY_PRESETS = new Set<PresetKey>(['reception']);
 /** …and the ones that only mean something where the desk (C3) is on. */
 export const DESK_ONLY_GROUPS = new Set(['desk']);
 export const DESK_ONLY_PRESETS = new Set<PresetKey>(['frontDesk']);
+/** …and the center's fees (C4). */
+export const FEES_ONLY_GROUPS = new Set(['fees']);
 /** Groups that reach the whole academy, so never granted course by course. */
-export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk']);
+export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees']);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
-export function presetOf(permissions: string[], directContact: boolean): PresetKey {
+export function presetOf(
+  permissions: string[],
+  directContact: boolean,
+  /** Capabilities of groups not offered here (a feature that is off): ignored on both sides. */
+  hidden: ReadonlySet<string> = new Set(),
+): PresetKey {
   const shown = permissions
-    .filter((p) => OFFERED.has(p))
+    .filter((p) => OFFERED.has(p) && !hidden.has(p))
     .sort()
     .join();
   for (const [key, p] of Object.entries(PRESETS)) {
-    if ([...p.permissions].sort().join() === shown && p.directContact === directContact) {
+    const want = p.permissions.filter((c) => !hidden.has(c));
+    if ([...want].sort().join() === shown && p.directContact === directContact) {
       return key as PresetKey;
     }
   }

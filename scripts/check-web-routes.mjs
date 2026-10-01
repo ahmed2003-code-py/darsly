@@ -133,6 +133,13 @@ const NOT_KEYS = new Set([
   // Capabilities (C3) whose first word is also a copy namespace.
   'desk.checkin',
   'card.manage',
+  // C4 capabilities share the copy namespace 'fees'.
+  'fees.view',
+  'fees.collect',
+  'fees.manage',
+  'fees.adjust',
+  'fees.reverse',
+  'fees.report',
 ]);
 for (const file of sources) {
   const text = readFileSync(file, 'utf8');

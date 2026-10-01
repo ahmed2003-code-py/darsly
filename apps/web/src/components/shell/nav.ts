@@ -132,6 +132,13 @@ export const DESK_ITEM: NavItem = {
   labelKey: 'nav.desk',
 };
 
+/** The center's own fees (C4): who owes, the day's collections, plans. */
+export const FEES_ITEM: NavItem = {
+  to: '/center/fees',
+  icon: 'payments',
+  labelKey: 'nav.centerFees',
+};
+
 export const CLASSES_ITEM: NavItem = {
   to: '/classes',
   icon: 'co_present',

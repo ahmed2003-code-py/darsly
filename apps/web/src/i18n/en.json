@@ -158,7 +158,8 @@
       "courseBuilder": "Courses",
       "myStudents": "Students"
     },
-    "desk": "Desk"
+    "desk": "Desk",
+    "centerFees": "Fees"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1044,6 +1045,10 @@
       "receptionDesk": {
         "label": "Reception desk & QR cards",
         "hint": "A QR card per student and a desk that checks them in by card or code in seconds (needs Classes & attendance)"
+      },
+      "centerFees": {
+        "label": "Center fees & collections",
+        "hint": "Fee plans, what each student owes, collections with receipts, and who still owes — the center's own money, not Darsly payments"
       }
     },
     "centersTitle": "Centers",
@@ -3266,7 +3271,21 @@
     "eMakeupRequired": "This student is not in this class — confirm it is a makeup.",
     "eClassesOff": "Classes are not on at this center.",
     "eDeskTooManyMisses": "Too many unknown cards or codes — wait a few minutes.",
-    "eDeskSearchOff": "Name search is not available to you — scan the card or type the code."
+    "eDeskSearchOff": "Name search is not available to you — scan the card or type the code.",
+    "ePlanStartInPast": "A plan cannot start in the past.",
+    "ePlanNotFound": "That plan does not exist.",
+    "ePlanNotMonthly": "That is not an active monthly plan.",
+    "ePlanNotStarted": "That plan has not started yet.",
+    "eChargeNotFound": "That charge does not exist.",
+    "eCollectionNotFound": "That receipt does not exist.",
+    "eNothingOwed": "This student owes nothing.",
+    "eAmountExceedsBalance": "More than is owed — the center keeps no credit balance.",
+    "eAllocationInvalid": "That is not an open charge of this student.",
+    "eAllocationMismatch": "The parts must add up to the amount.",
+    "eIdempotencyKeyReused": "This was already recorded with a different amount — start again.",
+    "eChargeVoid": "That charge is void.",
+    "eAdjustmentBelowPaid": "That would owe less than was paid — reverse the collection first.",
+    "eChargeHasPayments": "Money was collected against this charge — reverse that first."
   },
   "myStudio": {
     "title": "My Studio",
@@ -4974,7 +4993,8 @@
       "payments": "Payments",
       "guardians": "Parents",
       "register": "Student register",
-      "desk": "Reception desk"
+      "desk": "Reception desk",
+      "fees": "Center fees"
     },
     "cap": {
       "student.view": {
@@ -5051,6 +5071,36 @@
         "short": "Cards",
         "label": "Issues students’ QR cards",
         "hint": "Issue a card, replace a lost or damaged one, and cancel it."
+      },
+      "fees.view": {
+        "short": "View fees",
+        "label": "Sees students’ fees",
+        "hint": "What each student owes, receipts, and who owes."
+      },
+      "fees.collect": {
+        "short": "Collect",
+        "label": "Takes money and prints the receipt",
+        "hint": "Records the amount received and prints the receipt. Cannot reverse or discount."
+      },
+      "fees.manage": {
+        "short": "Fee plans",
+        "label": "Manages fee plans and charges",
+        "hint": "Monthly or per-class plans, one-time charges, voiding a charge posted by mistake."
+      },
+      "fees.adjust": {
+        "short": "Discounts",
+        "label": "Gives discounts and corrections",
+        "hint": "With a written reason, never below what was paid."
+      },
+      "fees.reverse": {
+        "short": "Reverse",
+        "label": "Reverses a collection recorded by mistake",
+        "hint": "The receipt stays, marked reversed."
+      },
+      "fees.report": {
+        "short": "Fee reports",
+        "label": "Sees everyone’s collections and totals",
+        "hint": "The day’s collections for all staff, and exports."
       }
     },
     "direct": {
@@ -5185,7 +5235,8 @@
       "groups": "Groups",
       "guardians": "Guardians",
       "payments": "Payments",
-      "care": "Conversations"
+      "care": "Conversations",
+      "fees": "Center fees"
     },
     "tile": {
       "courses": "Courses",
@@ -5765,6 +5816,225 @@
       "code": "Student code",
       "kind": "Student card",
       "note": "For use at the center only"
+    }
+  },
+  "fees": {
+    "title": "Center fees",
+    "off": "Center fees are not on here",
+    "offHint": "The platform team turns them on per center.",
+    "noAccess": "You cannot see fees",
+    "noAccessHint": "The center owner can give you access on the Team screen.",
+    "owed": "Owed",
+    "overdue": "Overdue",
+    "paid": "Paid",
+    "due": "Due",
+    "remaining": "Remaining",
+    "nextDue": "Next due",
+    "dueOn": "due {{date}}",
+    "charges": "Charges",
+    "receipts": "Receipts",
+    "noCharges": "No charges for this student",
+    "noChargesHint": "Charges come from group fee plans, or as a one-time charge.",
+    "noReceipts": "No collections yet.",
+    "nothingOwed": "This student owes nothing.",
+    "status": {
+      "PAID": "Paid",
+      "OVERDUE": "Overdue",
+      "PARTIALLY_PAID": "Part paid",
+      "DUE": "Due today",
+      "UPCOMING": "Upcoming",
+      "VOID": "Void"
+    },
+    "kind": {
+      "MONTHLY": "Monthly",
+      "PER_SESSION": "Per class",
+      "ONE_TIME": "One-time"
+    },
+    "method": {
+      "CASH": "Cash",
+      "CARD_EXTERNAL": "Card (center terminal)",
+      "BANK_TRANSFER": "Bank transfer",
+      "OTHER": "Other",
+      "cardHint": "Paid on the center's own card terminal — recorded only; Darsly takes no money."
+    },
+    "money": {
+      "invalid": "Type a valid amount, up to two decimals.",
+      "reads": "Will be recorded as:"
+    },
+    "desk": {
+      "clear": "Nothing owed ✓"
+    },
+    "collect": {
+      "action": "Collect",
+      "title": "Collect money",
+      "confirmTitle": "Check before recording",
+      "doneTitle": "Receipt",
+      "from": "From",
+      "amount": "Amount",
+      "method": "Method",
+      "note": "Note (optional)",
+      "all": "Everything owed",
+      "pick": "Pick the charges",
+      "which": "Which charges?",
+      "typeAmount": "Type an amount instead",
+      "oldestFirst": "The amount pays the oldest first — you will see how before confirming.",
+      "continue": "Review",
+      "covers": "This pays:",
+      "remainingAfter": "Remaining after",
+      "confirm": "Confirm & record",
+      "saving": "Recording…",
+      "back": "Back",
+      "retry": "Retry (it will not be recorded twice)",
+      "offline": "No connection — nothing was recorded. Check the network and retry."
+    },
+    "receipt": {
+      "title": "Receipt",
+      "number": "Receipt no.",
+      "date": "Date",
+      "student": "Student",
+      "code": "Code",
+      "collector": "Received by",
+      "paidFor": "For:",
+      "total": "Total",
+      "balanceAfter": "Still owed",
+      "received": "Recorded ✓",
+      "print": "Print receipt",
+      "done": "Done",
+      "reversedStamp": "REVERSED",
+      "reversedShort": "Reversed",
+      "reversedNote": "This receipt was reversed: {{reason}} — {{by}}",
+      "footer": "Center fees — not a Darsly payment"
+    },
+    "reverse": {
+      "action": "Reverse",
+      "reason": "Reason",
+      "hint": "The receipt stays, marked reversed; the amount is owed again.",
+      "confirm": "Reverse collection"
+    },
+    "oneTime": {
+      "action": "One-time charge",
+      "title": "One-time charge",
+      "what": "For what?",
+      "whatPh": "e.g. book, exam fee, registration",
+      "amount": "Amount",
+      "dueOn": "Due on",
+      "save": "Add charge"
+    },
+    "monthly": {
+      "action": "This month's fee",
+      "title": "This month's fee",
+      "hint": "For a student who joined the group after the 1st: posted once only.",
+      "pick": "Pick the monthly plan",
+      "save": "Post this month's fee",
+      "posted": "This month's fee was posted.",
+      "already": "This month's fee was already posted."
+    },
+    "adjust": {
+      "action": "Discount / correct",
+      "title": "Discount or correction",
+      "kind": "Type",
+      "DISCOUNT": "Discount",
+      "CORRECTION": "Correction",
+      "mode": {
+        "AMOUNT": "Amount",
+        "PERCENT": "Percent %"
+      },
+      "DECREASE": "Lowers what is owed",
+      "INCREASE": "Raises what is owed",
+      "amount": "Amount",
+      "percent": "Percent (%)",
+      "reason": "Reason",
+      "reasonPh": "e.g. sibling discount",
+      "save": "Save"
+    },
+    "void": {
+      "action": "Void charge",
+      "title": "Void the charge",
+      "body": "“{{what}}” will no longer count against the student — it stays in the history.",
+      "confirm": "Void charge",
+      "done": "Void"
+    },
+    "statement": {
+      "print": "Statement",
+      "title": "Student statement",
+      "date": "Date",
+      "item": "Item",
+      "amount": "Amount",
+      "balance": "Balance"
+    },
+    "event": {
+      "CHARGE": "Charge",
+      "DISCOUNT": "Discount",
+      "CORRECTION": "Correction",
+      "COLLECTION": "Collection",
+      "REVERSAL": "Reversal",
+      "VOID": "Void"
+    },
+    "page": {
+      "title": "Center fees",
+      "sub": "The center's own money: what students owe and what was collected — not Darsly payments.",
+      "tab": {
+        "owing": "Who owes",
+        "today": "Collections",
+        "plans": "Fee plans"
+      },
+      "studentsOwing": "Students owing",
+      "searchPh": "Search by name or code",
+      "filter": "Filter",
+      "status": {
+        "OWING": "Owing",
+        "OVERDUE": "Overdue",
+        "PARTIAL": "Part paid",
+        "PAID": "Paid up",
+        "ALL": "All"
+      },
+      "none": "No students here",
+      "since": "owing since {{date}}",
+      "export": "Export",
+      "day": "Day",
+      "mine": "These are your own collections.",
+      "recorded": "Recorded collections (not a bank reconciliation).",
+      "total": "Total",
+      "count": "Receipts",
+      "reversed": "Reversed",
+      "noCollections": "No collections on this day"
+    },
+    "plan": {
+      "policy": "Monthly: owed by those in the group on the 1st, a full month, no proration. Per class: owed for each class a student attended in the group. A plan never charges for anything before the day it was made.",
+      "new": "New plan",
+      "none": "No fee plans yet",
+      "noneHint": "Create a plan for a group: monthly or per class.",
+      "name": "Plan name",
+      "group": "Group",
+      "pickGroup": "Pick the group",
+      "typeLabel": "Plan type",
+      "type": {
+        "MONTHLY": "Monthly",
+        "PER_SESSION": "Per class"
+      },
+      "typeHint": {
+        "MONTHLY": "Every month, for those in the group on the 1st (or the plan’s start day).",
+        "PER_SESSION": "For every class the student attended (present or late). Absences and makeups are not charged."
+      },
+      "amountMonth": "Amount per month",
+      "amountClass": "Amount per class",
+      "dueDay": "Due day of the month",
+      "startHint": "Starts today — nothing before today is charged.",
+      "changeHint": "A new amount applies to what is posted from now on; posted charges keep theirs.",
+      "create": "Create plan",
+      "created_one": "Plan created; 1 charge posted.",
+      "created_other": "Plan created; {{count}} charges posted.",
+      "editTitle": "Edit plan",
+      "edit": "Edit",
+      "generate": "Post what is due now",
+      "archive": "Stop this plan",
+      "archived": "Stopped",
+      "perMonth": "/ month",
+      "perClass": "/ class",
+      "from": "from {{date}}",
+      "dueDayIs": "due on day {{day}}",
+      "charges_one": "1 charge",
+      "charges_other": "{{count}} charges"
     }
   }
 }

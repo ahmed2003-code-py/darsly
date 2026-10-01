@@ -13,6 +13,7 @@ import {
 import { useOwnedAcademy } from '../../lib/academy';
 import { useRegistryAccess } from '../../lib/centerStudents';
 import { useDeskAccess } from '../../lib/desk';
+import { useFeesAccess } from '../../lib/centerFees';
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { askConfirm } from '../../lib/confirm';
 import { dateShort } from '../../lib/format';
@@ -27,6 +28,7 @@ import {
   ACADEMY_WIDE_GROUPS,
   DESK_ONLY_GROUPS,
   DESK_ONLY_PRESETS,
+  FEES_ONLY_GROUPS,
   REGISTRY_ONLY_GROUPS,
   REGISTRY_ONLY_PRESETS,
   TeamAssistant,
@@ -270,12 +272,26 @@ function AssistantEditor({
           directContact: PRESETS.support.directContact,
         },
   );
-  const preset = useMemo(() => presetOf(grant.permissions, grant.directContact), [grant]);
   // The register's preset and capabilities are offered only where it is on.
   const selectedAcademy = useStaffAcademyStore((s) => s.academyId) ?? undefined;
   const registryOn = !!useRegistryAccess(selectedAcademy).data?.enabled;
-  // …and the desk's (C3) where the desk is on.
+  // …and the desk's (C3) where the desk is on, and fees (C4) where they are on.
   const deskOn = !!useDeskAccess(selectedAcademy).data?.enabled;
+  const feesOn = !!useFeesAccess(selectedAcademy).data?.enabled;
+  const groupShown = (key: string) =>
+    (registryOn || !REGISTRY_ONLY_GROUPS.has(key)) &&
+    (deskOn || !DESK_ONLY_GROUPS.has(key)) &&
+    (feesOn || !FEES_ONLY_GROUPS.has(key));
+  /** Capabilities of a feature that is off here: never granted by a preset, ignored when matching one. */
+  const hidden = useMemo(
+    () => new Set(CAPABILITY_GROUPS.filter((g) => !groupShown(g.key)).flatMap((g) => g.caps)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [registryOn, deskOn, feesOn],
+  );
+  const preset = useMemo(
+    () => presetOf(grant.permissions, grant.directContact, hidden),
+    [grant, hidden],
+  );
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -303,7 +319,10 @@ function AssistantEditor({
           ? t(`team.preset.${k}.title`)
           : g.title,
       // Anything outside the screen (an older assistant's grant) is carried as is.
-      permissions: [...g.permissions.filter((x) => !OFFERED.has(x)), ...p.permissions],
+      permissions: [
+        ...g.permissions.filter((x) => !OFFERED.has(x)),
+        ...p.permissions.filter((x) => !hidden.has(x)),
+      ],
       directContact: p.directContact,
       // The register is the whole academy's: it is never granted course by course.
       ...(k === 'reception' || k === 'frontDesk'
@@ -503,11 +522,7 @@ function AssistantEditor({
             {t('team.whatCanTheyDo')}
           </legend>
           <div className="flex flex-col gap-4">
-            {CAPABILITY_GROUPS.filter(
-              (g) =>
-                (registryOn || !REGISTRY_ONLY_GROUPS.has(g.key)) &&
-                (deskOn || !DESK_ONLY_GROUPS.has(g.key)),
-            ).map((group) => (
+            {CAPABILITY_GROUPS.filter((g) => groupShown(g.key)).map((group) => (
               <div key={group.key}>
                 <p className="mb-1 text-xs font-bold uppercase tracking-wide text-outline">
                   {t(`team.group.${group.key}`)}

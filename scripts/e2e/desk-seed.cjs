@@ -96,7 +96,7 @@ function code() {
         isHome: true,
       },
     });
-    for (const key of ['studentRegistry', 'classOperations', 'receptionDesk'])
+    for (const key of ['studentRegistry', 'classOperations', 'receptionDesk', 'centerFees'])
       await p.academyFeatureFlag.create({ data: { academyId: academy.id, key, enabled: true } });
     return { owner, academy };
   }
@@ -120,13 +120,18 @@ function code() {
     });
     return u;
   };
-  const reception = await staff('reception', 'منى الاستقبال', [
+  // The Reception & desk preset (C3 + C4's fees.view / fees.collect).
+  const FRONT_DESK = [
     'student.view',
     'student.directory',
     'student.register',
     'desk.checkin',
     'card.manage',
-  ]);
+    'fees.view',
+    'fees.collect',
+  ];
+  const reception = await staff('reception', 'منى الاستقبال', FRONT_DESK);
+  const reception2 = await staff('reception2', 'هالة الاستقبال', FRONT_DESK);
   const c1only = await staff('c1only', 'سجل فقط', [
     'student.view',
     'student.directory',
@@ -312,6 +317,7 @@ function code() {
       owner: A.owner.email,
       reception: reception.email,
       c1only: c1only.email,
+      reception2: reception2.email,
       teacher: tUser.email,
       foreignOwner: B.owner.email,
       student: S.account && email(`student${n}`),

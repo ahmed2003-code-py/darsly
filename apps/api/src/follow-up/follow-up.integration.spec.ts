@@ -1056,6 +1056,13 @@ describe('C5 — scale', () => {
       ),
     );
     const a = w.A.acad.id;
+    // The worst case on purpose: statistics taken while the tables are tiny,
+    // then 160k records arrive (a center that just grew or imported). With
+    // stale estimates an earlier version of the signal query chose nested
+    // loops and took minutes; this must stay quick anyway.
+    await prisma.$executeRawUnsafe(
+      'ANALYZE "AttendanceRecord", "AttendanceSession", "GroupSession", "AcademyStudent", "Group"',
+    );
     const users = await prisma.user.createManyAndReturn({
       data: Array.from({ length: N }, (_, i) => ({
         role: 'STUDENT' as const,

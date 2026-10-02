@@ -53,12 +53,22 @@ contacts anyone, never blocks check-in, payment or anything else. Each row
 says whether a case is open for it and whether the family was already
 contacted today. Amounts appear only for a caller holding `fees.view`.
 
-Set-based: one window query reads the academy's last 120 days of attendance
-for both streaks (the run's start comes from one ordered array, not a
-join-back), one query for today's absences, one C4 call for fees, then cases
-and contacts in bulk. Measured locally: 10,000 learners, 160,000 attendance
-records → about 0.6 s for the whole list (it was 1.2 s before the plan was
-measured and the query reshaped).
+Set-based and plan-stable. The group's classes in the window are ranked once
+(a few hundred rows); every record carries its class's integer rank; one
+aggregate pass per learner and group finds the newest record that breaks a
+run and counts the absent / late records newer than it. No global sort, no
+join between large sets, and nested loops are switched off for that one read
+(`SET LOCAL`), because with stale statistics — a table that grew since it was
+last analysed — the planner otherwise chose them and the list took minutes.
+Then one query for today's absences, one C4 call for fees, cases and contacts
+in bulk.
+
+Measured with 10,000 learners and 160,000 attendance records, statistics
+deliberately taken while the tables were tiny (the scale test reproduces this
+every run): about 0.4 s on Postgres 17 and 0.5 s on Postgres 18, with no
+sort spilling to disk. History of the measurement: a windowed version was
+0.55 s on a quiet machine but 32.8 s in CI and 286 s with stale statistics —
+that is why the query has this shape.
 
 ## Cases
 
@@ -161,5 +171,5 @@ name or a phone.
 - No automated messages (SMS, WhatsApp API, push, email) — by design for C5.
 - Guardians receive no notification of a follow-up; the conversation happens
   on the staff member's phone.
-- Signals look back 120 days; a run is exact up to 30 records per group.
+- Signals look back 120 days of classes.
 - A streak counts records, not calendar weeks.

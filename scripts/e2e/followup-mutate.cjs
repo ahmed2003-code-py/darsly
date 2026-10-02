@@ -34,7 +34,7 @@ const MUTANTS = [
     'M2',
     'an absence a makeup covered still counts',
     SIG,
-    `(r.status = 'ABSENT' AND NOT (gs.id IS NOT NULL AND EXISTS (`,
+    `(r.status = 'ABSENT' AND NOT (x.gsid IS NOT NULL AND EXISTS (`,
     `(r.status = 'ABSENT' AND NOT (FALSE AND EXISTS (`,
   ],
   [
@@ -55,8 +55,8 @@ const MUTANTS = [
     'M5',
     'withdrawn learners raise streak signals',
     SIG,
-    `            AND s.status = 'ACTIVE' \${one}\n        ), ranked AS (`,
-    `            \${one}\n        ), ranked AS (`,
+    `AND s."studentId" = u."studentId"\n          AND s.status = 'ACTIVE'\n`,
+    `AND s."studentId" = u."studentId"\n`,
   ],
   [
     'M6',

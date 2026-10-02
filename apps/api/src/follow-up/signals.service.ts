@@ -11,8 +11,6 @@ import { FollowUpSettingsService } from './settings.service';
 /** How far back a streak is looked for. Ten weekly classes fit with room. */
 const LOOKBACK_DAYS = 120;
 const PAGE = 50;
-/** Records per learner and group a streak is read from (thresholds go to 10). */
-const MAX_RUN = 30;
 
 export type SignalReason = 'ABSENT_TODAY' | 'ABSENT_STREAK' | 'LATE_STREAK' | 'FEES_OVERDUE';
 
@@ -78,60 +76,83 @@ export class FollowUpSignalsService {
     const one = opts.academyStudentId
       ? Prisma.sql`AND s.id = ${opts.academyStudentId}`
       : Prisma.empty;
+    const oneProfile = opts.academyStudentId
+      ? Prisma.sql`AND r."studentId" = (SELECT "studentId" FROM "AcademyStudent" WHERE id = ${opts.academyStudentId} AND "academyId" = ${academyId})`
+      : Prisma.empty;
 
     const [streaks, absentToday, overdue] = await Promise.all([
-      this.prisma.$queryRaw<
-        {
-          academyStudentId: string;
-          groupId: string;
-          groupName: string;
-          absentRun: number;
-          lateRun: number;
-          absentStart: string | null;
-          absentSince: string | null;
-          lateStart: string | null;
-          lateSince: string | null;
-        }[]
-      >`
-        WITH recs AS (
-          SELECT s.id AS "academyStudentId", sh."groupId", sh.id AS shid, sh.date,
-                 COALESCE(gs."startAt", sh.date::timestamp) AS at,
-                 (r.status = 'ABSENT' AND NOT (gs.id IS NOT NULL AND EXISTS (
+      // Its own transaction: SET LOCAL ends with it. Nested loops are off for
+      // this one read because with stale statistics (a table that grew since
+      // it was last analysed) the planner chose them over 160k rows and the
+      // list took minutes (measured; see the scale test, which reproduces it).
+      this.prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SET LOCAL enable_nestloop = off`;
+        return tx.$queryRaw<
+          {
+            academyStudentId: string;
+            groupId: string;
+            groupName: string;
+            absentRun: number;
+            lateRun: number;
+            absentStart: string | null;
+            absentSince: string | null;
+            lateStart: string | null;
+            lateSince: string | null;
+          }[]
+        >`
+        WITH sess AS MATERIALIZED (
+          -- The group's own classes in the window, newest first: rk 1 = newest.
+          -- A few hundred rows however many learners there are.
+          SELECT sh.id, sh."groupId", sh.date, gs.id AS gsid,
+                 ROW_NUMBER() OVER (PARTITION BY sh."groupId"
+                   ORDER BY COALESCE(gs."startAt", sh.date::timestamp) DESC, sh.id DESC)::int AS rk
+          FROM "AttendanceSession" sh
+          LEFT JOIN "GroupSession" gs ON gs.id = sh."groupSessionId"
+          WHERE sh."academyId" = ${academyId} AND sh."deletedAt" IS NULL
+            AND sh.date >= ${since}::date AND (gs.id IS NULL OR gs.status <> 'CANCELLED')
+        ), recs AS MATERIALIZED (
+          -- Each own-group record as (learner, group, the class's rank, absent?, late?).
+          SELECT r."studentId", x."groupId", x.rk,
+                 (r.status = 'ABSENT' AND NOT (x.gsid IS NOT NULL AND EXISTS (
                     SELECT 1 FROM "AttendanceRecord" m
-                    WHERE m."makeupForSessionId" = gs.id AND m."studentId" = r."studentId"
+                    WHERE m."makeupForSessionId" = x.gsid AND m."studentId" = r."studentId"
                       AND m."deletedAt" IS NULL AND m.status IN ('PRESENT', 'LATE')))) AS absent,
                  (r.status = 'LATE') AS late
           FROM "AttendanceRecord" r
-          JOIN "AttendanceSession" sh ON sh.id = r."sessionId" AND sh."deletedAt" IS NULL
-          LEFT JOIN "GroupSession" gs ON gs.id = sh."groupSessionId"
-          JOIN "AcademyStudent" s ON s."academyId" = r."academyId" AND s."studentId" = r."studentId"
-          WHERE r."academyId" = ${academyId} AND sh."academyId" = ${academyId}
-            AND r."deletedAt" IS NULL AND r."homeGroupId" IS NULL AND r.status <> 'EXCUSED'
-            AND sh.date >= ${since}::date AND (gs.id IS NULL OR gs.status <> 'CANCELLED')
-            AND s.status = 'ACTIVE' ${one}
-        ), ranked AS (
-          SELECT "academyStudentId", "groupId", shid, date, absent, late,
-                 ROW_NUMBER() OVER (PARTITION BY "academyStudentId", "groupId" ORDER BY at DESC, shid DESC) AS rn
-          FROM recs
+          JOIN sess x ON x.id = r."sessionId"
+          WHERE r."academyId" = ${academyId}
+            AND r."deletedAt" IS NULL AND r."homeGroupId" IS NULL AND r.status <> 'EXCUSED' ${oneProfile}
         ), agg AS (
-          -- A streak is the run of matching records from the newest back; its
-          -- start is the record at position "run" — read from one ordered
-          -- array, not by joining back (measured: the join-back cost ~0.4 s at
-          -- 10k learners). Only the newest MAX_RUN records per group matter
-          -- (thresholds are at most 10), so a run is exact up to MAX_RUN.
-          SELECT "academyStudentId", "groupId",
-                 (COALESCE(MIN(rn) FILTER (WHERE NOT absent), MAX(rn) + 1) - 1)::int AS "absentRun",
-                 (COALESCE(MIN(rn) FILTER (WHERE NOT late), MAX(rn) + 1) - 1)::int AS "lateRun",
-                 array_agg(shid ORDER BY rn) AS shids,
-                 array_agg(date::text ORDER BY rn) AS dates
-          FROM ranked WHERE rn <= ${MAX_RUN} GROUP BY 1, 2
+          -- A streak is every record newer than the newest one that breaks it.
+          -- One aggregate pass per learner and group — no join between large
+          -- sets, no global sort: the newest break, and the ranks of the
+          -- absent / late records (a handful each) to count from.
+          SELECT "studentId", "groupId",
+                 MIN(rk) FILTER (WHERE NOT absent) AS ab,
+                 MIN(rk) FILTER (WHERE NOT late) AS lb,
+                 array_agg(rk) FILTER (WHERE absent) AS ar,
+                 array_agg(rk) FILTER (WHERE late) AS lr
+          FROM recs GROUP BY 1, 2
+          HAVING bool_or(absent) OR bool_or(late)
+        ), runs AS (
+          SELECT "studentId", "groupId",
+                 (SELECT COUNT(*) FROM unnest(ar) x WHERE x < COALESCE(ab, 2147483647))::int AS "absentRun",
+                 (SELECT COUNT(*) FROM unnest(lr) x WHERE x < COALESCE(lb, 2147483647))::int AS "lateRun",
+                 (SELECT MAX(x) FROM unnest(ar) x WHERE x < COALESCE(ab, 2147483647)) AS ak,
+                 (SELECT MAX(x) FROM unnest(lr) x WHERE x < COALESCE(lb, 2147483647)) AS lk
+          FROM agg
         )
-        SELECT a."academyStudentId", a."groupId", g.name AS "groupName", a."absentRun", a."lateRun",
-               a.shids[a."absentRun"] AS "absentStart", a.dates[a."absentRun"] AS "absentSince",
-               a.shids[a."lateRun"] AS "lateStart", a.dates[a."lateRun"] AS "lateSince"
-        FROM agg a
-        JOIN "Group" g ON g.id = a."groupId"
-        WHERE a."absentRun" >= ${cfg.absenceStreak} OR a."lateRun" >= ${cfg.lateStreak}`,
+        SELECT s.id AS "academyStudentId", u."groupId", g.name AS "groupName", u."absentRun", u."lateRun",
+               sa.id AS "absentStart", sa.date::text AS "absentSince",
+               sl.id AS "lateStart", sl.date::text AS "lateSince"
+        FROM runs u
+        JOIN "AcademyStudent" s ON s."academyId" = ${academyId} AND s."studentId" = u."studentId"
+          AND s.status = 'ACTIVE'
+        JOIN "Group" g ON g.id = u."groupId"
+        LEFT JOIN sess sa ON sa."groupId" = u."groupId" AND sa.rk = u.ak
+        LEFT JOIN sess sl ON sl."groupId" = u."groupId" AND sl.rk = u.lk
+        WHERE u."absentRun" >= ${cfg.absenceStreak} OR u."lateRun" >= ${cfg.lateStreak}`;
+      }),
       this.prisma.$queryRaw<
         { academyStudentId: string; shid: string; groupId: string; groupName: string }[]
       >`

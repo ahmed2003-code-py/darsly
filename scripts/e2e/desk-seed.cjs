@@ -102,6 +102,8 @@ function code() {
       'receptionDesk',
       'centerFees',
       'studentFollowUp',
+      // C6: paper exams and grades.
+      'paperExams',
     ])
       await p.academyFeatureFlag.create({ data: { academyId: academy.id, key, enabled: true } });
     return { owner, academy };

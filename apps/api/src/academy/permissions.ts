@@ -67,6 +67,11 @@ export const CAPABILITIES = [
   // Center Operations C5 — student follow-up (academy-wide, not a teacher default).
   'followup.view', // who needs follow-up, cases, contact history and its notes, the timeline
   'followup.manage', // open, assign and close cases; log a contact with a family
+  // Center Operations C6 — paper exams and grades. Group-scoped: a member reaches
+  // only the groups they are assigned to (the owner reaches all).
+  'grades.view', // exams, results, statistics and history of reachable groups
+  'grades.manage', // create exams, enter draft grades, publish
+  'grades.correct', // correct a published grade (with a reason), void an exam
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -97,6 +102,9 @@ export const ROLE_PERMISSIONS: Record<AcademyRole, Capability[]> = {
     'message.group',
     'guardian.manage',
     'payment.view',
+    // C6: their assigned groups' paper exams — never post-publish correction.
+    'grades.view',
+    'grades.manage',
   ],
   // An assistant holds exactly what the owner granted them, one capability at
   // a time (their membership `permissions`) — never a role default that grows
@@ -137,6 +145,9 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'fees.report',
   'followup.view',
   'followup.manage',
+  'grades.view',
+  'grades.manage',
+  'grades.correct',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',

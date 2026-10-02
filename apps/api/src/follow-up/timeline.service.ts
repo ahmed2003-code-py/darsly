@@ -4,6 +4,7 @@ import { CenterFeesService } from '../center-fees/center-fees.service';
 import { ClassScheduleService } from '../class-ops/class-schedule.service';
 import { wallClock } from '../class-ops/zoned-time';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { GradesReadService } from '../paper-exams/grades-read.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const LIMIT = 40;
@@ -40,6 +41,7 @@ export class TimelineService {
     private readonly fees: CenterFeesService,
     private readonly flags: FeatureFlagsService,
     private readonly schedule: ClassScheduleService,
+    private readonly grades: GradesReadService,
   ) {}
 
   async forStudent(ctx: AcademyContext, academyStudentId: string, beforeIso?: string) {
@@ -53,102 +55,117 @@ export class TimelineService {
     const before = parsed && !isNaN(parsed.getTime()) ? parsed : new Date(Date.now() + 60_000);
     const showFees =
       ctx.can('fees.view') && (await this.flags.isEnabled(ctx.academyId, 'centerFees'));
+    // C6 grade events: only for grades.view, only in reachable groups — never fetched otherwise.
+    const gradeReach = ctx.can('grades.view') ? await this.grades.reach(ctx) : undefined;
     const clock = await this.schedule.academyClock(ctx.academyId);
     const a = ctx.academyId;
     const lt = { lt: before };
 
-    const [audit, stints, attendance, cards, links, cases, closed, contacts, feeEvents] =
-      await Promise.all([
-        this.prisma.auditLog.findMany({
-          where: {
-            academyId: a,
-            entity: 'AcademyStudent',
-            entityId: s.id,
-            action: { in: ['student.withdraw', 'student.reactivate'] },
-            createdAt: lt,
-          },
-          orderBy: { createdAt: 'desc' },
-          take: LIMIT,
-          select: { id: true, action: true, createdAt: true },
-        }),
-        this.prisma.groupMembership.findMany({
-          where: { academyId: a, studentId: s.studentId, OR: [{ addedAt: lt }, { deletedAt: lt }] },
-          orderBy: { addedAt: 'desc' },
-          take: LIMIT * 2,
-          select: {
-            id: true,
-            addedAt: true,
-            deletedAt: true,
-            group: { select: { id: true, name: true } },
-          },
-        }),
-        this.prisma.attendanceRecord.findMany({
-          where: { academyId: a, studentId: s.studentId, deletedAt: null, markedAt: lt },
-          orderBy: { markedAt: 'desc' },
-          take: LIMIT,
-          select: {
-            id: true,
-            status: true,
-            method: true,
-            markedAt: true,
-            checkedInAt: true,
-            homeGroupId: true,
-            session: { select: { date: true, group: { select: { name: true } } } },
-          },
-        }),
-        this.prisma.academyStudentCard.findMany({
-          where: {
-            academyId: a,
-            academyStudentId: s.id,
-            OR: [{ issuedAt: lt }, { revokedAt: lt }],
-          },
-          orderBy: { issuedAt: 'desc' },
-          take: LIMIT,
-          select: { id: true, issuedAt: true, revokedAt: true, revokeReason: true },
-        }),
-        this.prisma.guardianLink.findMany({
-          where: {
-            academyId: a,
-            studentId: s.studentId,
-            OR: [{ createdAt: lt }, { revokedAt: lt }],
-          },
-          orderBy: { createdAt: 'desc' },
-          take: LIMIT,
-          select: {
-            id: true,
-            relationship: true,
-            createdAt: true,
-            revokedAt: true,
-            guardian: { select: { user: { select: { fullName: true } } } },
-          },
-        }),
-        this.prisma.studentFollowUp.findMany({
-          where: { academyId: a, academyStudentId: s.id, openedAt: lt },
-          orderBy: { openedAt: 'desc' },
-          take: LIMIT,
-          select: { id: true, reason: true, openedAt: true, note: true },
-        }),
-        this.prisma.studentFollowUp.findMany({
-          where: { academyId: a, academyStudentId: s.id, closedAt: lt },
-          orderBy: { closedAt: 'desc' },
-          take: LIMIT,
-          select: { id: true, reason: true, status: true, closedAt: true, closeReason: true },
-        }),
-        this.prisma.studentContact.findMany({
-          where: { academyId: a, academyStudentId: s.id, contactedAt: lt },
-          orderBy: { contactedAt: 'desc' },
-          take: LIMIT,
-          select: {
-            id: true,
-            channel: true,
-            outcome: true,
-            party: true,
-            note: true,
-            contactedAt: true,
-          },
-        }),
-        showFees ? this.fees.timelineEvents(a, s.id, before, LIMIT) : Promise.resolve([]),
-      ]);
+    const [
+      audit,
+      stints,
+      attendance,
+      cards,
+      links,
+      cases,
+      closed,
+      contacts,
+      feeEvents,
+      gradeEvents,
+    ] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where: {
+          academyId: a,
+          entity: 'AcademyStudent',
+          entityId: s.id,
+          action: { in: ['student.withdraw', 'student.reactivate'] },
+          createdAt: lt,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: LIMIT,
+        select: { id: true, action: true, createdAt: true },
+      }),
+      this.prisma.groupMembership.findMany({
+        where: { academyId: a, studentId: s.studentId, OR: [{ addedAt: lt }, { deletedAt: lt }] },
+        orderBy: { addedAt: 'desc' },
+        take: LIMIT * 2,
+        select: {
+          id: true,
+          addedAt: true,
+          deletedAt: true,
+          group: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.attendanceRecord.findMany({
+        where: { academyId: a, studentId: s.studentId, deletedAt: null, markedAt: lt },
+        orderBy: { markedAt: 'desc' },
+        take: LIMIT,
+        select: {
+          id: true,
+          status: true,
+          method: true,
+          markedAt: true,
+          checkedInAt: true,
+          homeGroupId: true,
+          session: { select: { date: true, group: { select: { name: true } } } },
+        },
+      }),
+      this.prisma.academyStudentCard.findMany({
+        where: {
+          academyId: a,
+          academyStudentId: s.id,
+          OR: [{ issuedAt: lt }, { revokedAt: lt }],
+        },
+        orderBy: { issuedAt: 'desc' },
+        take: LIMIT,
+        select: { id: true, issuedAt: true, revokedAt: true, revokeReason: true },
+      }),
+      this.prisma.guardianLink.findMany({
+        where: {
+          academyId: a,
+          studentId: s.studentId,
+          OR: [{ createdAt: lt }, { revokedAt: lt }],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: LIMIT,
+        select: {
+          id: true,
+          relationship: true,
+          createdAt: true,
+          revokedAt: true,
+          guardian: { select: { user: { select: { fullName: true } } } },
+        },
+      }),
+      this.prisma.studentFollowUp.findMany({
+        where: { academyId: a, academyStudentId: s.id, openedAt: lt },
+        orderBy: { openedAt: 'desc' },
+        take: LIMIT,
+        select: { id: true, reason: true, openedAt: true, note: true },
+      }),
+      this.prisma.studentFollowUp.findMany({
+        where: { academyId: a, academyStudentId: s.id, closedAt: lt },
+        orderBy: { closedAt: 'desc' },
+        take: LIMIT,
+        select: { id: true, reason: true, status: true, closedAt: true, closeReason: true },
+      }),
+      this.prisma.studentContact.findMany({
+        where: { academyId: a, academyStudentId: s.id, contactedAt: lt },
+        orderBy: { contactedAt: 'desc' },
+        take: LIMIT,
+        select: {
+          id: true,
+          channel: true,
+          outcome: true,
+          party: true,
+          note: true,
+          contactedAt: true,
+        },
+      }),
+      showFees ? this.fees.timelineEvents(a, s.id, before, LIMIT) : Promise.resolve([]),
+      gradeReach !== undefined
+        ? this.grades.timelineEvents(a, s.id, before, LIMIT, gradeReach)
+        : Promise.resolve([]),
+    ]);
 
     const events: Event[] = [];
     if (s.createdAt < before)
@@ -258,6 +275,7 @@ export class TimelineService {
         data: { channel: c.channel, outcome: c.outcome, party: c.party, note: c.note },
       });
     for (const f of feeEvents) events.push(f);
+    for (const g of gradeEvents) events.push(g);
 
     events.sort((x, y) => y.at.getTime() - x.at.getTime() || x.ref.localeCompare(y.ref));
     let page = events.slice(0, LIMIT);

@@ -281,6 +281,9 @@ model Academy {
   followUps           StudentFollowUp[]
   studentContacts     StudentContact[]
   followUpSettings    AcademyFollowUpSettings?
+  /// Center Operations C6: paper exams and grades.
+  paperExams          PaperExam[]
+  gradeSettings       AcademyGradeSettings?
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
   provisionedStudents StudentProfile[]         @relation("provisionedStudents")
 
@@ -317,14 +320,15 @@ model AcademyFeatureFlag {
 // on or off. Unlike AcademyFeatureFlag, a MISSING row means "not offered":
 // subjects are opt-in per Center. Only consulted for kind = CENTER.
 model AcademySubject {
-  id        String   @id @default(cuid())
-  academyId String
-  academy   Academy  @relation(fields: [academyId], references: [id], onDelete: Cascade)
-  subjectId String
-  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  isActive  Boolean  @default(true)
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+  id         String      @id @default(cuid())
+  academyId  String
+  academy    Academy     @relation(fields: [academyId], references: [id], onDelete: Cascade)
+  subjectId  String
+  subject    Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  isActive   Boolean     @default(true)
+  paperExams PaperExam[]
+  updatedAt  DateTime    @updatedAt
+  createdAt  DateTime    @default(now())
 
   @@unique([academyId, subjectId])
   @@index([academyId, isActive])
@@ -461,6 +465,7 @@ model Group {
 
   members            GroupMembership[]
   assignments        GroupAssignment[]
+  paperExams         PaperExam[]
   attendanceSessions AttendanceSession[]
   groupSessions      GroupSession[]
   liveSessions       LiveSession[]
@@ -762,6 +767,7 @@ model GroupSession {
   makeupRecords AttendanceRecord[] @relation("makeupFor")
   /// C4: per-session fees posted for this class.
   feeCharges    CenterCharge[]
+  paperExams    PaperExam[]
 
   @@index([slotId, occurrenceDate])
   @@index([academyId, startAt])
@@ -853,6 +859,8 @@ model AcademyStudent {
   /// C5: follow-up cases and contact history.
   followUps      StudentFollowUp[]
   contacts       StudentContact[]
+  /// C6: paper exam results.
+  paperResults   PaperExamResult[]
 
   @@unique([academyId, studentId])
   @@unique([academyId, code])
@@ -5306,6 +5314,8 @@ enum FollowUpReason {
   LATE_STREAK
   FEES_OVERDUE
   MANUAL
+  /// C6: a published (effective) paper-exam result below the pass mark / threshold.
+  LOW_GRADE
 }
 
 enum FollowUpStatus {
@@ -5413,4 +5423,141 @@ model AcademyFollowUpSettings {
   guardianFeesVisible Boolean  @default(false)
   updatedAt           DateTime @updatedAt
   updatedBy           String?
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Center Operations C6 — Paper Exams & Grades.
+//
+// Exams sat on paper at the center, marked by staff, recorded per learner.
+// Its own source of truth: never Quiz/Assignment/Challenge/PaperImport, never
+// AI. Scores are integer hundredths (26.5 → 2650). See docs/PAPER-EXAMS.md.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PaperExamKind {
+  REGULAR
+  /// A later sitting for learners who were ABSENT / EXCUSED in a REGULAR exam.
+  MAKEUP
+}
+
+enum PaperExamStatus {
+  DRAFT
+  PUBLISHED
+  VOID
+}
+
+enum PaperResultStatus {
+  SCORED
+  ABSENT
+  EXCUSED
+}
+
+enum PaperRevisionKind {
+  /// A grade entered or changed while the exam was a DRAFT.
+  ENTRY
+  /// A grade removed while the exam was a DRAFT.
+  CLEAR
+  /// A published grade corrected — with a reason (grades.correct).
+  CORRECTION
+}
+
+/// One paper exam of one group on one academy-local date.
+model PaperExam {
+  id             String              @id @default(uuid())
+  academyId      String
+  academy        Academy             @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  groupId        String
+  group          Group               @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  /// The class it was sat in, when there was one. Never required.
+  groupSessionId String?
+  groupSession   GroupSession?       @relation(fields: [groupSessionId], references: [id], onDelete: Restrict)
+  subjectId      String?
+  subject        AcademySubject?     @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  title          String
+  /// Staff-only; never shown to guardians.
+  note           String?
+  examDate       DateTime            @db.Date
+  /// Hundredths: 30 marks → 3000.
+  maxScore       Int
+  passScore      Int?
+  kind           PaperExamKind       @default(REGULAR)
+  makeupOfExamId String?
+  makeupOf       PaperExam?          @relation("paperExamMakeup", fields: [makeupOfExamId], references: [id], onDelete: Restrict)
+  makeups        PaperExam[]         @relation("paperExamMakeup")
+  status         PaperExamStatus     @default(DRAFT)
+  createdBy      String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  publishedAt    DateTime?
+  publishedBy    String?
+  voidedAt       DateTime?
+  voidedBy       String?
+  voidReason     String?
+  requestKey     String
+  version        Int                 @default(1)
+  results        PaperExamResult[]
+  revisions      PaperExamRevision[]
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, groupId, examDate])
+  @@index([academyId, status, examDate])
+  @@index([makeupOfExamId])
+}
+
+/// One learner's result on one exam. No row = not graded yet (or not expected).
+model PaperExamResult {
+  id               String            @id @default(uuid())
+  academyId        String
+  examId           String
+  exam             PaperExam         @relation(fields: [examId], references: [id], onDelete: Restrict)
+  academyStudentId String
+  academyStudent   AcademyStudent    @relation(fields: [academyStudentId], references: [id], onDelete: Restrict)
+  status           PaperResultStatus
+  /// Hundredths; only when SCORED (0 is a real score).
+  score            Int?
+  /// Not on the exam date's roster; added on purpose (a makeup guest, a late joiner).
+  guest            Boolean           @default(false)
+  /// Set by the database: the original REGULAR exam for a SCORED result of a
+  /// non-void MAKEUP exam — one effective makeup per (original, learner).
+  makeupKey        String?
+  enteredBy        String
+  enteredAt        DateTime          @default(now())
+  version          Int               @default(1)
+
+  @@unique([examId, academyStudentId])
+  @@index([academyStudentId])
+}
+
+/// Append-only history of every grade change: never edited, never deleted.
+model PaperExamRevision {
+  id               String             @id @default(uuid())
+  academyId        String
+  examId           String
+  exam             PaperExam          @relation(fields: [examId], references: [id], onDelete: Restrict)
+  academyStudentId String
+  kind             PaperRevisionKind
+  fromStatus       PaperResultStatus?
+  fromScore        Int?
+  toStatus         PaperResultStatus?
+  toScore          Int?
+  /// CORRECTION only. Staff-only: never in logs, the audit, timelines or guardian views.
+  reason           String?
+  actorUserId      String
+  /// The bulk save this belongs to (idempotent replay).
+  batchKey         String?
+  at               DateTime           @default(now())
+
+  @@index([examId, academyStudentId, at])
+  @@index([examId, batchKey])
+}
+
+/// C6's few knobs per academy. Absent row = defaults.
+model AcademyGradeSettings {
+  academyId             String   @id
+  academy               Academy  @relation(fields: [academyId], references: [id], onDelete: Restrict)
+  /// LOW_GRADE when an exam has no pass mark and the effective result is below this percent (1–100).
+  lowGradePercent       Int      @default(50)
+  /// Whether guardians see published results. Independent of every other flag; default OFF.
+  guardianGradesVisible Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
+  updatedBy             String?
 }

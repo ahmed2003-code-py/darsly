@@ -361,6 +361,15 @@ export class GuardianService {
     };
   }
 
+  /** The child's register record in that academy (C6 grades are keyed on it). */
+  async academyRecordOf(academyId: string, studentProfileId: string): Promise<string | null> {
+    const r = await this.prisma.academyStudent.findUnique({
+      where: { academyId_studentId: { academyId, studentId: studentProfileId } },
+      select: { id: true },
+    });
+    return r?.id ?? null;
+  }
+
   // ── Guardian side ─────────────────────────────────────────────────────────
 
   private assertGuardian(user: JwtPayload) {

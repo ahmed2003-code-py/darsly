@@ -13,6 +13,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { GuardianAllowed } from '../common/decorators/guardian-allowed.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { GuardianFeesView } from '../follow-up/guardian-fees.view';
+import { GradesReadService } from '../paper-exams/grades-read.service';
 import { GuardianService } from './guardian.service';
 
 class AddGuardianDto {
@@ -114,6 +115,7 @@ export class GuardianController {
   constructor(
     private readonly guardians: GuardianService,
     private readonly guardianFees: GuardianFeesView,
+    private readonly grades: GradesReadService,
   ) {}
 
   @Public()
@@ -144,6 +146,12 @@ export class GuardianController {
   async overview(@CurrentUser() u: JwtPayload, @Param('linkId') linkId: string) {
     const view = await this.guardians.overview(u, linkId);
     // C5: fees only where the academy chose to show guardians (default off).
-    return { ...view, fees: await this.guardianFees.forChild(view.academy.id, view.student.id) };
+    // C6: published grades only where the academy chose to show guardians (default off).
+    const record = await this.guardians.academyRecordOf(view.academy.id, view.student.id);
+    return {
+      ...view,
+      fees: await this.guardianFees.forChild(view.academy.id, view.student.id),
+      grades: record ? await this.grades.guardianView(view.academy.id, record) : null,
+    };
   }
 }

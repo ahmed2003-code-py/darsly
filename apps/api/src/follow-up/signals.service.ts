@@ -6,13 +6,17 @@ import { ClassScheduleService } from '../class-ops/class-schedule.service';
 import { addDays, localDayBounds } from '../class-ops/zoned-time';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { GradesReadService, Reach } from '../paper-exams/grades-read.service';
 import { FollowUpSettingsService } from './settings.service';
 
 /** How far back a streak is looked for. Ten weekly classes fit with room. */
 const LOOKBACK_DAYS = 120;
 const PAGE = 50;
 
-export type SignalReason = 'ABSENT_TODAY' | 'ABSENT_STREAK' | 'LATE_STREAK' | 'FEES_OVERDUE';
+export type SignalReason =
+  'ABSENT_TODAY' | 'ABSENT_STREAK' | 'LATE_STREAK' | 'FEES_OVERDUE' | 'LOW_GRADE';
+/** How far back a published exam can still raise LOW_GRADE. */
+const LOW_GRADE_DAYS = 60;
 
 export interface Signal {
   academyStudentId: string;
@@ -59,12 +63,23 @@ export class FollowUpSignalsService {
     private readonly fees: CenterFeesService,
     private readonly flags: FeatureFlagsService,
     private readonly settings: FollowUpSettingsService,
+    private readonly grades: GradesReadService,
   ) {}
+
+  /**
+   * C6 LOW_GRADE is shown only to a caller who may see grades (grades.view),
+   * and only for the groups they reach; undefined = no grade signals at all
+   * (Reception: follow-up without grades).
+   */
+  async gradeReach(ctx: AcademyContext): Promise<Reach | undefined> {
+    if (!ctx.can('grades.view')) return undefined;
+    return this.grades.reach(ctx);
+  }
 
   /** Every signal in the academy (or for one learner), unordered. */
   async compute(
     academyId: string,
-    opts: { academyStudentId?: string; withAmounts?: boolean } = {},
+    opts: { academyStudentId?: string; withAmounts?: boolean; grades?: Reach } = {},
   ) {
     const [clock, cfg, feesOn] = await Promise.all([
       this.schedule.academyClock(academyId),
@@ -174,6 +189,16 @@ export class FollowUpSignalsService {
         ? this.fees.overdueLearners(academyId, addDays(today, -cfg.overdueDays))
         : Promise.resolve([]),
     ]);
+    // C6, read through its own service (C5 never copies grades).
+    const low =
+      opts.grades !== undefined
+        ? await this.grades.lowGrades(
+            academyId,
+            addDays(today, -LOW_GRADE_DAYS),
+            opts.grades,
+            opts.academyStudentId,
+          )
+        : [];
 
     const out: Signal[] = [];
     for (const r of absentToday)
@@ -236,6 +261,17 @@ export class FollowUpSignalsService {
         ...(opts.withAmounts ? { overdueCents: o.overdueCents } : {}),
       });
     }
+    for (const g of low)
+      out.push({
+        academyStudentId: g.academyStudentId,
+        reason: 'LOW_GRADE',
+        signalKey: g.examId,
+        groupId: g.groupId,
+        groupName: g.groupName,
+        // Whole percent of the effective result (display only).
+        count: Math.floor(g.pctBps / 100),
+        since: g.examDate,
+      });
     return { today, timezone: clock.timezone, settings: cfg, signals: out };
   }
 
@@ -251,6 +287,7 @@ export class FollowUpSignalsService {
     const withAmounts = ctx.can('fees.view');
     const { today, timezone, settings, signals } = await this.compute(ctx.academyId, {
       withAmounts,
+      grades: await this.gradeReach(ctx),
     });
     const ids = [...new Set(signals.map((s) => s.academyStudentId))];
     const { start } = localDayBounds(today, timezone);
@@ -288,9 +325,21 @@ export class FollowUpSignalsService {
     const caseOf = (s: Signal) =>
       openBy.get(keyOf(s.academyStudentId, s.reason, s.signalKey)) ?? null;
     const touched = new Map(contacted.map((c) => [c.academyStudentId, c._max.contactedAt]));
-    const totals = { ABSENT_TODAY: 0, ABSENT_STREAK: 0, LATE_STREAK: 0, FEES_OVERDUE: 0 };
+    const totals = {
+      ABSENT_TODAY: 0,
+      ABSENT_STREAK: 0,
+      LATE_STREAK: 0,
+      FEES_OVERDUE: 0,
+      LOW_GRADE: 0,
+    };
     for (const s of signals) totals[s.reason]++;
-    const ORDER: SignalReason[] = ['ABSENT_TODAY', 'ABSENT_STREAK', 'LATE_STREAK', 'FEES_OVERDUE'];
+    const ORDER: SignalReason[] = [
+      'ABSENT_TODAY',
+      'ABSENT_STREAK',
+      'LATE_STREAK',
+      'FEES_OVERDUE',
+      'LOW_GRADE',
+    ];
     const rows = signals
       .filter((s) => !q.reason || s.reason === q.reason)
       .filter((s) => !q.notContacted || !touched.has(s.academyStudentId))

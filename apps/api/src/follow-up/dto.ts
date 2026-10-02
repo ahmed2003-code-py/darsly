@@ -24,6 +24,7 @@ export const REASONS = [
   'LATE_STREAK',
   'FEES_OVERDUE',
   'MANUAL',
+  'LOW_GRADE',
 ] as const;
 export type Reason = (typeof REASONS)[number];
 export const CHANNELS = ['PHONE_CALL', 'WHATSAPP', 'IN_PERSON', 'APP_MESSAGE', 'OTHER'] as const;

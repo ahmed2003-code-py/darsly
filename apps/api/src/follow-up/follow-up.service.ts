@@ -51,7 +51,10 @@ export class FollowUpService {
     const s = await this.learner(ctx, dto.academyStudentId);
     const signalKey = dto.reason === 'MANUAL' ? null : dto.signalKey!;
     if (signalKey) {
-      const { signals } = await this.signals.compute(ctx.academyId, { academyStudentId: s.id });
+      const { signals } = await this.signals.compute(ctx.academyId, {
+        academyStudentId: s.id,
+        grades: await this.signals.gradeReach(ctx),
+      });
       if (!signals.some((x) => x.reason === dto.reason && x.signalKey === signalKey))
         throw new ConflictException({
           message: 'This signal is not (or no longer) raised for this learner',

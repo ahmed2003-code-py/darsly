@@ -3,6 +3,7 @@ import { AcademyModule } from '../academy/academy.module';
 import { CenterFeesModule } from '../center-fees/center-fees.module';
 import { ClassOpsModule } from '../class-ops/class-ops.module';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
+import { PaperExamsModule } from '../paper-exams/paper-exams.module';
 import { FollowUpController } from './follow-up.controller';
 import { FollowUpService } from './follow-up.service';
 import { GuardianFeesView } from './guardian-fees.view';
@@ -16,7 +17,7 @@ import { TimelineService } from './timeline.service';
  * only) and guardians; writes nothing in any of them (follow-up.boundary.spec.ts).
  */
 @Module({
-  imports: [AcademyModule, ClassOpsModule, FeatureFlagsModule, CenterFeesModule],
+  imports: [AcademyModule, ClassOpsModule, FeatureFlagsModule, CenterFeesModule, PaperExamsModule],
   controllers: [FollowUpController],
   providers: [
     FollowUpService,

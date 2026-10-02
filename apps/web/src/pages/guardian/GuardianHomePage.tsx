@@ -4,6 +4,7 @@ import Avatar from '../../components/Avatar';
 import { EmptyState, ErrorNote, Skeleton, Spinner } from '../../components/ui';
 import { GuardianOverview, useGuardianChildren, useGuardianOverview } from '../../lib/guardian';
 import { dayLabel, Money } from '../fees/feeParts';
+import { formatMarks, formatPct } from '../../lib/paperExams';
 import { ActivityList, AttendanceCard, CourseProgressList, LiveList } from '../care/CareViews';
 
 /**
@@ -120,6 +121,8 @@ export default function GuardianHomePage() {
           <AttendanceCard attendance={o.attendance} />
           {/* C5: only when the academy chose to show guardians fees (off by default). */}
           {o.fees && <GuardianFeesCard fees={o.fees} />}
+          {/* C6: only when the academy chose to show guardians grades (off by default). */}
+          {o.grades && <GuardianGradesCard grades={o.grades} />}
           <LiveList live={o.live} />
           <ActivityList activity={o.activity} />
           <p className="px-1 text-center text-xs text-outline">{t('guardian.privacyNote')}</p>
@@ -179,6 +182,58 @@ function GuardianFeesCard({ fees }: { fees: NonNullable<GuardianOverview['fees']
                 currency={r.currency}
                 className={`shrink-0 font-bold ${r.reversed ? 'line-through opacity-60' : ''}`}
               />
+            </li>
+          ))}
+        </ul>
+      )}
+    </article>
+  );
+}
+
+/**
+ * The child's published exam grades — the mark, the maximum, the percentage
+ * and pass/fail where the exam has a pass mark. Nothing internal: no drafts,
+ * notes, correction reasons, who entered it, other learners or ranks.
+ */
+function GuardianGradesCard({ grades }: { grades: NonNullable<GuardianOverview['grades']> }) {
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language === 'en' ? 'en' : 'ar';
+  const newest = [...grades].reverse();
+  return (
+    <article className="card p-4">
+      <h2 className="mb-3 font-heading text-lg font-bold text-on-surface">
+        {t('guardian.grades.title')}
+      </h2>
+      {newest.length === 0 ? (
+        <p className="text-sm text-on-surface-variant">{t('guardian.grades.none')}</p>
+      ) : (
+        <ul className="divide-y divide-outline-variant/40 text-sm">
+          {newest.map((g) => (
+            <li key={g.examId} className="flex items-center gap-2 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-semibold">{g.title}</span>
+                <span className="block text-xs text-on-surface-variant">
+                  {dayLabel(g.examDate, lang)}
+                  {g.kind === 'MAKEUP' && ` · ${t('exams.kind.MAKEUP')}`}
+                  {g.passed != null && ` · ${t(g.passed ? 'exams.passed' : 'exams.failed')}`}
+                </span>
+              </span>
+              <span className="shrink-0 text-end tabular-nums" dir="ltr">
+                {g.status === 'SCORED' && g.score != null ? (
+                  <>
+                    <span className="block font-bold">
+                      {formatMarks(g.score)} / {formatMarks(g.maxScore)}
+                    </span>
+                    {g.pctBps != null && (
+                      <span className="block text-xs text-on-surface-variant">
+                        {formatPct(g.pctBps)}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-on-surface-variant">{t(`exams.status.${g.status}`)}</span>
+                )}
+              </span>
             </li>
           ))}
         </ul>

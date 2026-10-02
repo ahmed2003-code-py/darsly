@@ -139,6 +139,13 @@ export const FEES_ITEM: NavItem = {
   labelKey: 'nav.centerFees',
 };
 
+/** Paper exams and grades (C6): exams of the groups this person reaches. */
+export const EXAMS_ITEM: NavItem = {
+  to: '/center/exams',
+  icon: 'grading',
+  labelKey: 'nav.exams',
+};
+
 export const FOLLOW_UP_ITEM: NavItem = {
   to: '/center/follow-up',
   icon: 'support_agent',

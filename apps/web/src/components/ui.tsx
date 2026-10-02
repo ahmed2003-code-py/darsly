@@ -388,11 +388,11 @@ export function Modal({
         transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h3 id={titleId} className="font-heading text-xl font-bold tracking-tight">
+          <h3 id={titleId} className="min-w-0 font-heading text-xl font-bold tracking-tight">
             {title}
           </h3>
           <button
-            className="-me-1.5 grid h-11 w-11 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
+            className="-me-1.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-outline transition-colors hover:bg-surface-container-low hover:text-on-surface"
             onClick={onClose}
             aria-label={i18n.t('common.close')}
           >

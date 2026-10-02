@@ -160,7 +160,8 @@
     },
     "desk": "Desk",
     "centerFees": "Fees",
-    "followUp": "Student follow-up"
+    "followUp": "Student follow-up",
+    "exams": "Exams & grades"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1054,6 +1055,10 @@
       "studentFollowUp": {
         "label": "Student & guardian follow-up",
         "hint": "Who needs follow-up from absences, lateness and fees, logging contacts with families, and inviting a guardian from the registration number"
+      },
+      "paperExams": {
+        "label": "Paper exams & grades",
+        "hint": "Paper exams per group with marks, publishing, corrections and makeups; low grades in follow-up; guardians see grades only if the center chooses"
       }
     },
     "centersTitle": "Centers",
@@ -3297,7 +3302,34 @@
     "eCaseNotFound": "This case does not exist.",
     "eAssigneeInvalid": "That person cannot work on follow-up here.",
     "eContactGuardianNotFound": "That guardian is not linked to this student (or was removed).",
-    "eContactPartyMismatch": "Pick a guardian only when the guardian is the one you contacted."
+    "eContactPartyMismatch": "Pick a guardian only when the guardian is the one you contacted.",
+    "eExamNotFound": "That exam does not exist.",
+    "ePassAboveMax": "The pass mark can't be above the full mark.",
+    "eMakeupNotPossible": "A makeup is only for a published regular exam.",
+    "eExamVoid": "This exam was voided — it can't change.",
+    "eExamPublished": "This exam is published — its date and marks are fixed; correct a grade instead.",
+    "eRosterLocked": "Results were entered, so the date and class can't change now.",
+    "eMakeupMarksFixed": "A makeup keeps the original exam's marks.",
+    "eMaxBelowGrade": "Some entered marks are above that full mark.",
+    "eExamNotDraft": "Only a draft can be deleted — void it instead.",
+    "eExamHasResults": "Results were entered — clear them or void the exam.",
+    "eExamHasMakeups": "This exam has a makeup — void the makeup first.",
+    "eExamHasHistory": "Grades were entered on this exam before — void it instead of deleting.",
+    "eRowsDuplicate": "The same learner appears twice — reload and try again.",
+    "eMarksAboveMax": "The mark is above the exam's full mark.",
+    "eNotMakeupCandidate": "That learner wasn't absent or excused in the original, or already has a makeup.",
+    "eNotOnRoster": "That learner wasn't in the group on the exam date.",
+    "eRowsInvalid": "Some marks couldn't be saved — see the marked learners.",
+    "eMakeupAlreadyTaken": "That learner already has a result in another makeup of this exam.",
+    "eExamEmpty": "Enter at least one result before publishing.",
+    "eRosterIncomplete": "Some learners have no result yet — enter a mark, Absent or Excused for each.",
+    "eRosterMismatch": "Some results are for learners who weren't in the group that day.",
+    "eExamNotPublished": "Only a published grade is corrected — while a draft, just change it.",
+    "eResultNotFound": "That learner has no result in this exam.",
+    "eVersionConflict": "Someone changed this grade meanwhile — reload to see it.",
+    "eNoChange": "That's the same as the current grade.",
+    "eSubjectNotFound": "That subject does not exist.",
+    "eExamKeyReused": "This was already used for a different exam — start again."
   },
   "myStudio": {
     "title": "My Studio",
@@ -5008,7 +5040,8 @@
       "register": "Student register",
       "desk": "Reception desk",
       "fees": "Center fees",
-      "followup": "Student follow-up"
+      "followup": "Student follow-up",
+      "grades": "Exams & grades"
     },
     "cap": {
       "student.view": {
@@ -5125,6 +5158,21 @@
         "short": "Follows up",
         "label": "Follows up with families",
         "hint": "Opens and closes cases and logs contacts with families."
+      },
+      "grades.view": {
+        "short": "Grades",
+        "label": "See exams and grades",
+        "hint": "Paper exams, results and statistics of the groups they are assigned to."
+      },
+      "grades.manage": {
+        "short": "Enter grades",
+        "label": "Create exams and enter grades",
+        "hint": "Create paper exams, enter draft marks and publish — in their assigned groups."
+      },
+      "grades.correct": {
+        "short": "Correct grades",
+        "label": "Correct published grades",
+        "hint": "Change a published grade with a reason, and void an exam — in their assigned groups."
       }
     },
     "direct": {
@@ -5206,6 +5254,10 @@
       "overdue": "Overdue",
       "noReceipts": "No receipts yet.",
       "reversed": "reversed"
+    },
+    "grades": {
+      "title": "Exam grades",
+      "none": "No published grades yet"
     }
   },
   "care": {
@@ -5269,7 +5321,8 @@
       "payments": "Payments",
       "care": "Conversations",
       "fees": "Center fees",
-      "followup": "Follow-up"
+      "followup": "Follow-up",
+      "grades": "Grades"
     },
     "tile": {
       "courses": "Courses",
@@ -6107,7 +6160,8 @@
       "ABSENT_STREAK": "Absences in a row",
       "LATE_STREAK": "Late in a row",
       "FEES_OVERDUE": "Fees overdue",
-      "MANUAL": "Manual follow-up"
+      "MANUAL": "Manual follow-up",
+      "LOW_GRADE": "Low grade"
     },
     "detail": {
       "absentToday": "Missed today's {{group}} class",
@@ -6116,7 +6170,8 @@
       "lateStreak_one": "Late once in {{group}} since {{date}}",
       "lateStreak_other": "Late {{count}} classes in a row in {{group}} since {{date}}",
       "feesOverdue_one": "Fees overdue for {{count}} day",
-      "feesOverdue_other": "Fees overdue for {{count}} days"
+      "feesOverdue_other": "Fees overdue for {{count}} days",
+      "lowGrade": "{{pct}}% in a {{group}} exam on {{date}}"
     },
     "relationship": {
       "FATHER": "Father",
@@ -6235,7 +6290,9 @@
       "FEE_VOID": "Charge voided: {{description}}",
       "FEE_ADJUSTMENT": "Discount/correction: {{description}}",
       "FEE_COLLECTION": "Payment — receipt {{receipt}}",
-      "FEE_REVERSAL": "Collection reversed — receipt {{receipt}}"
+      "FEE_REVERSAL": "Collection reversed — receipt {{receipt}}",
+      "GRADE_PUBLISHED": "Grade published: {{title}}",
+      "GRADE_CORRECTED": "Grade corrected: {{title}}"
     },
     "settings": {
       "absenceStreak": "Absences in a row that raise a signal",
@@ -6251,5 +6308,173 @@
     },
     "offline": "No connection — nothing was recorded. When you are back online press Try again (it will not be recorded twice).",
     "retry": "Try again"
+  },
+  "exams": {
+    "off": "Paper exams are not switched on here",
+    "offHint": "The center owner can ask Darsly to switch on paper exams and grades.",
+    "noAccess": "You can't see grades here",
+    "noAccessHint": "Ask the center owner for access to exams and grades.",
+    "ungraded": "—",
+    "passed": "Passed",
+    "failed": "Below the pass mark",
+    "kind": {
+      "REGULAR": "Exam",
+      "MAKEUP": "Makeup"
+    },
+    "status": {
+      "SCORED": "Scored",
+      "ABSENT": "Absent",
+      "EXCUSED": "Excused"
+    },
+    "examStatus": {
+      "DRAFT": "Draft",
+      "PUBLISHED": "Published",
+      "VOID": "Void"
+    },
+    "page": {
+      "title": "Exams & grades",
+      "sub": "Paper exams of your groups — enter marks, publish, and follow results. Separate from online quizzes.",
+      "academy": "Center",
+      "tab": {
+        "exams": "Exams",
+        "settings": "Settings"
+      }
+    },
+    "list": {
+      "allGroups": "All my groups",
+      "status": "Status",
+      "anyStatus": "Any status",
+      "new": "New exam",
+      "empty": "No exams yet",
+      "emptyHint": "Create a paper exam for one of your groups, then enter the marks.",
+      "outOf": "out of {{max}}"
+    },
+    "form": {
+      "newTitle": "New paper exam",
+      "editTitle": "Edit exam",
+      "group": "Group",
+      "pickGroup": "Choose a group",
+      "title": "Title",
+      "date": "Exam date",
+      "dateHint": "The learners in the group on this date are the exam's roster.",
+      "max": "Full mark",
+      "pass": "Pass mark (optional)",
+      "passHint": "Leave empty for no pass/fail.",
+      "marksInvalid": "Enter a number with at most two decimals (e.g. 26.5)",
+      "passAboveMax": "The pass mark can't be above the full mark",
+      "note": "Note (staff only)",
+      "noteHint": "Never shown to learners or guardians.",
+      "create": "Create exam",
+      "publishedFixed": "The date and marks are fixed once published.",
+      "makeupMarksFixed": "A makeup keeps the original exam's marks."
+    },
+    "stats": {
+      "average": "Average",
+      "median": "Median",
+      "highest": "Highest",
+      "lowest": "Lowest",
+      "passRate": "Pass rate",
+      "counts": "{{scored}} scored · {{absent}} absent · {{excused}} excused",
+      "scoredOnly": "Statistics count scored results only."
+    },
+    "sheet": {
+      "back": "All exams",
+      "passMark": "pass mark {{pass}}",
+      "makeupOf": "Makeup of",
+      "makeups": "Makeups:",
+      "voided": "This exam was voided: {{reason}}. It counts nowhere.",
+      "edit": "Edit",
+      "export": "Download CSV",
+      "delete": "Delete draft",
+      "progress": "{{graded}} of {{total}} entered",
+      "unsaved_one": "{{count}} change not saved",
+      "unsaved_other": "{{count}} changes not saved",
+      "search": "Search by name or code",
+      "sort": "Sort",
+      "sortBy": {
+        "name": "By name",
+        "code": "By code",
+        "scoreDesc": "Highest mark first",
+        "ungradedFirst": "Not entered first"
+      },
+      "onlyUngraded": "Only not entered",
+      "keysHint": "Enter or ↓ next learner · ↑ previous · A absent · E excused · Ctrl+S save",
+      "noRoster": "Nobody was in this group on the exam date",
+      "noCandidates": "Nobody is waiting for this makeup",
+      "noMatch": "No learner matches.",
+      "guest": "added by hand",
+      "withdrawn": "withdrawn",
+      "corrected": "corrected",
+      "scoreFor": "Mark for {{name}}",
+      "aboveMax": "Above the full mark ({{max}})",
+      "missing": "No result yet — enter a mark, Absent or Excused.",
+      "conflict": "Someone else saved {{value}} meanwhile.",
+      "conflictCleared": "Someone else cleared this meanwhile.",
+      "keepMine": "Keep mine",
+      "useTheirs": "Use theirs",
+      "save": "Save",
+      "saved_one": "Saved {{count}} result.",
+      "saved_other": "Saved {{count}} results.",
+      "savedWithConflicts_one": "Saved — {{count}} learner was changed by someone else; choose below.",
+      "savedWithConflicts_other": "Saved — {{count}} learners were changed by someone else; choose below.",
+      "alreadySaved": "Already saved.",
+      "allSaved": "Everything is saved.",
+      "offline": "Not saved — no connection. Your marks are still here; save again when you're back online.",
+      "fixFirst_one": "Fix {{count}} mark first.",
+      "fixFirst_other": "Fix {{count}} marks first.",
+      "resolveFirst_one": "Choose for {{count}} changed learner first.",
+      "resolveFirst_other": "Choose for {{count}} changed learners first.",
+      "unsavedTitle": "Leave without saving?",
+      "unsavedBody": "Marks you typed and did not save will be lost.",
+      "unsavedLeave": "Leave"
+    },
+    "publish": {
+      "do": "Publish",
+      "title": "Publish the grades?",
+      "body": "{{graded}} of {{total}} learners have a result. After publishing, a grade changes only by a correction with a reason.",
+      "saveFirst": "Save your changes first"
+    },
+    "makeup": {
+      "open": "Makeup exam",
+      "title": "Makeup exam",
+      "defaultTitle": "Makeup — {{title}}",
+      "who_one": "For the {{count}} learner absent or excused (anyone already holding a makeup is left out).",
+      "who_other": "For the {{count}} learners absent or excused (anyone already holding a makeup is left out).",
+      "marks": "Same full mark ({{max}}) and pass mark as the original. The original absence stays on record.",
+      "create": "Create makeup"
+    },
+    "correct": {
+      "open": "Correct",
+      "title": "Correct {{name}}'s grade",
+      "now": "Now:",
+      "score": "New mark (out of {{max}})",
+      "reason": "Why",
+      "reasonHint": "Required. Kept in the exam's history; never shown to learners or guardians.",
+      "save": "Save correction"
+    },
+    "void": {
+      "open": "Void exam",
+      "title": "Void this exam?",
+      "body": "“{{title}}” will be kept with your reason but count nowhere — not in statistics, follow-up or the guardian view. This can't be undone.",
+      "reason": "Reason",
+      "do": "Void exam"
+    },
+    "settings": {
+      "lowGradePercent": "Low grade below (%)",
+      "lowGradeHint": "For exams without a pass mark: a published result below this percentage appears in follow-up as a low grade.",
+      "guardianGradesVisible": "Show guardians published grades",
+      "guardianGradesHint": "Off by default. Guardians then see only published results: title, date, mark, percentage and pass/fail — never drafts, notes or other learners.",
+      "saved": "Saved"
+    },
+    "student": {
+      "none": "No published grades in your groups yet"
+    },
+    "rowErr": {
+      "STUDENT_NOT_FOUND": "Not on this center's register.",
+      "MARKS_ABOVE_MAX": "Above the full mark.",
+      "NOT_ON_ROSTER": "Wasn't in this group on the exam date.",
+      "NOT_MAKEUP_CANDIDATE": "Wasn't absent or excused in the original exam, or already has a makeup.",
+      "STUDENT_WITHDRAWN": "Has withdrawn from the center."
+    }
   }
 }

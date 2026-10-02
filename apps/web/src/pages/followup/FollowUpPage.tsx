@@ -18,6 +18,7 @@ import {
   useFollowUpSettings,
   useSignals,
 } from '../../lib/followUp';
+import { usePaperExamsAccess } from '../../lib/paperExams';
 import {
   AssignDialog,
   CaseLine,
@@ -124,12 +125,17 @@ function Today({
   const q = useSignals(academyId, { reason, notContacted, page });
   const fees = useFeesAccess(academyId);
   const currency = fees.data?.currency ?? undefined;
+  // C6: the low-grade card only for someone who may see grades.
+  const grades = !!usePaperExamsAccess(academyId).data?.canView;
+  const reasons = SIGNAL_REASONS.filter((r) => r !== 'LOW_GRADE' || grades);
   const d = q.data;
   return (
     <section>
       {d && (
-        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SIGNAL_REASONS.map((r) => (
+        <div
+          className={`mb-4 grid grid-cols-2 gap-2 ${reasons.length > 4 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}
+        >
+          {reasons.map((r) => (
             <button
               key={r}
               type="button"
@@ -140,7 +146,7 @@ function Today({
               <span className="line-clamp-2 block text-xs text-on-surface-variant">
                 {t(`followUp.reason.${r}`)}
               </span>
-              <span className="block text-lg font-extrabold tabular-nums">{d.totals[r]}</span>
+              <span className="block text-lg font-extrabold tabular-nums">{d.totals[r] ?? 0}</span>
             </button>
           ))}
         </div>

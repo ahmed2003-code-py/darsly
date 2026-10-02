@@ -63,6 +63,24 @@ export interface GuardianOverview {
    * C5: the child's center fees — only where the academy chose to show
    * guardians (off by default). What is owed and the receipts; nothing internal.
    */
+  /**
+   * C6: the child's published paper-exam grades — only where the academy chose
+   * to show guardians (off by default). Never drafts, notes, reasons or ranks.
+   */
+  grades?:
+    | {
+        examId: string;
+        title: string;
+        examDate: string;
+        kind: 'REGULAR' | 'MAKEUP';
+        makeupOfExamId: string | null;
+        status: 'SCORED' | 'ABSENT' | 'EXCUSED';
+        score: number | null;
+        maxScore: number;
+        pctBps: number | null;
+        passed: boolean | null;
+      }[]
+    | null;
   fees?: {
     currency: string;
     outstandingCents: number;

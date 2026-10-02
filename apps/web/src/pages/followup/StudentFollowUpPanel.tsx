@@ -10,6 +10,7 @@ import {
   useStudentFollowUp,
   whatsappUrl,
 } from '../../lib/followUp';
+import { formatMarks } from '../../lib/paperExams';
 import { dayLabel, Money } from '../fees/feeParts';
 import {
   AssignDialog,
@@ -309,6 +310,8 @@ const TL_ICON: Record<string, string> = {
   FEE_ADJUSTMENT: 'percent',
   FEE_COLLECTION: 'payments',
   FEE_REVERSAL: 'undo',
+  GRADE_PUBLISHED: 'grading',
+  GRADE_CORRECTED: 'edit_note',
 };
 
 /** The learner's history, newest first — exactly what the server chose to send. */
@@ -414,11 +417,19 @@ function TimelineText({ item }: { item: TimelineItem }) {
         ? `${t(`followUp.channel.${String(d.channel)}`)} · ${t(`followUp.outcome.${String(d.outcome)}`)}`
         : item.kind.startsWith('CASE_')
           ? t(`followUp.reason.${String(d.reason)}`)
-          : '';
+          : item.kind.startsWith('GRADE_')
+            ? (d.status === 'SCORED' &&
+              typeof d.score === 'number' &&
+              typeof d.maxScore === 'number'
+                ? `${formatMarks(d.score)} / ${formatMarks(d.maxScore)}`
+                : t(`exams.status.${String(d.status)}`)) +
+              (d.makeup ? ` · ${t('exams.kind.MAKEUP')}` : '')
+            : '';
   return (
     <span className="block">
       <span className="font-semibold">
         {t(`followUp.tl.${item.kind}`, {
+          title: d.title ?? '',
           group: d.group ?? '',
           from: d.from ?? '',
           to: d.to ?? '',

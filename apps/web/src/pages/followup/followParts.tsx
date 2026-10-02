@@ -26,12 +26,13 @@ const REASON_ICON: Record<CaseReason, string> = {
   ABSENT_STREAK: 'person_off',
   LATE_STREAK: 'schedule',
   FEES_OVERDUE: 'payments',
+  LOW_GRADE: 'grading',
   MANUAL: 'edit_note',
 };
 
 export function ReasonChip({ reason }: { reason: CaseReason }) {
   const { t } = useTranslation();
-  const warn = reason === 'ABSENT_STREAK' || reason === 'FEES_OVERDUE';
+  const warn = reason === 'ABSENT_STREAK' || reason === 'FEES_OVERDUE' || reason === 'LOW_GRADE';
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -85,6 +86,17 @@ export function SignalDetail({ row, currency }: { row: SignalRow; currency?: str
               <Money cents={row.overdueCents} currency={currency} />
             </>
           )}
+        </>
+      );
+    case 'LOW_GRADE':
+      // The whole percent of the effective (published) result — never the mark sheet.
+      return (
+        <>
+          {t('followUp.detail.lowGrade', {
+            pct: row.count,
+            group: row.groupName ?? '',
+            date: dayLabel(row.since, lang),
+          })}
         </>
       );
   }

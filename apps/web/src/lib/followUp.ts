@@ -10,7 +10,8 @@ import { api } from './api';
  * staff member's own phone (tel: / wa.me), and its outcome is then logged.
  */
 
-export type SignalReason = 'ABSENT_TODAY' | 'ABSENT_STREAK' | 'LATE_STREAK' | 'FEES_OVERDUE';
+export type SignalReason =
+  'ABSENT_TODAY' | 'ABSENT_STREAK' | 'LATE_STREAK' | 'FEES_OVERDUE' | 'LOW_GRADE';
 export type CaseReason = SignalReason | 'MANUAL';
 export type CaseStatus = 'OPEN' | 'RESOLVED' | 'DISMISSED';
 export type Channel = 'PHONE_CALL' | 'WHATSAPP' | 'IN_PERSON' | 'APP_MESSAGE' | 'OTHER';
@@ -23,6 +24,9 @@ export const SIGNAL_REASONS: SignalReason[] = [
   'ABSENT_STREAK',
   'LATE_STREAK',
   'FEES_OVERDUE',
+  // C6: a published grade below the pass mark / the academy's threshold —
+  // only for someone who may see grades.
+  'LOW_GRADE',
 ];
 export const CHANNELS: Channel[] = ['PHONE_CALL', 'WHATSAPP', 'IN_PERSON', 'APP_MESSAGE', 'OTHER'];
 export const OUTCOMES: Outcome[] = [

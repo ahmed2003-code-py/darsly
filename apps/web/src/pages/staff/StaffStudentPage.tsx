@@ -19,10 +19,20 @@ import { useFeesAccess } from '../../lib/centerFees';
 import StudentFeesPanel from '../fees/StudentFeesPanel';
 import { useFollowUpAccess } from '../../lib/followUp';
 import StudentFollowUpPanel from '../followup/StudentFollowUpPanel';
+import { usePaperExamsAccess } from '../../lib/paperExams';
+import StudentGradesPanel from '../exams/StudentGradesPanel';
 import RegistryCard from '../center/RegistryCard';
 
 type Tab =
-  'overview' | 'progress' | 'groups' | 'guardians' | 'payments' | 'fees' | 'followup' | 'care';
+  | 'overview'
+  | 'progress'
+  | 'groups'
+  | 'guardians'
+  | 'payments'
+  | 'fees'
+  | 'followup'
+  | 'grades'
+  | 'care';
 
 /**
  * Student 360 — one student, as far as the viewer's reach goes.
@@ -49,6 +59,8 @@ export default function StaffStudentPage() {
   const feesAccess = useFeesAccess(academyId);
   // Student follow-up (C5) — cases, contacts and the timeline.
   const followUpAccess = useFollowUpAccess(academyId);
+  // Paper exams (C6) — published grades in the groups this person reaches.
+  const gradesAccess = usePaperExamsAccess(academyId);
   const record = useRegistryRecord(
     academyId,
     id,
@@ -56,6 +68,8 @@ export default function StaffStudentPage() {
   );
   const feesFor = feesAccess.data?.canView ? record.data?.id : undefined;
   const followUpFor = followUpAccess.data?.canView ? record.data?.id : undefined;
+  // By the learner's profile: a teacher grades without register access.
+  const gradesFor = gradesAccess.data?.canView ? id : undefined;
 
   const tabs = useMemo(
     () =>
@@ -68,12 +82,13 @@ export default function StaffStudentPage() {
           ['payments', !!s?.can.payments],
           ['fees', !!feesFor],
           ['followup', !!followUpFor],
+          ['grades', !!gradesFor],
           ['care', true],
         ] as [Tab, boolean][]
       )
         .filter(([, ok]) => ok)
         .map(([k]) => k),
-    [s, feesFor, followUpFor],
+    [s, feesFor, followUpFor, gradesFor],
   );
 
   if (ws.isLoading || student.isLoading) {
@@ -258,6 +273,9 @@ export default function StaffStudentPage() {
           canManage={!!followUpAccess.data?.canManage}
           onGoGuardians={s.can.guardians ? () => setTab('guardians') : undefined}
         />
+      )}
+      {tab === 'grades' && gradesFor && academyId && (
+        <StudentGradesPanel academyId={academyId} studentId={gradesFor} />
       )}
       {tab === 'care' &&
         (!care.data?.conversations.length ? (

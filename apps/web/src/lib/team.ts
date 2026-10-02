@@ -30,7 +30,10 @@ export type AssistantCapability =
   | 'fees.reverse'
   | 'fees.report'
   | 'followup.view'
-  | 'followup.manage';
+  | 'followup.manage'
+  | 'grades.view'
+  | 'grades.manage'
+  | 'grades.correct';
 
 export interface AssistantGrant {
   title: string;
@@ -101,6 +104,9 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   },
   // Student follow-up (C5) — offered only where it is switched on.
   { key: 'followup', caps: ['followup.view', 'followup.manage'] },
+  // Paper exams and grades (C6) — offered only where they are switched on.
+  // Group-scoped: an assistant grades only the groups they are assigned to.
+  { key: 'grades', caps: ['grades.view', 'grades.manage', 'grades.correct'] },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
@@ -180,6 +186,8 @@ export const DESK_ONLY_PRESETS = new Set<PresetKey>(['frontDesk']);
 export const FEES_ONLY_GROUPS = new Set(['fees']);
 /** …and student follow-up (C5). */
 export const FOLLOWUP_ONLY_GROUPS = new Set(['followup']);
+/** …and paper exams (C6). */
+export const GRADES_ONLY_GROUPS = new Set(['grades']);
 /** Groups that reach the whole academy, so never granted course by course. */
 export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees', 'followup']);
 

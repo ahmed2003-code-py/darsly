@@ -27,6 +27,7 @@ import {
   DESK_ITEM,
   FEES_ITEM,
   FOLLOW_UP_ITEM,
+  EXAMS_ITEM,
   MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
@@ -35,6 +36,7 @@ import { useClassAccess, useMyClassAccess } from '../lib/classOps';
 import { useDeskAccess } from '../lib/desk';
 import { useFeesAccess } from '../lib/centerFees';
 import { useFollowUpAccess } from '../lib/followUp';
+import { useMyExamsAccess } from '../lib/paperExams';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -124,6 +126,9 @@ export default function Layout({ children }: { children: ReactNode }) {
   const followUp = useFollowUpAccess(
     staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
   );
+  // Paper exams (C6): in any workspace of theirs where it is on and they may
+  // see grades (a Center teacher's home is usually their own academy).
+  const myExams = useMyExamsAccess(staffish);
   const baseNav = [
     roleNav[0],
     ...(desk.data?.canCheckIn ? [DESK_ITEM] : []),
@@ -131,6 +136,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
     ...(fees.data?.canView ? [FEES_ITEM] : []),
     ...(followUp.data?.canView ? [FOLLOW_UP_ITEM] : []),
+    ...(myExams.data?.enabled ? [EXAMS_ITEM] : []),
     ...roleNav.slice(1),
   ].filter(Boolean);
   const nav = chatClosed ? baseNav.filter((n) => n.to !== '/messages') : baseNav;

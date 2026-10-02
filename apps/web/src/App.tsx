@@ -43,6 +43,8 @@ const ClassPage = lazyPage(() => import('./pages/classes/ClassPage'));
 const DeskPage = lazyPage(() => import('./pages/desk/DeskPage'));
 const CenterFeesPage = lazyPage(() => import('./pages/fees/CenterFeesPage'));
 const FollowUpPage = lazyPage(() => import('./pages/followup/FollowUpPage'));
+const ExamsPage = lazyPage(() => import('./pages/exams/ExamsPage'));
+const ExamSheetPage = lazyPage(() => import('./pages/exams/ExamSheetPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
 const AdminTeachersPage = lazyPage(() => import('./pages/admin/AdminTeachersPage'));
@@ -805,6 +807,24 @@ export default function App() {
             element={
               <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
                 <FollowUpPage />
+              </RequireAuth>
+            }
+          />
+          {/* Paper exams and grades (Center Operations C6). The pages and the API
+              check grades.* (group-scoped) and the paperExams flag. */}
+          <Route
+            path="/center/exams"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <ExamsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/exams/:id"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <ExamSheetPage />
               </RequireAuth>
             }
           />

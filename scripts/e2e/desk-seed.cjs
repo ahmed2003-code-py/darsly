@@ -106,6 +106,8 @@ function code() {
       'paperExams',
       // C7: the day's operations and its close.
       'dailyOperations',
+      // C8: teacher settlements.
+      'teacherSettlement',
     ])
       await p.academyFeatureFlag.create({ data: { academyId: academy.id, key, enabled: true } });
     return { owner, academy };

@@ -5,6 +5,7 @@ import {
   ReactNode,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
 } from 'react';
 import { Reveal } from './motion';
@@ -256,17 +257,20 @@ export function Modal({
   // Whatever had focus when this opened, so it can be given back on close.
   const openerRef = useRef<Element | null>(null);
 
-  useEffect(() => {
+  // A layout effect: focus settles in the same commit that opens the dialog,
+  // before the browser hands over a single keystroke. Deferred to the next
+  // frame, it landed late on a busy phone and pulled the cursor out of a field
+  // the person was already typing in — "400" became "4" (and was paid).
+  useLayoutEffect(() => {
     if (!open) return;
     openerRef.current = document.activeElement;
 
     // The panel itself, rather than its first control: a dialog that opens with
     // the cursor already in a text field reads its label instead of its title,
     // and the reader never learns what they are being asked.
-    const focusPanel = requestAnimationFrame(() => panelRef.current?.focus());
+    panelRef.current?.focus();
 
     return () => {
-      cancelAnimationFrame(focusPanel);
       // Only take focus back if it is still inside the dialog being torn down;
       // if something else has claimed it since, stealing it would be worse.
       const panel = panelRef.current;

@@ -376,12 +376,30 @@ try {
     'bonus 50.00 with its reason: payable 650.00',
     (await db.teacherSettlement.findUnique({ where: { id: sid } })).adjustCents === 5_000,
   );
-  // Final payment.
+  // Final payment — on a slow phone. The frame after the dialog opens is held
+  // back 300 ms (a busy main thread); the owner taps the amount and types
+  // "4", pauses, then "00". Nothing may take the cursor away mid-amount: what
+  // was typed is what is paid (once this recorded 4.00 instead of 400.00).
   await waitFor(async () => !(await dialogText(o)));
+  await o.evaluate(() => {
+    const raf = window.requestAnimationFrame.bind(window);
+    window.__raf = raf;
+    window.requestAnimationFrame = (cb) => raf(() => setTimeout(() => raf(cb), 300));
+  });
   await clickText(o, 'main button', AR.settle.pay.open);
   await waitFor(async () => (await dialogText(o)).includes(AR.settle.pay.amount));
-  await o.evaluate(() => document.querySelector('[role=dialog] input')?.focus());
-  await o.keyboard.type('400');
+  await o.click('[role=dialog] input');
+  await o.keyboard.type('4');
+  await sleep(500);
+  await o.keyboard.type('00');
+  await o.evaluate(() => {
+    window.requestAnimationFrame = window.__raf;
+  });
+  ok(
+    'slow phone: the amount keeps every digit typed (no focus taken mid-amount)',
+    (await o.evaluate(() => document.querySelector('[role=dialog] input')?.value)) === '400',
+    await o.evaluate(() => document.querySelector('[role=dialog] input')?.value),
+  );
   await clickText(o, '[role=dialog] button[type=submit]', AR.settle.pay.save);
   await waitFor(
     async () => (await db.teacherSettlement.findUnique({ where: { id: sid } })).status === 'PAID',

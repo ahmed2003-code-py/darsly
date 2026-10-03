@@ -149,6 +149,13 @@ const MUTANTS = [
     `  async clock(academyId: string) {\n`,
     `  async clock(academyId: string) {\n    await this.prisma.attendanceRecord.updateMany({ where: { id: '__none__' }, data: {} });\n`,
   ],
+  [
+    'M20',
+    'an unchanged day can be re-closed (meaningless versions)',
+    SVC,
+    'this.drift(last.figures as unknown as DayFigures, report.figures).length === 0 &&',
+    'false &&',
+  ],
 ];
 
 // Every mutant site must be original before starting: a run killed mid-mutant

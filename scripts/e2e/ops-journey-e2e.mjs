@@ -420,7 +420,7 @@ try {
   await waitFor(async () => (await main(o)).includes(AR.day.history));
   ok('16 the page shows the close and its history', (await main(o)).includes(AR.day.history));
 
-  // Races: two closes at once with different keys — one wins, the other is told the day is closed.
+  // Unchanged day: two re-closes at once (different keys, with reasons) — both refused, no meaningless version.
   const race = await Promise.all([
     as('owner', 'POST', '/daily-ops/close', {
       date: today,
@@ -439,8 +439,8 @@ try {
     await db.centerDayClose.findMany({ where: { academyId: A }, orderBy: { version: 'asc' } })
   ).map((x) => x.version);
   ok(
-    'race: two re-closes at once make consecutive versions, never a duplicate',
-    JSON.stringify(vs) === JSON.stringify([1, 2, 3]) && race.every((r) => r.status === 200),
+    'race: re-closing an unchanged day (twice at once) is refused — still only version 1',
+    JSON.stringify(vs) === JSON.stringify([1]) && race.every((r) => code(r) === 'DAY_UNCHANGED'),
     vs.join(','),
   );
 
@@ -475,14 +475,14 @@ try {
     );
   }
   await clickText(o, '[role=dialog] button[type=submit]', AR.day.closeAgain);
-  await waitFor(async () => (await db.centerDayClose.count({ where: { academyId: A } })) === 4);
+  await waitFor(async () => (await db.centerDayClose.count({ where: { academyId: A } })) === 2);
   const last = await db.centerDayClose.findFirst({
     where: { academyId: A },
     orderBy: { version: 'desc' },
   });
   ok(
-    '17 closed again with a reason: version 4 records the reversal',
-    last.version === 4 &&
+    '17 closed again with a reason: version 2 records the reversal',
+    last.version === 2 &&
       last.reason?.includes('تصحيح') &&
       last.figures.collections.reversedToday.amountCents === 20_000,
   );

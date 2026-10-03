@@ -3338,7 +3338,8 @@
     "eDayInFuture": "That day hasn't happened yet.",
     "eDayAlreadyClosed": "This day is already closed — give a reason to close it again.",
     "eDayHasExceptions": "The day has open items — add a note to close with them.",
-    "eDayCloseKeyReused": "This was already used for another day — start again."
+    "eDayCloseKeyReused": "This was already used for another day — start again.",
+    "eDayUnchanged": "Nothing changed since the last close — there is nothing new to record."
   },
   "myStudio": {
     "title": "My Studio",

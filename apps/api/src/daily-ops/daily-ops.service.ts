@@ -84,6 +84,20 @@ export interface DayException {
   unmarked: number;
 }
 
+/**
+ * Canonical form: JSONB stores object keys in its own order, so figures are
+ * compared with keys sorted, never by raw JSON text.
+ */
+const canon = (x: unknown): string =>
+  Array.isArray(x)
+    ? `[${x.map(canon).join(',')}]`
+    : x && typeof x === 'object'
+      ? `{${Object.keys(x)
+          .sort()
+          .map((k) => `${JSON.stringify(k)}:${canon((x as Record<string, unknown>)[k])}`)
+          .join(',')}}`
+      : JSON.stringify(x ?? null);
+
 /** Sections whose facts are compared for drift (never `state`). */
 const FACT_SECTIONS = [
   'classes',
@@ -322,17 +336,6 @@ export class DailyOpsService {
 
   /** Sections whose facts differ between the latest close and now. */
   drift(closed: DayFigures, live: DayFigures): string[] {
-    // Canonical form: JSONB stores object keys in its own order, so compare
-    // with keys sorted, never by raw JSON text.
-    const canon = (x: unknown): string =>
-      Array.isArray(x)
-        ? `[${x.map(canon).join(',')}]`
-        : x && typeof x === 'object'
-          ? `{${Object.keys(x)
-              .sort()
-              .map((k) => `${JSON.stringify(k)}:${canon((x as Record<string, unknown>)[k])}`)
-              .join(',')}}`
-          : JSON.stringify(x ?? null);
     const facts = (x: unknown) => {
       if (!x || typeof x !== 'object') return canon(x);
       const { state: _state, ...rest } = x as Record<string, unknown>;
@@ -382,7 +385,8 @@ export class DailyOpsService {
    * Close (or close again) a business day. Under a lock on (academy, date):
    * recompute from the sources, refuse a day in the future, require a note
    * when there are exceptions and a reason when the day was closed before,
-   * then append version N+1. A retry with the same request key is answered
+   * refuse a re-close when nothing changed since the latest close, then
+   * append version N+1. A retry with the same request key is answered
    * with the close it made.
    */
   async close(ctx: AcademyContext, dto: CloseDayDto) {
@@ -411,7 +415,7 @@ export class DailyOpsService {
           const last = await tx.centerDayClose.findFirst({
             where: { academyId: ctx.academyId, businessDate: new Date(`${dto.date}T00:00:00Z`) },
             orderBy: { version: 'desc' },
-            select: { version: true },
+            select: { version: true, figures: true, exceptions: true },
           });
           if (last && !dto.reason?.trim())
             throw new ConflictException({
@@ -425,6 +429,18 @@ export class DailyOpsService {
               message: 'The day has open items — add a note to close with them',
               code: 'DAY_HAS_EXCEPTIONS',
               exceptions: report.exceptions,
+            });
+          // Re-closing a day whose facts and open items are exactly those of its
+          // latest close would only add a meaningless version: refused.
+          if (
+            last &&
+            this.drift(last.figures as unknown as DayFigures, report.figures).length === 0 &&
+            canon(last.exceptions) === canon(report.exceptions)
+          )
+            throw new ConflictException({
+              message: 'Nothing changed since the last close',
+              code: 'DAY_UNCHANGED',
+              version: last.version,
             });
           const row = await tx.centerDayClose.create({
             data: {

@@ -489,6 +489,17 @@ describe('C7 — the day, from the sources', () => {
     expect(await refusal(ops.close(w.owner, { date: addDays(today, -2), requestKey: ck }))).toBe(
       'DAY_CLOSE_KEY_REUSED',
     );
+    // Nothing changed since the close: a re-close (even with a reason) is refused, not a new version.
+    expect(
+      await refusal(
+        ops.close(w.owner, {
+          date: today,
+          requestKey: key(),
+          exceptionNote: 'x x x',
+          reason: 'من غير تغيير',
+        }),
+      ),
+    ).toBe('DAY_UNCHANGED');
     // An open day never blocks anything: attendance still closes after the day is closed.
     await classes.close(w.owner, open.id);
     const after = await ops.day(w.owner, today);
@@ -502,13 +513,24 @@ describe('C7 — the day, from the sources', () => {
     });
     // The snapshot is what was true at close; re-closing records the corrected day.
     expect(after.latest!.figures.attendance.closedClasses).toBe(1);
-    const v2 = await ops.close(w.owner, {
-      date: today,
-      requestKey: key(),
-      exceptionNote: 'حصة لسه ماخلصتش',
-      reason: 'اتقفل الحضور بعد القفل',
-    });
-    expect(v2.version).toBe(2);
+    // Two re-closes at once after the change: one new version, the other told nothing changed.
+    const pair = await Promise.allSettled(
+      ['اتقفل الحضور بعد القفل', 'نفس السبب من جهاز تاني'].map((reason) =>
+        ops.close(w.owner, {
+          date: today,
+          requestKey: key(),
+          exceptionNote: 'حصة لسه ماخلصتش',
+          reason,
+        }),
+      ),
+    );
+    const won = pair.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<{
+      version: number;
+    }>[];
+    expect(won.map((r) => r.value.version)).toEqual([2]);
+    expect(
+      (pair.find((r) => r.status === 'rejected') as PromiseRejectedResult).reason.response.code,
+    ).toBe('DAY_UNCHANGED');
     const final = await ops.day(w.owner, today);
     expect(final.latest!.drift).toEqual([]);
     expect(final.closes.map((x) => x.version)).toEqual([1, 2]);

@@ -45,6 +45,8 @@ const CenterFeesPage = lazyPage(() => import('./pages/fees/CenterFeesPage'));
 const FollowUpPage = lazyPage(() => import('./pages/followup/FollowUpPage'));
 const ExamsPage = lazyPage(() => import('./pages/exams/ExamsPage'));
 const DayPage = lazyPage(() => import('./pages/day/DayPage'));
+const SettlementsPage = lazyPage(() => import('./pages/settlements/SettlementsPage'));
+const SettlementPage = lazyPage(() => import('./pages/settlements/SettlementPage'));
 const ExamSheetPage = lazyPage(() => import('./pages/exams/ExamSheetPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
@@ -815,6 +817,24 @@ export default function App() {
               check grades.* (group-scoped) and the paperExams flag. */}
           {/* The day's operations and its close (Center Operations C7). The page and
               the API check daily.* and the dailyOperations flag. */}
+          {/* What the center owes and pays its teachers (Center Operations C8). The
+              pages and the API check settlement.* and the teacherSettlement flag. */}
+          <Route
+            path="/center/settlements"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <SettlementsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/center/settlements/:id"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <SettlementPage />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/center/day"
             element={

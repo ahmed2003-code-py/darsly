@@ -162,7 +162,8 @@
     "centerFees": "Fees",
     "followUp": "Student follow-up",
     "exams": "Exams & grades",
-    "day": "The day"
+    "day": "The day",
+    "settlements": "Teacher pay"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1064,6 +1065,10 @@
       "dailyOperations": {
         "label": "Daily operations & closing",
         "hint": "One page for the day's classes, attendance, desk, collections, follow-up and exams, and a recorded daily close"
+      },
+      "teacherSettlement": {
+        "label": "Teacher settlements",
+        "hint": "Pay rates per teacher from a date, monthly settlements from the classes taught and money collected, adjustments and recorded payments — the center's own books"
       }
     },
     "centersTitle": "Centers",
@@ -1132,6 +1137,14 @@
       "adminName": "Enter the admin's name (at least 2 characters).",
       "email": "Enter a valid email, like name@example.com.",
       "phone": "Enter a valid Egyptian mobile number, like 01012345678 — or leave it empty."
+    },
+    "flagSave": {
+      "saving": "Saving…",
+      "savedOn": "Saved: ON · {{time}}",
+      "savedOff": "Saved: OFF · {{time}}",
+      "savedAt": "Saved {{time}}",
+      "default": "Default (never saved)",
+      "notSaved": "Not saved — the switch shows what the server has. Try again."
     }
   },
   "security": {
@@ -3339,7 +3352,30 @@
     "eDayAlreadyClosed": "This day is already closed — give a reason to close it again.",
     "eDayHasExceptions": "The day has open items — add a note to close with them.",
     "eDayCloseKeyReused": "This was already used for another day — start again.",
-    "eDayUnchanged": "Nothing changed since the last close — there is nothing new to record."
+    "eDayUnchanged": "Nothing changed since the last close — there is nothing new to record.",
+    "eSettlementKeyReused": "This was already used for something else — start again.",
+    "eAgreementScopeInvalid": "A fixed monthly amount has no groups.",
+    "eAgreementScopeRequired": "Choose the groups whose collections count.",
+    "eAgreementDatesInvalid": "Check the dates — the end can't be before the start, and a rate only ends earlier.",
+    "eAgreementInSettledPeriod": "That date is inside a finalized settlement — use an adjustment instead.",
+    "eAgreementNotFound": "That rate does not exist.",
+    "eAgreementEnded": "This rate has already ended.",
+    "eAgreementOverlap": "Another rate of this kind already covers these dates and groups.",
+    "eSettlementPreviewChanged": "The figures changed since you looked — review them again.",
+    "eSettlementEmpty": "There is nothing to settle in that period.",
+    "eSettlementSourceTaken": "Some of these classes or collections are already in another settlement.",
+    "eSettlementOverlap": "A settlement already covers part of that period.",
+    "eSettlementVoid": "This settlement is void.",
+    "eSettlementHasPayments": "Payments were recorded — correct it with an adjustment instead.",
+    "eAdjustmentSignInvalid": "A bonus adds and a deduction subtracts; an amount can't be zero.",
+    "eAdjustmentBelowZero": "A settlement can't owe less than nothing.",
+    "eSettlementOverpayment": "That is more than what is still owed.",
+    "eSettlementNotFound": "That settlement does not exist.",
+    "ePeriodInvalid": "The period ends before it starts.",
+    "ePeriodInFuture": "A settlement can't include days that haven't happened.",
+    "ePeriodTooLong": "A settlement covers at most three months.",
+    "eSessionTeacherLocked": "Only the owner can change who taught a class that has started.",
+    "eSettlementAdjustBelowPaid": "More than that was already paid to the teacher."
   },
   "myStudio": {
     "title": "My Studio",
@@ -5052,7 +5088,8 @@
       "fees": "Center fees",
       "followup": "Student follow-up",
       "grades": "Exams & grades",
-      "daily": "The day"
+      "daily": "The day",
+      "settlement": "Teacher pay"
     },
     "cap": {
       "student.view": {
@@ -5194,6 +5231,26 @@
         "short": "Close the day",
         "label": "Close the day",
         "hint": "Record the day's figures as a close; close again with a reason after a correction."
+      },
+      "settlement.view": {
+        "short": "Teacher pay",
+        "label": "See teacher pay",
+        "hint": "Rates, settlement previews, settlements and statements."
+      },
+      "settlement.manage": {
+        "short": "Rates",
+        "label": "Manage rates and adjustments",
+        "hint": "Add or end a teacher's rate; bonuses, deductions and corrections with a reason."
+      },
+      "settlement.finalize": {
+        "short": "Finalize",
+        "label": "Finalize settlements",
+        "hint": "Freeze a period's figures; void an unpaid settlement."
+      },
+      "settlement.pay": {
+        "short": "Pay teachers",
+        "label": "Record payments to teachers",
+        "hint": "Record that the center paid a teacher — never more than owed."
       }
     },
     "direct": {
@@ -6585,5 +6642,140 @@
     "reasonWas": "Reason: {{reason}}",
     "closedWith_one": "Closed with {{count}} open item",
     "closedWith_other": "Closed with {{count}} open items"
+  },
+  "settle": {
+    "title": "Teacher settlements",
+    "sub": "What the center owes and pays its teachers — from the classes they taught and what was collected. Not Darsly money, not students' fees.",
+    "off": "Teacher settlements are not switched on here",
+    "offHint": "The center owner can ask Darsly to switch them on.",
+    "noAccess": "You can't see teacher settlements here",
+    "noAccessHint": "Ask the center owner for access.",
+    "tab": {
+      "settlements": "Settlements",
+      "settle": "New settlement",
+      "teachers": "Teachers & rates"
+    },
+    "noTeachers": "No teachers in this center yet",
+    "method": {
+      "PER_SESSION": "Per class",
+      "PERCENT_OF_COLLECTIONS": "% of collections",
+      "FIXED_PERIOD": "Fixed monthly"
+    },
+    "methodHint": {
+      "PER_SESSION": "Each held class counts: physical or hybrid, not cancelled, ended, attendance closed. Empty classes count.",
+      "PERCENT_OF_COLLECTIONS": "A share of money actually collected for the chosen groups' plan fees (monthly or per class). Reversed money never counts; one-time charges never count.",
+      "FIXED_PERIOD": "A fixed amount per calendar month, prorated by days for part of a month."
+    },
+    "rate": {
+      "perSession": "per class",
+      "fixed": "per month",
+      "percent": "{{pct}}% of collections"
+    },
+    "agreement": {
+      "add": "Add a rate",
+      "addTitle": "New rate for {{name}}",
+      "none": "No rate yet",
+      "from": "from {{date}}",
+      "to": "until {{date}}",
+      "open": "open-ended",
+      "perClass": "Amount per class",
+      "perMonth": "Amount per month",
+      "percent": "Percent (e.g. 15 or 12.5)",
+      "groupsRequired": "Groups whose collections count (required)",
+      "groupsOptional": "Only these groups (leave empty for all)",
+      "effectiveFrom": "Starts on",
+      "fromHint": "A new rate never changes earlier days. To change a rate, end the old one the day before.",
+      "save": "Save rate",
+      "end": "End",
+      "endTitle": "End this rate",
+      "lastDay": "Last day it applies",
+      "endHint": "Days after it are paid by whatever rate comes next.",
+      "endConfirm": "End this rate after {{date}}?"
+    },
+    "teacher": "Teacher",
+    "pickTeacher": "Choose a teacher",
+    "from": "From",
+    "to": "To",
+    "pickPeriod": "Choose a teacher and a period to see what they would be paid.",
+    "gross": "Gross for the period",
+    "finalize": "Finalize settlement",
+    "overlaps": "A settlement already covers {{from}} → {{to}} — open it",
+    "pending": "Not counted yet",
+    "pendingHint": "These classes count once they have ended and their attendance is closed.",
+    "why": {
+      "NOT_ENDED": "hasn't ended",
+      "ATTENDANCE_OPEN": "attendance not closed"
+    },
+    "noLines": "Nothing to pay in this period.",
+    "lines_one": "{{count}} line",
+    "lines_other": "{{count}} lines",
+    "kind": {
+      "SESSION": "Class",
+      "COLLECTION": "Collection",
+      "FIXED": "Fixed monthly"
+    },
+    "collectionLine": "receipt {{receipt}} · learner {{code}} · {{pct}}%",
+    "fixedLine": "{{month}} · {{days}} of {{of}} days",
+    "none": "No settlements yet",
+    "noneHint": "Choose a teacher and a period under “New settlement”.",
+    "status": {
+      "FINALIZED": "Finalized",
+      "PARTIALLY_PAID": "Partly paid",
+      "PAID": "Paid",
+      "VOID": "Void"
+    },
+    "back": "All settlements",
+    "finalizedBy": "finalized by {{name}}",
+    "voided": "Voided: {{reason}}",
+    "sum": {
+      "gross": "Gross",
+      "adjust": "Adjustments",
+      "payable": "Payable",
+      "paid": "Paid",
+      "remaining": "Remaining"
+    },
+    "drift": {
+      "title": "The sources changed after this settlement was finalized",
+      "body": "{{added}} added, {{removed}} gone, {{changed}} changed — difference",
+      "hint": "The settlement itself never changes. Record a correction if it should."
+    },
+    "statement": "Download statement (CSV)",
+    "adjustments": "Adjustments",
+    "payments": "Payments",
+    "adjust": {
+      "open": "Bonus / deduction / correction",
+      "title": "Adjust this settlement",
+      "kind": {
+        "BONUS": "Bonus",
+        "DEDUCTION": "Deduction",
+        "CORRECTION": "Correction"
+      },
+      "amount": "Amount",
+      "reduce": "This correction reduces what is owed",
+      "reason": "Why (required)",
+      "save": "Save adjustment"
+    },
+    "pay": {
+      "open": "Record a payment",
+      "title": "Record a payment to the teacher",
+      "remaining": "Still owed:",
+      "amount": "Amount paid",
+      "method": {
+        "CASH": "Cash",
+        "BANK_TRANSFER": "Bank transfer",
+        "OTHER": "Other"
+      },
+      "reference": "Reference (optional)",
+      "note": "This records that the center paid the teacher. Darsly does not move this money.",
+      "save": "Record payment"
+    },
+    "void": {
+      "open": "Void",
+      "title": "Void this settlement?",
+      "body": "Only an unpaid settlement can be voided. It stays in the history; the period can then be settled again.",
+      "reason": "Why (required)",
+      "do": "Void settlement"
+    },
+    "offline": "Not recorded — no connection. Try again when you're back online."
   }
 }

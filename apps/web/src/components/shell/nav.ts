@@ -139,6 +139,13 @@ export const FEES_ITEM: NavItem = {
   labelKey: 'nav.centerFees',
 };
 
+/** What the center owes and pays its teachers (C8). */
+export const SETTLEMENTS_ITEM: NavItem = {
+  to: '/center/settlements',
+  icon: 'request_quote',
+  labelKey: 'nav.settlements',
+};
+
 /** The day's operations and its close (C7). */
 export const DAY_ITEM: NavItem = {
   to: '/center/day',

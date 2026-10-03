@@ -35,7 +35,11 @@ export type AssistantCapability =
   | 'grades.manage'
   | 'grades.correct'
   | 'daily.view'
-  | 'daily.close';
+  | 'daily.close'
+  | 'settlement.view'
+  | 'settlement.manage'
+  | 'settlement.finalize'
+  | 'settlement.pay';
 
 export interface AssistantGrant {
   title: string;
@@ -111,6 +115,11 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   { key: 'grades', caps: ['grades.view', 'grades.manage', 'grades.correct'] },
   // The day's operations and its close (C7) — offered only where they are switched on.
   { key: 'daily', caps: ['daily.view', 'daily.close'] },
+  // Teacher settlements (C8) — offered only where they are switched on.
+  {
+    key: 'settlement',
+    caps: ['settlement.view', 'settlement.manage', 'settlement.finalize', 'settlement.pay'],
+  },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
@@ -194,8 +203,17 @@ export const FOLLOWUP_ONLY_GROUPS = new Set(['followup']);
 export const GRADES_ONLY_GROUPS = new Set(['grades']);
 /** …and the day's operations (C7). */
 export const DAILY_ONLY_GROUPS = new Set(['daily']);
+/** …and teacher settlements (C8). */
+export const SETTLEMENT_ONLY_GROUPS = new Set(['settlement']);
 /** Groups that reach the whole academy, so never granted course by course. */
-export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees', 'followup', 'daily']);
+export const ACADEMY_WIDE_GROUPS = new Set([
+  'register',
+  'desk',
+  'fees',
+  'followup',
+  'daily',
+  'settlement',
+]);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
 export function presetOf(

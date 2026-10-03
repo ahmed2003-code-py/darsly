@@ -63,67 +63,94 @@ function Stat({ label, value, icon }: { label: string; value: string | number; i
 }
 
 /**
- * A feature switch that says what it does as soon as it is tapped. It used to
- * show only the server's answer, so for the half-second of the round trip a
- * tap looked ignored — and a second tap, sent as "the opposite of what is
- * shown", switched the feature straight back off (production audit: enabled
- * then disabled 0.75 s apart). Now the switch moves at once, sends the value
- * the person chose (never "toggle"), and stays locked until the server has
- * confirmed; a failure puts it back and says why.
+ * A feature switch that never claims more than the server confirmed.
+ *
+ * History: it first showed only the server's answer, so a tap looked ignored
+ * and a second tap ("the opposite of what is shown") switched the feature back
+ * off; then it moved at once, optimistically — and an admin could see ON for a
+ * save that never completed (a reload or a lost request: no row, no audit).
+ *
+ * Now: the tap sends the explicit value chosen from the server's state; the
+ * switch is locked and says "Saving…" (and leaving the page asks first) until
+ * the server answers. It turns ON only from the saved row the server returns,
+ * and then says "Saved" with the time; a failure or a timeout says "Not saved"
+ * and the switch shows the server's value, which never moved.
  */
 function FlagSwitch({
   flagKey,
   enabled,
+  savedAt,
   label,
   academyId,
 }: {
   flagKey: string;
   enabled: boolean;
+  savedAt: string | null;
   label: string;
   academyId: string;
 }) {
+  const { t } = useTranslation();
   const setFlag = useSetFeatureFlag(academyId);
-  const [wanted, setWanted] = useState<boolean | null>(null);
-  /** An accidental double tap lands within a few hundred ms — on a fast
-   *  network the first change may already be confirmed by then, so being
-   *  "busy" is not enough: a tap inside this window after the last one is
-   *  ignored. A deliberate change a moment later still goes through. */
+  const saving = setFlag.isPending;
+  /** A double tap lands within a few hundred ms: ignore taps inside it. */
   const settleUntil = useRef(0);
-  const shown = wanted ?? enabled;
-  const busy = wanted !== null && wanted !== enabled;
-  // The server's value caught up with the choice: the switch is free again.
   useEffect(() => {
-    if (wanted !== null && wanted === enabled) setWanted(null);
-  }, [enabled, wanted]);
+    if (!saving) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saving]);
+  const confirmed = setFlag.data && !saving && !setFlag.error ? setFlag.data : null;
   return (
     <>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={shown}
-        aria-label={label}
-        aria-busy={busy}
-        disabled={busy}
-        onClick={() => {
-          if (Date.now() < settleUntil.current) return;
-          settleUntil.current = Date.now() + 800;
-          const next = !shown;
-          setWanted(next);
-          setFlag.mutate({ key: flagKey, enabled: next }, { onError: () => setWanted(null) });
-        }}
-        className="grid h-11 w-14 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 disabled:cursor-wait"
-      >
-        <span
-          className={`relative block h-7 w-12 rounded-full transition ${shown ? 'bg-primary' : 'bg-outline-variant'} ${busy ? 'opacity-70' : ''}`}
+      <div className="flex shrink-0 flex-col items-end gap-0.5">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          aria-label={label}
+          aria-busy={saving}
+          disabled={saving}
+          onClick={() => {
+            if (Date.now() < settleUntil.current) return;
+            settleUntil.current = Date.now() + 800;
+            setFlag.mutate({ key: flagKey, enabled: !enabled });
+          }}
+          className="grid h-11 w-14 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-600 disabled:cursor-wait"
         >
           <span
-            className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
-            style={{ insetInlineStart: shown ? '1.625rem' : '0.25rem' }}
-          />
+            className={`relative block h-7 w-12 rounded-full transition ${enabled ? 'bg-primary' : 'bg-outline-variant'} ${saving ? 'opacity-60' : ''}`}
+          >
+            <span
+              className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all"
+              style={{ insetInlineStart: enabled ? '1.625rem' : '0.25rem' }}
+            />
+          </span>
+        </button>
+        <span
+          className="text-[11px] leading-tight text-on-surface-variant"
+          role="status"
+          aria-live="polite"
+        >
+          {saving
+            ? t('admin.flagSave.saving')
+            : confirmed
+              ? t(confirmed.enabled ? 'admin.flagSave.savedOn' : 'admin.flagSave.savedOff', {
+                  time: dateShort(confirmed.updatedAt),
+                })
+              : savedAt
+                ? t('admin.flagSave.savedAt', { time: dateShort(savedAt) })
+                : t('admin.flagSave.default')}
         </span>
-      </button>
+      </div>
       {setFlag.error ? (
         <div className="basis-full">
+          <p className="mb-1 text-sm font-semibold text-error" role="alert">
+            {t('admin.flagSave.notSaved')}
+          </p>
           <ErrorNote error={setFlag.error} />
         </div>
       ) : null}
@@ -772,6 +799,7 @@ export default function AdminAcademyDetailPage() {
               <FlagSwitch
                 flagKey={f.key}
                 enabled={f.enabled}
+                savedAt={f.savedAt ?? null}
                 label={t(`admin.featureFlag.${f.key}.label`)}
                 academyId={data.id}
               />

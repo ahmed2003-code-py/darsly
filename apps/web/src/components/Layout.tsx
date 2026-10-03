@@ -29,6 +29,7 @@ import {
   FOLLOW_UP_ITEM,
   EXAMS_ITEM,
   DAY_ITEM,
+  SETTLEMENTS_ITEM,
   MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
@@ -39,6 +40,7 @@ import { useFeesAccess } from '../lib/centerFees';
 import { useFollowUpAccess } from '../lib/followUp';
 import { useMyExamsAccess } from '../lib/paperExams';
 import { useDailyAccess } from '../lib/dailyOps';
+import { useSettlementAccess } from '../lib/settlements';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -132,6 +134,10 @@ export default function Layout({ children }: { children: ReactNode }) {
   // see grades (a Center teacher's home is usually their own academy).
   const myExams = useMyExamsAccess(staffish);
   // The day's operations (C7): where it is on and this person may read it.
+  // Teacher settlements (C8): where they are on and this person may read them.
+  const settlements = useSettlementAccess(
+    staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
+  );
   const daily = useDailyAccess(
     staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
   );
@@ -143,6 +149,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),
     ...(fees.data?.canView ? [FEES_ITEM] : []),
     ...(followUp.data?.canView ? [FOLLOW_UP_ITEM] : []),
+    ...(settlements.data?.canView ? [SETTLEMENTS_ITEM] : []),
     ...(myExams.data?.enabled ? [EXAMS_ITEM] : []),
     ...roleNav.slice(1),
   ].filter(Boolean);

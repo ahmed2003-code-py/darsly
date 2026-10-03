@@ -82,7 +82,8 @@ export interface AdminAcademyDetail {
   netRevenueCents: number;
   platformFeeCents: number;
   lastActivityAt: string | null;
-  featureFlags: { key: string; enabled: boolean }[];
+  /** savedAt: when the flag was last saved (null = never; the default applies). */
+  featureFlags: { key: string; enabled: boolean; savedAt?: string | null }[];
 }
 
 export interface GrowthPoint {
@@ -160,9 +161,33 @@ export function useAdminRevenueTrend(range: GrowthRange) {
 export function useSetFeatureFlag(academyId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) =>
-      (await api.patch(`/admin/academies/${academyId}/feature-flags/${key}`, { enabled })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] }),
+    // A save that never answers must not look saved: give up after 15 s and say so.
+    mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
+      const row = (
+        await api.patch<{ key: string; enabled: boolean; updatedAt: string }>(
+          `/admin/academies/${academyId}/feature-flags/${key}`,
+          { enabled },
+          { timeout: 15_000 },
+        )
+      ).data;
+      // The server's saved row is the only proof: it must say what was asked.
+      if (row?.key !== key || row.enabled !== enabled) throw new Error('FLAG_NOT_CONFIRMED');
+      return row;
+    },
+    // The confirmed row moves the switch at once; the list is then re-read anyway.
+    onSuccess: (row) =>
+      qc.setQueryData<AdminAcademyDetail>(['admin-academy-detail', academyId], (d) =>
+        d
+          ? {
+              ...d,
+              featureFlags: d.featureFlags.map((f) =>
+                f.key === row.key ? { ...f, enabled: row.enabled, savedAt: row.updatedAt } : f,
+              ),
+            }
+          : d,
+      ),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['admin-academy-detail', academyId] }),
+    networkMode: 'always',
   });
 }
 

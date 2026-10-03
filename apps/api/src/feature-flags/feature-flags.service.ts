@@ -36,6 +36,9 @@ export const FEATURE_FLAG_KEYS = [
   // Center Operations C7 — the day's operations and its close. OFF until a
   // platform admin turns it on per academy.
   'dailyOperations',
+  // Center Operations C8 — teacher pay agreements and settlements. OFF until a
+  // platform admin turns it on per academy.
+  'teacherSettlement',
 ] as const;
 export type FeatureFlagKey = (typeof FEATURE_FLAG_KEYS)[number];
 
@@ -55,6 +58,7 @@ const DEFAULT_OFF: ReadonlySet<FeatureFlagKey> = new Set<FeatureFlagKey>([
   'studentFollowUp',
   'paperExams',
   'dailyOperations',
+  'teacherSettlement',
 ]);
 
 function defaultFor(key: FeatureFlagKey): boolean {
@@ -101,13 +105,27 @@ export class FeatureFlagsService {
   }
 
   /** Platform-admin read: every known flag for one academy, defaults filled in. */
-  async listForAcademy(academyId: string): Promise<{ key: FeatureFlagKey; enabled: boolean }[]> {
+  /**
+   * Every flag with its effective value, and when it was last saved (null =
+   * never saved: the default applies). The admin screen shows the saved time so
+   * nobody has to trust a switch that only looks on.
+   */
+  async listForAcademy(
+    academyId: string,
+  ): Promise<{ key: FeatureFlagKey; enabled: boolean; savedAt: string | null }[]> {
     const rows = await this.prisma.academyFeatureFlag.findMany({
       where: { academyId },
-      select: { key: true, enabled: true },
+      select: { key: true, enabled: true, updatedAt: true },
     });
-    const byKey = new Map(rows.map((r) => [r.key, r.enabled]));
-    return FEATURE_FLAG_KEYS.map((key) => ({ key, enabled: byKey.get(key) ?? defaultFor(key) }));
+    const byKey = new Map(rows.map((r) => [r.key, r]));
+    return FEATURE_FLAG_KEYS.map((key) => {
+      const row = byKey.get(key);
+      return {
+        key,
+        enabled: row?.enabled ?? defaultFor(key),
+        savedAt: row ? row.updatedAt.toISOString() : null,
+      };
+    });
   }
 
   /** Platform-admin write. Invalidates this academy+key's cache entry immediately. */

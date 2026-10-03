@@ -591,6 +591,47 @@ export class CenterFeesService {
     };
   }
 
+  /**
+   * C8's percent-of-collections base — read here so C4 stays the only reader
+   * of its tables. Money actually collected in [start, end) on plan charges
+   * (monthly / per class) of the given groups, one row per allocation, never
+   * a reversed collection. One-time charges have no group and never count.
+   */
+  async allocationsForGroups(
+    academyId: string,
+    groupIds: string[],
+    start: Date,
+    end: Date,
+    db: Db = this.prisma,
+  ) {
+    if (!groupIds.length) return [];
+    return db.$queryRaw<
+      {
+        allocationId: string;
+        amountCents: number;
+        collectionId: string;
+        receiptNumber: string;
+        receivedAt: Date;
+        chargeKind: string;
+        groupId: string;
+        studentCode: string;
+      }[]
+    >`
+      SELECT al.id AS "allocationId", al."amountCents", k.id AS "collectionId", k."receiptNumber",
+             k."receivedAt", c.kind::text AS "chargeKind", p."groupId", s.code AS "studentCode"
+      FROM "CenterAllocation" al
+      JOIN "CenterCollection" k ON k.id = al."collectionId"
+      JOIN "CenterCharge" c ON c.id = al."chargeId"
+      JOIN "CenterFeePlan" p ON p.id = c."planId"
+      JOIN "AcademyStudent" s ON s.id = c."academyStudentId"
+      WHERE al."academyId" = ${academyId} AND k."reversedAt" IS NULL
+        AND c.kind::text IN ('MONTHLY', 'PER_SESSION')
+        AND p."groupId" = ANY(${groupIds}::text[])
+        AND k."receivedAt" >= (${start.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+        AND k."receivedAt" < (${end.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+      ORDER BY k."receivedAt", al.id`;
+  }
+
   async day(ctx: AcademyContext, date: string | undefined, page = 1) {
     const clock = await this.schedule.academyClock(ctx.academyId);
     const d = date ?? clock.today;

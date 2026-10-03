@@ -285,6 +285,8 @@ model Academy {
   paperExams          PaperExam[]
   gradeSettings       AcademyGradeSettings?
   dayCloses           CenterDayClose[]
+  teacherAgreements   TeacherAgreement[]
+  teacherSettlements  TeacherSettlement[]
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
   provisionedStudents StudentProfile[]         @relation("provisionedStudents")
 
@@ -5592,4 +5594,152 @@ model CenterDayClose {
   @@unique([academyId, businessDate, version])
   @@unique([academyId, requestKey])
   @@index([academyId, businessDate])
+}
+
+// ── Center Operations C8 — what the CENTER owes and pays its TEACHERS ──────
+// Its own books: never Payment / Ledger* / Wallet* / PayoutRequest /
+// LivePurchase / CommercialTerms (platform money), never Center* (what
+// students owe the center). Money is integer piasters; the database keeps the
+// rules (teacher-settlement migration).
+
+enum TeacherPayMethod {
+  /// A fixed amount for each eligible class the teacher taught.
+  PER_SESSION
+  /// A share (basis points) of tuition actually collected for the agreement's groups.
+  PERCENT_OF_COLLECTIONS
+  /// A fixed amount per calendar month, prorated by covered days.
+  FIXED_PERIOD
+}
+
+enum TeacherSettlementStatus {
+  FINALIZED
+  PARTIALLY_PAID
+  PAID
+  VOID
+}
+
+enum TeacherSettlementLineKind {
+  SESSION
+  COLLECTION
+  FIXED
+}
+
+enum TeacherSettlementAdjustmentKind {
+  BONUS
+  DEDUCTION
+  CORRECTION
+}
+
+enum TeacherSettlementPaymentMethod {
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+/// How the center pays one teacher, from a date. Never edited: a new rate is a
+/// new agreement (the old one ends the day before); only the end can be set.
+model TeacherAgreement {
+  id            String           @id @default(uuid())
+  academyId     String
+  academy       Academy          @relation(fields: [academyId], references: [id])
+  teacherUserId String
+  method        TeacherPayMethod
+  currency      String
+  /// PER_SESSION: per class; FIXED_PERIOD: per calendar month.
+  rateCents     Int?
+  /// PERCENT_OF_COLLECTIONS: 1–10000 (100% = 10000).
+  percentBps    Int?
+  /// The groups it covers (required for PERCENT_OF_COLLECTIONS; empty = all groups for PER_SESSION).
+  groupIds      String[]
+  effectiveFrom DateTime         @db.Date
+  effectiveTo   DateTime?        @db.Date
+  requestKey    String
+  createdBy     String
+  createdAt     DateTime         @default(now())
+  endedBy       String?
+  endedAt       DateTime?
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, teacherUserId])
+}
+
+/// One teacher, one period, frozen when finalized: its lines are the exact
+/// sources that were paid for. Later source changes never rewrite it — they
+/// show as drift and are corrected by adjustments.
+model TeacherSettlement {
+  id            String                        @id @default(uuid())
+  academyId     String
+  academy       Academy                       @relation(fields: [academyId], references: [id])
+  teacherUserId String
+  periodFrom    DateTime                      @db.Date
+  periodTo      DateTime                      @db.Date
+  currency      String
+  status        TeacherSettlementStatus       @default(FINALIZED)
+  grossCents    Int
+  adjustCents   Int                           @default(0)
+  paidCents     Int                           @default(0)
+  requestKey    String
+  finalizedBy   String
+  finalizedAt   DateTime                      @default(now())
+  voidedBy      String?
+  voidedAt      DateTime?
+  voidReason    String?
+  version       Int                           @default(1)
+  lines         TeacherSettlementLine[]
+  adjustments   TeacherSettlementAdjustment[]
+  payments      TeacherSettlementPayment[]
+
+  @@unique([academyId, requestKey])
+  @@index([academyId, teacherUserId, periodFrom])
+}
+
+model TeacherSettlementLine {
+  id            String                    @id @default(uuid())
+  academyId     String
+  settlementId  String
+  settlement    TeacherSettlement         @relation(fields: [settlementId], references: [id])
+  teacherUserId String
+  kind          TeacherSettlementLineKind
+  /// The class, the C4 allocation, or "agreement:month-segment" — never counted twice.
+  sourceId      String
+  agreementId   String
+  amountCents   Int
+  detail        Json
+  voided        Boolean                   @default(false)
+
+  @@index([settlementId])
+}
+
+model TeacherSettlementAdjustment {
+  id           String                          @id @default(uuid())
+  academyId    String
+  settlementId String
+  settlement   TeacherSettlement               @relation(fields: [settlementId], references: [id])
+  kind         TeacherSettlementAdjustmentKind
+  /// Signed: BONUS > 0, DEDUCTION < 0, CORRECTION either.
+  amountCents  Int
+  reason       String
+  requestKey   String
+  createdBy    String
+  createdAt    DateTime                        @default(now())
+
+  @@unique([academyId, requestKey])
+  @@index([settlementId])
+}
+
+/// "The center recorded that it paid the teacher" — not a payout, not Darsly money.
+model TeacherSettlementPayment {
+  id           String                         @id @default(uuid())
+  academyId    String
+  settlementId String
+  settlement   TeacherSettlement              @relation(fields: [settlementId], references: [id])
+  amountCents  Int
+  method       TeacherSettlementPaymentMethod
+  reference    String?
+  paidAt       DateTime                       @default(now())
+  requestKey   String
+  recordedBy   String
+
+  @@unique([academyId, requestKey])
+  @@index([settlementId])
 }

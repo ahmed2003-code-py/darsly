@@ -62,6 +62,7 @@ import { CenterFeesModule } from './center-fees/center-fees.module';
 import { FollowUpModule } from './follow-up/follow-up.module';
 import { PaperExamsModule } from './paper-exams/paper-exams.module';
 import { DailyOpsModule } from './daily-ops/daily-ops.module';
+import { TeacherSettlementModule } from './teacher-settlement/settlement.module';
 import { PaperImportModule } from './paper-import/paper-import.module';
 import { DraftsModule } from './drafts/drafts.module';
 
@@ -155,6 +156,7 @@ const HASHED_ASSET = /[\\/]assets[\\/].+-[A-Za-z0-9_-]{8,}\.[a-z0-9]+$/;
     // Center Operations C6 — paper exams and grades.
     PaperExamsModule,
     DailyOpsModule,
+    TeacherSettlementModule,
     PaperImportModule,
     DraftsModule,
     DeviceModule,

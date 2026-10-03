@@ -75,6 +75,12 @@ export const CAPABILITIES = [
   // Center Operations C7 — the day's operations (academy-wide, not a teacher default).
   'daily.view', // the day's classes, attendance, desk, collections, follow-up and exams at a glance
   'daily.close', // close a business day: a versioned snapshot of its figures
+  // Center Operations C8 — what the center owes and pays its teachers (academy-wide;
+  // never a role default; never platform money).
+  'settlement.view', // agreements, settlement previews, settlements and their statements
+  'settlement.manage', // teacher pay agreements and settlement adjustments
+  'settlement.finalize', // freeze a settlement (and void an unpaid one)
+  'settlement.pay', // record that the center paid a teacher
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -153,6 +159,10 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'grades.correct',
   'daily.view',
   'daily.close',
+  'settlement.view',
+  'settlement.manage',
+  'settlement.finalize',
+  'settlement.pay',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -187,6 +197,10 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'followup.manage',
   'daily.view',
   'daily.close',
+  'settlement.view',
+  'settlement.manage',
+  'settlement.finalize',
+  'settlement.pay',
 ]);
 
 function isCapability(x: string): x is Capability {

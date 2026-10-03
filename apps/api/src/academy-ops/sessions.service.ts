@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -399,6 +400,22 @@ export class SessionsService {
 
     const { startAt, endAt, roomId, teacherUserId, mode, locationType, locationNote, joinUrl } =
       await this.resolveAndValidate(ctx, existing.groupId, dto, existing);
+
+    // C8: who taught a class is what teacher pay is computed from. Once a class
+    // has started, only the owner may change its teacher (recording a substitute
+    // after the fact) — never the teacher themselves or anyone else with
+    // schedule.manage. The change is audited (session.update meta).
+    if (
+      dto.teacherUserId !== undefined &&
+      (dto.teacherUserId ?? null) !== existing.teacherUserId &&
+      existing.startAt <= new Date() &&
+      !(ctx.role === 'OWNER' || ctx.isPlatformAdmin)
+    )
+      throw new ForbiddenException({
+        message: 'Only the owner can change who taught a class that has started',
+        code: 'SESSION_TEACHER_LOCKED',
+        field: 'teacherUserId',
+      });
 
     await this.precheckOverlap(
       'groupId',

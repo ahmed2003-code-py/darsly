@@ -104,7 +104,10 @@ allocation / month) settled twice (`TeacherSettlementLine_once`).
 - Adjustments and payments are append-only, request-keyed (a retry is one
   record).
 - **Statement** — CSV per settlement (UTF-8 BOM, integer money, spreadsheet
-  formula guard).
+  formula guard). Typed text starting with `= + - @` (a reason, a payment
+  reference) is prefixed with `'`; the statement's own amounts, including the
+  negative payment and deduction rows, stay plain numbers a spreadsheet can
+  add.
 
 ## Capabilities
 

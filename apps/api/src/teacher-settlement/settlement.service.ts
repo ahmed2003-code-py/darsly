@@ -735,7 +735,9 @@ export class TeacherSettlementService {
     const s = await this.get(ctx, id);
     const cell = (v: string) => {
       let t = v;
-      if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`;
+      // A plain signed amount (the statement's own money) stays a number a
+      // spreadsheet can add; anything else led by a formula character is text.
+      if (/^[=+\-@\t\r]/.test(t) && !/^-\d+(\.\d+)?$/.test(t)) t = `'${t}`;
       return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
     };
     const money = (c: number) =>

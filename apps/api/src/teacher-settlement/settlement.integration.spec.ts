@@ -698,6 +698,43 @@ describe('C8 — finalize, adjust, pay', () => {
     await svc.voidSettlement(w2.owner, s2.id, 'الفترة غلط');
     expect((await finalize(w2, '2026-03-01', '2026-03-31')).settlement.grossCents).toBe(10_000);
   });
+
+  it('statement CSV: typed text that looks like a formula is defused; the money stays numbers a spreadsheet can add', async () => {
+    if (!guard()) return;
+    const w = await world();
+    await agree(w, { rateCents: 30_000 });
+    await cls(w, '2026-03-03', w.t1).then((c) => classes.close(w.owner, c.id));
+    const s = (await finalize(w, '2026-03-01', '2026-03-31')).settlement;
+    await svc.adjust(w.owner, s.id, {
+      requestKey: key(),
+      kind: 'DEDUCTION',
+      amountCents: -3_005,
+      reason: '-1+cmd|calc',
+    } as AdjustDto);
+    await svc.pay(w.owner, s.id, {
+      requestKey: key(),
+      amountCents: 10_000,
+      method: 'CASH',
+      reference: '=HYPERLINK("http://x","y")',
+    } as PayDto);
+    await svc.pay(w.owner, s.id, {
+      requestKey: key(),
+      amountCents: 500,
+      method: 'OTHER',
+      reference: '@SUM(A1)',
+    } as PayDto);
+    const { csv } = await svc.statementCsv(w.owner, s.id);
+    const rows = csv.replace(/^﻿/, '').trimEnd().split('\r\n');
+    const amount = (r: string) => r.slice(r.lastIndexOf(',') + 1);
+    const row = (p: string) => rows.find((r) => r.startsWith(p))!;
+    expect(amount(row('DEDUCTION'))).toBe('-30.05');
+    expect(rows.filter((r) => r.startsWith('PAYMENT')).map(amount)).toEqual(['-100.00', '-5.00']);
+    expect(amount(row('remaining'))).toBe('164.95'); // 300.00 − 30.05 − 100.00 − 5.00
+    // Typed text: every formula lead is neutralised, the minus-led reason included.
+    expect(row('DEDUCTION')).toContain(",'-1+cmd|calc,");
+    expect(csv).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(csv).toContain(",'@SUM(A1),");
+  });
 });
 
 // ───────────────────────────────────────────────────────────────────────────

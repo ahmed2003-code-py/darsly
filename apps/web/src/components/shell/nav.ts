@@ -139,6 +139,13 @@ export const FEES_ITEM: NavItem = {
   labelKey: 'nav.centerFees',
 };
 
+/** The day's operations and its close (C7). */
+export const DAY_ITEM: NavItem = {
+  to: '/center/day',
+  icon: 'event_available',
+  labelKey: 'nav.day',
+};
+
 /** Paper exams and grades (C6): exams of the groups this person reaches. */
 export const EXAMS_ITEM: NavItem = {
   to: '/center/exams',

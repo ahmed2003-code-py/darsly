@@ -161,7 +161,8 @@
     "desk": "Desk",
     "centerFees": "Fees",
     "followUp": "Student follow-up",
-    "exams": "Exams & grades"
+    "exams": "Exams & grades",
+    "day": "The day"
   },
   "dashboardStudent": {
     "greeting": "Welcome back, {{name}}",
@@ -1059,6 +1060,10 @@
       "paperExams": {
         "label": "Paper exams & grades",
         "hint": "Paper exams per group with marks, publishing, corrections and makeups; low grades in follow-up; guardians see grades only if the center chooses"
+      },
+      "dailyOperations": {
+        "label": "Daily operations & closing",
+        "hint": "One page for the day's classes, attendance, desk, collections, follow-up and exams, and a recorded daily close"
       }
     },
     "centersTitle": "Centers",
@@ -3329,7 +3334,11 @@
     "eVersionConflict": "Someone changed this grade meanwhile — reload to see it.",
     "eNoChange": "That's the same as the current grade.",
     "eSubjectNotFound": "That subject does not exist.",
-    "eExamKeyReused": "This was already used for a different exam — start again."
+    "eExamKeyReused": "This was already used for a different exam — start again.",
+    "eDayInFuture": "That day hasn't happened yet.",
+    "eDayAlreadyClosed": "This day is already closed — give a reason to close it again.",
+    "eDayHasExceptions": "The day has open items — add a note to close with them.",
+    "eDayCloseKeyReused": "This was already used for another day — start again."
   },
   "myStudio": {
     "title": "My Studio",
@@ -5041,7 +5050,8 @@
       "desk": "Reception desk",
       "fees": "Center fees",
       "followup": "Student follow-up",
-      "grades": "Exams & grades"
+      "grades": "Exams & grades",
+      "daily": "The day"
     },
     "cap": {
       "student.view": {
@@ -5173,6 +5183,16 @@
         "short": "Correct grades",
         "label": "Correct published grades",
         "hint": "Change a published grade with a reason, and void an exam — in their assigned groups."
+      },
+      "daily.view": {
+        "short": "The day",
+        "label": "See the day's operations",
+        "hint": "Classes, attendance, desk check-ins, and — with their own permissions — collections, follow-up and exams, for any day."
+      },
+      "daily.close": {
+        "short": "Close the day",
+        "label": "Close the day",
+        "hint": "Record the day's figures as a close; close again with a reason after a correction."
       }
     },
     "direct": {
@@ -6476,5 +6496,93 @@
       "NOT_MAKEUP_CANDIDATE": "Wasn't absent or excused in the original exam, or already has a makeup.",
       "STUDENT_WITHDRAWN": "Has withdrawn from the center."
     }
+  },
+  "day": {
+    "title": "The day at the center",
+    "sub": "What happened today, what is still open, and the day's close. Closing changes nothing — it records the day's figures.",
+    "off": "The day's operations page is not switched on here",
+    "offHint": "The center owner can ask Darsly to switch it on.",
+    "noAccess": "You can't see the day's operations here",
+    "noAccessHint": "Ask the center owner for access.",
+    "prev": "Previous day",
+    "next": "Next day",
+    "pick": "Pick a day",
+    "toToday": "Today",
+    "close": "Close the day",
+    "closeAgain": "Close again",
+    "closeTitle": "Close {{date}}?",
+    "closeAgainTitle": "Close {{date}} again?",
+    "closeBody": "The day's figures are recorded as they are now. Nothing is changed or blocked: attendance and payments keep working.",
+    "note": "What is still open, and why close anyway",
+    "noteHint": "Required when the day has open items. Kept with the close.",
+    "reason": "Why close it again",
+    "reasonHint": "Required: the earlier close stays in the history.",
+    "offline": "Not closed — no connection. Try again when you're back online.",
+    "closedAt": "closed (version {{version}}) at {{time}} by {{name}}",
+    "notClosed": "not closed",
+    "inProgress": "in progress",
+    "drift": "Figures changed since the last close: {{sections}}. Close again to record them.",
+    "showing": "Showing",
+    "live": "Now",
+    "asClosed": "As closed (v{{version}})",
+    "attention": "Needs attention",
+    "open": "Open",
+    "exc": {
+      "notEnded": "{{group}} at {{time}} hasn't ended yet",
+      "notClosed_one": "{{group}} at {{time}}: attendance not closed ({{count}} not marked)",
+      "notClosed_other": "{{group}} at {{time}}: attendance not closed ({{count}} not marked)"
+    },
+    "task": {
+      "drafts_one": "{{count}} exam still a draft",
+      "drafts_other": "{{count}} exams still drafts",
+      "cases_one": "{{count}} open follow-up case",
+      "cases_other": "{{count}} open follow-up cases"
+    },
+    "section": {
+      "classes": "Classes",
+      "attendance": "Attendance",
+      "desk": "Reception desk",
+      "collections": "Collections",
+      "followUp": "Follow-up",
+      "exams": "Paper exams",
+      "classList": "Today's classes"
+    },
+    "f": {
+      "total": "Classes",
+      "completed": "Completed",
+      "cancelled": "Cancelled",
+      "upcoming": "Still to come",
+      "present": "Present",
+      "late": "Late",
+      "absent": "Absent",
+      "excused": "Excused",
+      "unmarked": "Not marked",
+      "closedClasses": "Attendance closed",
+      "checkIns": "Check-ins",
+      "byCard": "By card",
+      "byCode": "By code",
+      "received_one": "Received ({{count}})",
+      "received_other": "Received ({{count}})",
+      "reversedToday_one": "Reversed today ({{count}})",
+      "reversedToday_other": "Reversed today ({{count}})",
+      "net": "Net today",
+      "opened": "Cases opened",
+      "resolved": "Cases closed",
+      "contacts": "Families contacted",
+      "published": "Exams published",
+      "corrections": "Grade corrections"
+    },
+    "cls": {
+      "cancelled": "Cancelled",
+      "counts": "{{present}} of {{expected}} attended",
+      "closed": "Attendance closed",
+      "open": "Attendance open"
+    },
+    "noClasses": "No classes on this day.",
+    "history": "Closes of this day",
+    "version": "Version {{version}}",
+    "reasonWas": "Reason: {{reason}}",
+    "closedWith_one": "Closed with {{count}} open item",
+    "closedWith_other": "Closed with {{count}} open items"
   }
 }

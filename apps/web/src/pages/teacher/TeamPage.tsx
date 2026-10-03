@@ -16,6 +16,7 @@ import { useDeskAccess } from '../../lib/desk';
 import { useFeesAccess } from '../../lib/centerFees';
 import { useFollowUpAccess } from '../../lib/followUp';
 import { usePaperExamsAccess } from '../../lib/paperExams';
+import { useDailyAccess } from '../../lib/dailyOps';
 import { useStaffAcademyStore } from '../../stores/staffAcademy';
 import { askConfirm } from '../../lib/confirm';
 import { dateShort } from '../../lib/format';
@@ -33,6 +34,7 @@ import {
   FEES_ONLY_GROUPS,
   FOLLOWUP_ONLY_GROUPS,
   GRADES_ONLY_GROUPS,
+  DAILY_ONLY_GROUPS,
   REGISTRY_ONLY_GROUPS,
   REGISTRY_ONLY_PRESETS,
   TeamAssistant,
@@ -286,17 +288,20 @@ function AssistantEditor({
   const followUpOn = !!useFollowUpAccess(selectedAcademy).data?.enabled;
   // …and paper exams (C6) where they are on.
   const gradesOn = !!usePaperExamsAccess(selectedAcademy).data?.enabled;
+  // …and the day's operations (C7) where they are on.
+  const dailyOn = !!useDailyAccess(selectedAcademy).data?.enabled;
   const groupShown = (key: string) =>
     (registryOn || !REGISTRY_ONLY_GROUPS.has(key)) &&
     (deskOn || !DESK_ONLY_GROUPS.has(key)) &&
     (feesOn || !FEES_ONLY_GROUPS.has(key)) &&
     (followUpOn || !FOLLOWUP_ONLY_GROUPS.has(key)) &&
-    (gradesOn || !GRADES_ONLY_GROUPS.has(key));
+    (gradesOn || !GRADES_ONLY_GROUPS.has(key)) &&
+    (dailyOn || !DAILY_ONLY_GROUPS.has(key));
   /** Capabilities of a feature that is off here: never granted by a preset, ignored when matching one. */
   const hidden = useMemo(
     () => new Set(CAPABILITY_GROUPS.filter((g) => !groupShown(g.key)).flatMap((g) => g.caps)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [registryOn, deskOn, feesOn, followUpOn, gradesOn],
+    [registryOn, deskOn, feesOn, followUpOn, gradesOn, dailyOn],
   );
   const preset = useMemo(
     () => presetOf(grant.permissions, grant.directContact, hidden),

@@ -33,7 +33,9 @@ export type AssistantCapability =
   | 'followup.manage'
   | 'grades.view'
   | 'grades.manage'
-  | 'grades.correct';
+  | 'grades.correct'
+  | 'daily.view'
+  | 'daily.close';
 
 export interface AssistantGrant {
   title: string;
@@ -107,6 +109,8 @@ export const CAPABILITY_GROUPS: { key: string; caps: AssistantCapability[] }[] =
   // Paper exams and grades (C6) — offered only where they are switched on.
   // Group-scoped: an assistant grades only the groups they are assigned to.
   { key: 'grades', caps: ['grades.view', 'grades.manage', 'grades.correct'] },
+  // The day's operations and its close (C7) — offered only where they are switched on.
+  { key: 'daily', caps: ['daily.view', 'daily.close'] },
 ];
 export const OFFERED = new Set<string>(CAPABILITY_GROUPS.flatMap((g) => g.caps));
 
@@ -188,8 +192,10 @@ export const FEES_ONLY_GROUPS = new Set(['fees']);
 export const FOLLOWUP_ONLY_GROUPS = new Set(['followup']);
 /** …and paper exams (C6). */
 export const GRADES_ONLY_GROUPS = new Set(['grades']);
+/** …and the day's operations (C7). */
+export const DAILY_ONLY_GROUPS = new Set(['daily']);
 /** Groups that reach the whole academy, so never granted course by course. */
-export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees', 'followup']);
+export const ACADEMY_WIDE_GROUPS = new Set(['register', 'desk', 'fees', 'followup', 'daily']);
 
 /** Which preset a grant matches exactly, if any — so editing shows where it came from. */
 export function presetOf(

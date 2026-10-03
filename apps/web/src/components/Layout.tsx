@@ -28,6 +28,7 @@ import {
   FEES_ITEM,
   FOLLOW_UP_ITEM,
   EXAMS_ITEM,
+  DAY_ITEM,
   MAX_BOTTOM_TABS,
 } from './shell/nav';
 import { useAssistantWorkspace, useStaffMe } from '../lib/staff';
@@ -37,6 +38,7 @@ import { useDeskAccess } from '../lib/desk';
 import { useFeesAccess } from '../lib/centerFees';
 import { useFollowUpAccess } from '../lib/followUp';
 import { useMyExamsAccess } from '../lib/paperExams';
+import { useDailyAccess } from '../lib/dailyOps';
 import { useStaffAcademyStore } from '../stores/staffAcademy';
 import Sidebar from './shell/Sidebar';
 import TopBar from './TopBar';
@@ -129,8 +131,13 @@ export default function Layout({ children }: { children: ReactNode }) {
   // Paper exams (C6): in any workspace of theirs where it is on and they may
   // see grades (a Center teacher's home is usually their own academy).
   const myExams = useMyExamsAccess(staffish);
+  // The day's operations (C7): where it is on and this person may read it.
+  const daily = useDailyAccess(
+    staffish ? ((assistantMode ? ws.academyId : selectedAcademy) ?? undefined) : undefined,
+  );
   const baseNav = [
     roleNav[0],
+    ...(daily.data?.canView ? [DAY_ITEM] : []),
     ...(desk.data?.canCheckIn ? [DESK_ITEM] : []),
     ...(classes.data?.canAttend || myClasses.data?.enabled ? [CLASSES_ITEM] : []),
     ...(registry.data?.canView ? [REGISTRY_ITEM] : []),

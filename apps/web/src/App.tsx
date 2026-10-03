@@ -44,6 +44,7 @@ const DeskPage = lazyPage(() => import('./pages/desk/DeskPage'));
 const CenterFeesPage = lazyPage(() => import('./pages/fees/CenterFeesPage'));
 const FollowUpPage = lazyPage(() => import('./pages/followup/FollowUpPage'));
 const ExamsPage = lazyPage(() => import('./pages/exams/ExamsPage'));
+const DayPage = lazyPage(() => import('./pages/day/DayPage'));
 const ExamSheetPage = lazyPage(() => import('./pages/exams/ExamSheetPage'));
 const AdminPayoutsPage = lazyPage(() => import('./pages/admin/AdminPayoutsPage'));
 const AdminSecurityPage = lazyPage(() => import('./pages/admin/AdminSecurityPage'));
@@ -812,6 +813,16 @@ export default function App() {
           />
           {/* Paper exams and grades (Center Operations C6). The pages and the API
               check grades.* (group-scoped) and the paperExams flag. */}
+          {/* The day's operations and its close (Center Operations C7). The page and
+              the API check daily.* and the dailyOperations flag. */}
+          <Route
+            path="/center/day"
+            element={
+              <RequireAuth role={[Role.STAFF, Role.TEACHER]}>
+                <DayPage />
+              </RequireAuth>
+            }
+          />
           <Route
             path="/center/exams"
             element={

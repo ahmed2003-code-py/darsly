@@ -284,6 +284,7 @@ model Academy {
   /// Center Operations C6: paper exams and grades.
   paperExams          PaperExam[]
   gradeSettings       AcademyGradeSettings?
+  dayCloses           CenterDayClose[]
   /// Learner profiles this academy created at its desk (see StudentProfile.provisionedByAcademyId).
   provisionedStudents StudentProfile[]         @relation("provisionedStudents")
 
@@ -5274,6 +5275,8 @@ model CenterCollection {
   @@unique([academyId, receiptNumber])
   @@unique([academyId, requestKey])
   @@index([academyId, receivedAt])
+  /// C7: reversals performed on a business day.
+  @@index([academyId, reversedAt])
   @@index([academyStudentId])
 }
 
@@ -5560,4 +5563,33 @@ model AcademyGradeSettings {
   guardianGradesVisible Boolean  @default(false)
   updatedAt             DateTime @updatedAt
   updatedBy             String?
+}
+
+/// Center Operations C7 — a closed business day: a frozen, versioned snapshot of
+/// the day's operational figures (classes, attendance, desk, collections,
+/// follow-up, exams) and the exceptions acknowledged when closing. Append-only
+/// (a trigger refuses UPDATE/DELETE): re-closing after a legitimate correction
+/// adds version N+1 with its reason; earlier versions stay. Writes nothing in any
+/// other domain — the figures are read from C2/C3/C4/C5/C6.
+model CenterDayClose {
+  id            String   @id @default(uuid())
+  academyId     String
+  academy       Academy  @relation(fields: [academyId], references: [id])
+  /// The academy-local business date.
+  businessDate  DateTime @db.Date
+  version       Int
+  timezone      String
+  figures       Json
+  exceptions    Json
+  /// Required when closing with exceptions.
+  exceptionNote String?
+  /// Required for version > 1: why the day is closed again.
+  reason        String?
+  requestKey    String
+  closedBy      String
+  closedAt      DateTime @default(now())
+
+  @@unique([academyId, businessDate, version])
+  @@unique([academyId, requestKey])
+  @@index([academyId, businessDate])
 }

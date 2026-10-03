@@ -542,6 +542,55 @@ export class CenterFeesService {
    * fees.report; otherwise only the caller's own (a receptionist's drawer).
    * "Recorded collections" — not a bank reconciliation.
    */
+  /**
+   * C7's money figures for one business day — read here so C4 stays the only
+   * reader of its tables. Received on the day (by method, whatever happened to
+   * them later) and reversals PERFORMED on the day (whenever the money came
+   * in): both are timestamps C4 never changes once set, so a day reproduces
+   * exactly. Net = received − reversed that day.
+   */
+  async dayMovement(academyId: string, date: string, db: Db = this.prisma) {
+    const clock = await this.schedule.academyClock(academyId);
+    const { start, end } = localDayBounds(date, clock.timezone);
+    const s = start.toISOString();
+    const e = end.toISOString();
+    const [byMethod, reversed, currency] = await Promise.all([
+      db.$queryRaw<{ method: string; count: number; amount: bigint | null }[]>`
+        SELECT method::text AS method, count(*)::int AS count, sum("amountCents") AS amount
+        FROM "CenterCollection"
+        WHERE "academyId" = ${academyId}
+          AND "receivedAt" >= (${s}::timestamptz AT TIME ZONE 'UTC') AND "receivedAt" < (${e}::timestamptz AT TIME ZONE 'UTC')
+        GROUP BY method`,
+      db.$queryRaw<{ count: number; amount: bigint | null }[]>`
+        SELECT count(*)::int AS count, sum("amountCents") AS amount
+        FROM "CenterCollection"
+        WHERE "academyId" = ${academyId}
+          AND "reversedAt" >= (${s}::timestamptz AT TIME ZONE 'UTC') AND "reversedAt" < (${e}::timestamptz AT TIME ZONE 'UTC')`,
+      this.currencyOf(academyId),
+    ]);
+    const methods = Object.fromEntries(
+      ['CASH', 'CARD_EXTERNAL', 'BANK_TRANSFER', 'OTHER'].map((m) => {
+        const g = byMethod.find((x) => x.method === m);
+        return [m, { count: g?.count ?? 0, amountCents: Number(g?.amount ?? 0) }];
+      }),
+    );
+    const received = {
+      count: byMethod.reduce((n, g) => n + g.count, 0),
+      amountCents: byMethod.reduce((n, g) => n + Number(g.amount ?? 0), 0),
+      byMethod: methods,
+    };
+    const reversedToday = {
+      count: reversed[0]?.count ?? 0,
+      amountCents: Number(reversed[0]?.amount ?? 0),
+    };
+    return {
+      currency,
+      received,
+      reversedToday,
+      netCents: received.amountCents - reversedToday.amountCents,
+    };
+  }
+
   async day(ctx: AcademyContext, date: string | undefined, page = 1) {
     const clock = await this.schedule.academyClock(ctx.academyId);
     const d = date ?? clock.today;

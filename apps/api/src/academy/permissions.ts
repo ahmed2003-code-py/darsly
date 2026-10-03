@@ -72,6 +72,9 @@ export const CAPABILITIES = [
   'grades.view', // exams, results, statistics and history of reachable groups
   'grades.manage', // create exams, enter draft grades, publish
   'grades.correct', // correct a published grade (with a reason), void an exam
+  // Center Operations C7 — the day's operations (academy-wide, not a teacher default).
+  'daily.view', // the day's classes, attendance, desk, collections, follow-up and exams at a glance
+  'daily.close', // close a business day: a versioned snapshot of its figures
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -148,6 +151,8 @@ export const ASSISTANT_CEILING: ReadonlySet<Capability> = new Set<Capability>([
   'grades.view',
   'grades.manage',
   'grades.correct',
+  'daily.view',
+  'daily.close',
   // Kept for assistants from before Phase 1 (backfilled with them); the Team
   // screen does not offer them.
   'assessment.author',
@@ -180,6 +185,8 @@ export const ACADEMY_WIDE: ReadonlySet<Capability> = new Set<Capability>([
   'fees.report',
   'followup.view',
   'followup.manage',
+  'daily.view',
+  'daily.close',
 ]);
 
 function isCapability(x: string): x is Capability {

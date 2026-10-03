@@ -100,6 +100,14 @@ const ctxOf = async (userId: string, role: Role, academyId: string): Promise<Aca
 const key = () => randomUUID().replace(/-/g, '');
 const M = (marks: number) => Math.round(marks * 100);
 const DAY = '2026-03-10';
+/** Learner codes are random (90,000 of them); a fixture never reuses one in this run. */
+const usedCodes = new Set<string>();
+const freshCode = () => {
+  let c = generateStudentCode();
+  while (usedCodes.has(c)) c = generateStudentCode();
+  usedCodes.add(c);
+  return c;
+};
 
 function middayZone() {
   const off = ((12 - new Date().getUTCHours() + 36) % 24) - 12;
@@ -225,7 +233,7 @@ async function student(
     data: {
       academyId,
       studentId: sp.id,
-      code: generateStudentCode(),
+      code: freshCode(),
       fullName: name,
       source: 'DESK',
       status: opts.status ?? 'ACTIVE',

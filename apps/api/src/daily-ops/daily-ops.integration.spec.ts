@@ -104,6 +104,14 @@ function middayZone() {
   return off === 0 ? 'Etc/UTC' : `Etc/GMT${off > 0 ? '-' : '+'}${Math.abs(off)}`;
 }
 const H = 3_600_000;
+/** Learner codes are random (90,000 of them); a fixture never reuses one in this run. */
+const usedCodes = new Set<string>();
+const freshCode = () => {
+  let c = generateStudentCode();
+  while (usedCodes.has(c)) c = generateStudentCode();
+  usedCodes.add(c);
+  return c;
+};
 
 async function world() {
   const k = randomUUID().slice(0, 8);
@@ -204,7 +212,7 @@ async function learner(w: World, name: string) {
     data: {
       academyId: w.acad.id,
       studentId: sp.id,
-      code: generateStudentCode(),
+      code: freshCode(),
       fullName: name,
       source: 'DESK',
     },

@@ -91,6 +91,14 @@ const jwt = (sub: string, role: Role) => ({ sub, role, sessionId: 's' }) as JwtP
 const ctxOf = async (userId: string, role: Role, academyId: string): Promise<AcademyContext> =>
   (await academy.buildContext(userId, academyId, role))!;
 const key = () => randomUUID().replace(/-/g, '');
+/** Learner codes are random (90,000 of them); a fixture never reuses one in this run. */
+const usedCodes = new Set<string>();
+const freshCode = () => {
+  let c = generateStudentCode();
+  while (usedCodes.has(c)) c = generateStudentCode();
+  usedCodes.add(c);
+  return c;
+};
 const EGP = (n: number) => Math.round(n * 100);
 
 function middayZone() {
@@ -204,7 +212,7 @@ async function student(
     data: {
       academyId,
       studentId: sp.id,
-      code: generateStudentCode(),
+      code: freshCode(),
       fullName: name,
       source: 'DESK',
       status: opts.status ?? 'ACTIVE',

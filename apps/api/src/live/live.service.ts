@@ -68,7 +68,11 @@ import {
   transcriptionConfig,
   validPieceSeq,
 } from './transcription/lesson-transcription';
-import { transcriptCaptureState } from './transcription/capture-state';
+import {
+  closeCaptureSpans,
+  syncCaptureSpans,
+  transcriptCaptureState,
+} from './transcription/capture-state';
 import { finalizeTranscript } from './transcription/transcript-assembly';
 import { queueLiveSummary, type SummaryJobs } from './summary/summary-queue';
 import { forViewers } from './summary/grounded-summary';
@@ -1655,6 +1659,12 @@ export class LiveService {
       `live.end liveSession=${id} academy=${r.session.academyId ?? r.session.tenantId} ` +
         `reason=${reason} endedAt=${r.endedAt.toISOString()} provider=${r.provider}`,
     );
+    if (r.session.provider === 'CLOUDFLARE' && r.session.roomName) {
+      // What the teacher asked to keep ends with the class.
+      await closeCaptureSpans(this.prisma, id, r.session.roomName, r.endedAt).catch(
+        () => undefined,
+      );
+    }
     if (r.session.provider === 'CLOUDFLARE' && r.session.roomName && reason !== 'CANCELLED') {
       await this.queueTranscript(r.session, r.session.roomName).catch((e) =>
         this.logger.warn(
@@ -1700,11 +1710,19 @@ export class LiveService {
     const capture = await transcriptCaptureState(this.prisma, s.id, roomName);
     // OFF, or never switched on in this class: nothing to transcribe, nothing queued.
     if (!capture.available || !(capture.active || capture.everOn)) return;
+    // From any state but PROCESSING: a class reopened inside its window has a
+    // second run whose words are owed too. The job transcribes every run's
+    // pieces and the transcript is assembled from all of them in order; a
+    // later run never replaces an earlier one. Already PROCESSING: make sure a
+    // job will see this run (one that already finished deciding would not).
     const claimed = await this.prisma.liveSession.updateMany({
-      where: { id: s.id, transcriptStatus: { in: ['NOT_STARTED', 'FAILED'] } },
+      where: { id: s.id, transcriptStatus: { not: 'PROCESSING' } },
       data: { transcriptStatus: 'PROCESSING' },
     });
-    if (claimed.count === 0) return;
+    if (claimed.count === 0) {
+      await this.reopenTranscript(s, roomName, 'run-ended').catch(() => undefined);
+      return;
+    }
     try {
       await this.jobs.enqueue(
         s.academyId ?? s.tenantId,
@@ -1748,7 +1766,7 @@ export class LiveService {
     file: { buffer: Buffer; size: number; mimetype?: string } | undefined,
     durationMs?: number,
     /** Who uploads, and whose microphone the page says this piece is (verified here). */
-    who?: { uploaderUserId: string; speakerUserId?: string },
+    who?: { uploaderUserId: string; speakerUserId?: string; leaseId?: string },
   ) {
     if (!transcriptionConfig().enabled) {
       throw new ConflictException({ message: 'Transcription is off', code: 'TRANSCRIPTION_OFF' });
@@ -1757,23 +1775,61 @@ export class LiveService {
     if (session.provider !== 'CLOUDFLARE' || !session.roomName) {
       throw new ConflictException({ message: 'Not a Darsly-hosted class', code: 'NOT_CLOUDFLARE' });
     }
-    // Just after the end is fine: that is the last piece, flushed on the way out.
     const now = Date.now();
+    if (!validPieceSeq(seq, now)) {
+      throw new BadRequestException({ message: 'Bad piece number', code: 'BAD_SEQ' });
+    }
+    // The run the piece belongs to: its capture lease's, when the page names
+    // one. A piece recorded before a reopen and delivered after it belongs to
+    // the run it was spoken in, not the one running now.
+    let roomName = session.roomName;
+    if (who?.leaseId) {
+      const lease = await this.prisma.liveCaptureLease.findUnique({ where: { id: who.leaseId } });
+      if (!lease || lease.sessionId !== id || lease.userId !== who.uploaderUserId) {
+        throw new ConflictException({ message: 'Not your capture', code: 'CAPTURE_LEASE_LOST' });
+      }
+      roomName = lease.roomName;
+      // Another tab took the class over: a piece this one recorded after that
+      // moment duplicates what the new holder is capturing.
+      const holder = await this.prisma.liveCaptureLease.findFirst({
+        where: {
+          sessionId: id,
+          roomName,
+          id: { not: lease.id },
+          startedAt: { gt: lease.startedAt },
+        },
+        orderBy: { startedAt: 'asc' },
+      });
+      if (holder && seq * 1000 >= holder.startedAt.getTime()) {
+        throw new ConflictException({
+          message: 'This class is being captured in another tab or device',
+          code: 'CAPTURE_ELSEWHERE',
+        });
+      }
+    }
+    // Just after the end is fine: that is the last piece, flushed on the way out.
     const justEnded =
       session.status === 'ENDED' &&
       !!session.endedAt &&
       now - session.endedAt.getTime() <= LAST_PIECE_GRACE_MS;
-    if (session.status !== 'LIVE' && !justEnded) {
-      throw new ConflictException({ message: 'The class is not running', code: 'NOT_LIVE' });
-    }
-    const capture = await transcriptCaptureState(this.prisma, id, session.roomName);
+    const capture = await transcriptCaptureState(this.prisma, id, roomName);
     const recentlyOff =
       !!capture.lastOffAt && now - capture.lastOffAt.getTime() <= CAPTURE_OFF_GRACE_MS;
-    if (!capture.available || !(capture.active || recentlyOff || (justEnded && capture.everOn))) {
-      throw new ConflictException({ message: 'Transcript capture is off', code: 'CAPTURE_OFF' });
-    }
-    if (!validPieceSeq(seq, now)) {
-      throw new BadRequestException({ message: 'Bad piece number', code: 'BAD_SEQ' });
+    const liveNow =
+      roomName === session.roomName &&
+      (session.status === 'LIVE' || justEnded) &&
+      capture.available &&
+      (capture.active || recentlyOff || (justEnded && capture.everOn));
+    // Or late: a piece the page could not deliver at the time (offline, a
+    // reload, a crash) is still owed if it was spoken inside a stretch the
+    // teacher asked to keep. Temporary network loss must not make a permanent
+    // hole in the transcript; the window closes with the audio retention.
+    if (!liveNow && !(await this.withinCaptureSpan(id, roomName, seq, now))) {
+      throw new ConflictException(
+        session.status !== 'LIVE' && !justEnded
+          ? { message: 'The class is not running', code: 'NOT_LIVE' }
+          : { message: 'Transcript capture is off', code: 'CAPTURE_OFF' },
+      );
     }
     if (!file?.buffer?.length || file.size < AUDIO_SEGMENT_MIN_BYTES) {
       throw new BadRequestException({ message: 'Empty audio', code: 'EMPTY_AUDIO' });
@@ -1785,7 +1841,6 @@ export class LiveService {
         HttpStatus.UNSUPPORTED_MEDIA_TYPE,
       );
     }
-    const roomName = session.roomName;
     const existing = await this.prisma.liveAudioSegment.findUnique({
       where: { sessionId_roomName_seq: { sessionId: id, roomName, seq } },
     });
@@ -1860,6 +1915,32 @@ export class LiveService {
   }
 
   /**
+   * Whether a piece's second falls inside one of the run's capture spans (the
+   * stretches the teacher asked to keep), with the flush grace at each end,
+   * and the class ended no longer ago than its audio is kept.
+   */
+  private async withinCaptureSpan(sessionId: string, roomName: string, seq: number, now: number) {
+    const s = await this.prisma.liveSession.findUnique({
+      where: { id: sessionId },
+      select: { endedAt: true, deletedAt: true },
+    });
+    if (!s || s.deletedAt) return false;
+    const keepMs = transcriptionConfig().audioRetentionHours * 3600_000;
+    if (s.endedAt && now - s.endedAt.getTime() > keepMs) return false;
+    const at = seq * 1000;
+    const span = await this.prisma.liveCaptureSpan.findFirst({
+      where: {
+        sessionId,
+        roomName,
+        startedAt: { lte: new Date(at + 10_000) },
+        OR: [{ endedAt: null }, { endedAt: { gte: new Date(at - CAPTURE_OFF_GRACE_MS) } }],
+      },
+      select: { id: true },
+    });
+    return !!span;
+  }
+
+  /**
    * The teacher's transcription choices for one class: the mode (before the
    * class ends), and — in MANUAL mode, while it runs — capture on or off.
    */
@@ -1889,7 +1970,9 @@ export class LiveService {
       else data.transcriptCaptureOffAt = new Date();
     }
     await this.prisma.liveSession.update({ where: { id }, data });
-    const capture = await transcriptCaptureState(this.prisma, id, s.roomName);
+    const capture =
+      (s.status === 'LIVE' ? await syncCaptureSpans(this.prisma, id, s.roomName) : null) ??
+      (await transcriptCaptureState(this.prisma, id, s.roomName));
     this.logger.log(
       `live.transcript.mode liveSession=${id} mode=${capture.mode} capturing=${capture.active}`,
     );
@@ -3104,6 +3187,12 @@ export class LiveService {
               ...stages.transcript,
               reason: teacher ? stages.transcript.reason : null,
               partial: stages.transcript.stage === 'PARTIAL' || !!meta?.partial,
+              // Teacher only: what the words cover of the lesson they asked to
+              // keep — the gaps, and pieces that never arrived (coverage.ts).
+              coverage:
+                teacher && (meta as { coverage?: unknown } | null)?.coverage
+                  ? (meta as { coverage: unknown }).coverage
+                  : undefined,
               // Teacher only: pieces that failed but whose audio is still kept.
               canRetry: teacher ? retryable > 0 && cfg.enabled : undefined,
               progress,
@@ -3138,7 +3227,12 @@ export class LiveService {
         // Never the internal evidence quotes (see summary/grounded-summary.ts).
         data: canSeeSummary && summaryStatus === 'READY' ? forViewers(s.summary) : null,
         // Made from a transcript with gaps: shown as such, never as the whole class.
-        partial: canSeeSummary && summaryStatus === 'READY' ? !!sMeta?.partial : false,
+        // Or the transcript has since been found incomplete (a coverage gap
+        // decided after the summary was written): never shown as the whole class.
+        partial:
+          canSeeSummary && summaryStatus === 'READY'
+            ? !!sMeta?.partial || s.transcriptStatus === 'PARTIAL'
+            : false,
         // Made from older words than the transcript now has (a recovered piece).
         stale:
           summaryStatus === 'READY' &&

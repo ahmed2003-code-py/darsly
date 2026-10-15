@@ -145,9 +145,10 @@ export class LiveTranscribeHandler implements AiJobHandler {
     const owed = new Map<string, Extract<PieceOutcome, { kind: 'owed' }>>();
     try {
       for (let round = 0; round < MAX_ROUNDS && !account && !rateLimited; round++) {
-        const todo = (
+        const todo = // Every run of the class: a reopened class's earlier runs are owed too.
+        (
           await this.prisma.liveAudioSegment.findMany({
-            where: { sessionId: liveSessionId, roomName, text: null, error: null },
+            where: { sessionId: liveSessionId, text: null, error: null },
             orderBy: { seq: 'asc' },
           })
         ).filter((p) => !owed.has(p.id));
@@ -181,7 +182,7 @@ export class LiveTranscribeHandler implements AiJobHandler {
         // Nothing will be answered until the account is fixed: every piece
         // still owed fails now, its audio kept for the teacher's retry.
         await this.prisma.liveAudioSegment.updateMany({
-          where: { sessionId: liveSessionId, roomName, text: null, error: null },
+          where: { sessionId: liveSessionId, text: null, error: null },
           data: { error: `PROVIDER_UNAVAILABLE: ${account}`.slice(0, 300) },
         });
         this.logger.error(

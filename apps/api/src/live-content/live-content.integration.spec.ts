@@ -230,7 +230,7 @@ const publish = (
     includeSummary: true,
     ...extra,
   } as never);
-async function student(k: string) {
+async function student(k: string, gradeId?: string | null) {
   const u = await prisma.user.create({
     data: {
       role: 'STUDENT',
@@ -238,7 +238,11 @@ async function student(k: string) {
       email: `lcs-${k}-${randomUUID().slice(0, 4)}@it.test`,
     },
   });
-  const sp = await prisma.studentProfile.create({ data: { userId: u.id } });
+  // In the course's year when it names one: the year gate (course-access.ts)
+  // is asked before enrolment, and these cases are about enrolment.
+  const sp = await prisma.studentProfile.create({
+    data: { userId: u.id, ...(gradeId ? { gradeId } : {}) },
+  });
   return { u, sp };
 }
 
@@ -453,7 +457,7 @@ describe('Live and Course entitlements stay separate', () => {
     const w = await world();
     const r = await publish(S, w);
     // A Live attendee (booking on the class) — no course enrollment.
-    const liveBuyer = await student(w.k);
+    const liveBuyer = await student(w.k, w.grade?.id);
     await prisma.liveBooking.create({ data: { sessionId: w.ls.id, studentId: liveBuyer.sp.id } });
     await expect(
       S.playback.lessonClassNotes(

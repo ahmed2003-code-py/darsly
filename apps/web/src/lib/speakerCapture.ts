@@ -16,8 +16,16 @@
  * open than it should record separately — the rest falls back to the mixed
  * capture, unattributed, as before.
  */
-import { LessonAudio, nextSeq, pickAudioMime, uploadWithRetry } from './lessonAudio';
+import {
+  LessonAudio,
+  nextSeq,
+  pickAudioMime,
+  SUSPENDED_REPORT_MS,
+  uploadWithRetry,
+} from './lessonAudio';
 import type { PieceStore } from './lessonAudioStore';
+import type { PieceSink } from './lessonAudioOutbox';
+import { lessonAudioContext } from './lessonAudioContext';
 
 /** Upload one piece, saying whose microphone it is. */
 export type UploadSpeakerPiece = (
@@ -38,6 +46,8 @@ export const TURN_SILENCE_MS = 8_000;
 export const IDLE_RESTART_MS = 30_000;
 /** More open microphones than this are mixed together (unattributed) instead. */
 export const MAX_SEPARATE = 6;
+/** With no microphone of the teacher's own open, the silence is reported this often. */
+export const NO_MIC_REPORT_MS = 30_000;
 
 const VOICE_LEVEL = 0.012;
 const LEVEL_EVERY_MS = 400;
@@ -124,6 +134,9 @@ export class SpeakerCapture {
   private stopped = false;
   private readonly mime: string | null;
   private readonly startedAt = Date.now();
+  private suspendedSince: number | null = null;
+  /** Since when no microphone of the teacher's own is open (muted): reported as silence. */
+  private noOwnSince: number | null = null;
 
   constructor(
     private readonly upload: UploadSpeakerPiece,
@@ -131,8 +144,31 @@ export class SpeakerCapture {
     private readonly me: string,
     private readonly store: PieceStore | null = null,
     private readonly session = '',
+    /**
+     * Where finished pieces go (lessonAudioOutbox.ts): owed until delivered,
+     * silence reported, audio health told. Without one, the old behaviour.
+     */
+    private readonly sink: PieceSink | null = null,
   ) {
     this.mime = pickAudioMime();
+  }
+
+  /** The pieces being recorded right now. */
+  currentIds(): string[] {
+    const ids = [...this.sources.values()].map((s) => s.piece?.id).filter((x): x is string => !!x);
+    return [...ids, ...(this.mixed?.currentIds() ?? [])];
+  }
+
+  /** The page is going away: hand over what the recorders hold, so the store has it. */
+  flushForUnload() {
+    for (const s of this.sources.values()) {
+      try {
+        if (s.piece?.rec.state === 'recording') s.piece.rec.requestData();
+      } catch {
+        /* best effort */
+      }
+    }
+    this.mixed?.flushForUnload();
   }
 
   /** False when this browser cannot record separately (the caller uses the mixed capture). */
@@ -149,7 +185,8 @@ export class SpeakerCapture {
    * Only pieces begun before this capture: never one being recorded now.
    */
   async recover(): Promise<number> {
-    if (!this.store) return 0;
+    // With a sink, its outbox delivers leftovers (and keeps what it cannot).
+    if (!this.store || this.sink) return 0;
     const left = await this.store.leftovers(this.session, []);
     let sent = 0;
     for (const { meta, blob } of left) {
@@ -189,6 +226,7 @@ export class SpeakerCapture {
         undefined,
         this.store,
         this.session,
+        this.sink,
       );
       if (mixed.start()) this.mixed = mixed;
     }
@@ -197,6 +235,7 @@ export class SpeakerCapture {
 
   async stop(maxWaitMs = 15_000) {
     if (this.stopped) return;
+    if (this.noOwnSince != null) this.reportNoMic(Date.now());
     this.stopped = true;
     if (this.tick) clearInterval(this.tick);
     const last = [...this.sources.keys()].map((u) => this.drop(u));
@@ -211,7 +250,9 @@ export class SpeakerCapture {
   // ── Sources ───────────────────────────────────────────────────────────────
 
   private add(userId: string, track: MediaStreamTrack) {
-    const ctx = new AudioContext();
+    // With a sink: the page's one context, primed from the teacher's click —
+    // a context made here, inside a timer, could start (and stay) suspended.
+    const ctx = (this.sink && lessonAudioContext()) || new AudioContext();
     const node = ctx.createMediaStreamSource(new MediaStream([track]));
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
@@ -241,13 +282,48 @@ export class SpeakerCapture {
     const done = this.finish(s.piece);
     return done.finally(() => {
       s.node.disconnect();
-      void s.ctx.close().catch(() => undefined);
+      s.analyser.disconnect();
+      if (!this.sink) void s.ctx.close().catch(() => undefined);
     });
+  }
+
+  /** A stretch with no microphone of the teacher's own: nothing to hear, said as silence. */
+  private reportNoMic(now: number) {
+    const since = this.noOwnSince;
+    this.noOwnSince = null;
+    if (!this.sink || since == null || now - since < 1_000) return;
+    this.sink.silent({ seq: nextSeq(since), durationMs: now - since, reason: 'NO_MICROPHONE' });
+  }
+
+  /** Whether audio really runs; told to the sink once it has been held back a while. */
+  private checkHealth(now: number) {
+    if (!this.sink) return;
+    const ctxs = [...this.sources.values()].map((s) => s.ctx);
+    if (!ctxs.length) return;
+    if (ctxs.every((c) => c.state === 'running')) {
+      this.suspendedSince = null;
+      this.sink.health(true);
+      return;
+    }
+    this.suspendedSince ??= now;
+    if (now - this.suspendedSince >= SUSPENDED_REPORT_MS) {
+      this.sink.health(false, 'AUDIO_CONTEXT_SUSPENDED');
+    }
   }
 
   /** Levels, and the cut rule for every piece. */
   private check() {
     const now = Date.now();
+    this.checkHealth(now);
+    if (this.sink) {
+      const own = [...this.sources.values()].some((s) => s.own);
+      if (!own) {
+        this.noOwnSince ??= now;
+        if (now - this.noOwnSince >= NO_MIC_REPORT_MS) this.reportNoMic(now);
+      } else if (this.noOwnSince != null) {
+        this.reportNoMic(now);
+      }
+    }
     const buf = new Float32Array(1024);
     for (const s of this.sources.values()) {
       if (s.ctx.state === 'suspended') void s.ctx.resume().catch(() => undefined);
@@ -295,6 +371,7 @@ export class SpeakerCapture {
       done: Promise.resolve(),
     };
     const store = this.store;
+    const leaseId = this.sink?.leaseId();
     void store?.begin({
       id,
       session: this.session,
@@ -304,6 +381,7 @@ export class SpeakerCapture {
       lastAt: startedAt,
       voiced: false,
       speaker: s.userId,
+      leaseId,
     });
     rec.ondataavailable = (e) => {
       if (!e.data.size) return;
@@ -313,6 +391,20 @@ export class SpeakerCapture {
     piece.done = new Promise<void>((resolve) => {
       rec.onstop = () => {
         const blob = new Blob(chunks, { type: this.mime ?? 'audio/webm' });
+        if (this.sink) {
+          const ms = Date.now() - startedAt;
+          if (!piece.discard && piece.voiced && blob.size >= MIN_PIECE_BYTES) {
+            const p = this.sink
+              .owe({ id, seq, blob, durationMs: ms, speaker: s.userId, leaseId })
+              .finally(() => this.pending.delete(p));
+            this.pending.add(p);
+          } else {
+            void store?.remove(id);
+            this.sink.silent({ id, seq, durationMs: ms });
+          }
+          resolve();
+          return;
+        }
         if (!piece.discard && piece.voiced && blob.size >= MIN_PIECE_BYTES) {
           const ms = Date.now() - startedAt;
           const p = uploadWithRetry((q, b) => this.upload(q, b, ms, s.userId), seq, blob)

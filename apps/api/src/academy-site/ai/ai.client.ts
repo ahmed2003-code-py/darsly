@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
 import { AiJobError } from './ai-job.error';
+import { classifyProviderError, RETRYABLE_PROVIDER_FAILURES } from './provider-failure';
 import { currentAiTrace } from './ai-trace';
 
 export interface AiMessage {
@@ -364,12 +365,18 @@ export class AiClient {
       };
       return await this.getClient().responses.create(params as any, requestOptions);
     } catch (e: any) {
-      const status = e?.status ?? e?.response?.status;
-      const terminal =
-        typeof status === 'number' && status >= 400 && status < 500 && status !== 429;
+      // Classified once, the same way for every caller (provider-failure.ts):
+      // an account the provider will not serve — no credits, billing off, a
+      // bad key — comes back as a 429 or a 401 and is TERMINAL, never retried
+      // as if it were a rate limit. A true rate limit keeps its Retry-After.
+      const f = classifyProviderError(e);
       throw new AiJobError(
-        `OpenAI request failed${status ? ` (${status})` : ''}: ${this.redact(String(e?.message ?? e))}`,
-        terminal ? 'TERMINAL' : 'RETRYABLE',
+        `OpenAI request failed${f.status ? ` (${f.status})` : ''} [${f.kind}${f.code ? ` ${f.code}` : ''}]: ` +
+          this.redact(String(e?.message ?? e)),
+        RETRYABLE_PROVIDER_FAILURES.includes(f.kind) ? 'RETRYABLE' : 'TERMINAL',
+        undefined,
+        f.retryAfterMs,
+        f.kind,
       );
     }
   }

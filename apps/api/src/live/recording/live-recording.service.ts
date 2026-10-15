@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { LiveScope, LiveService } from '../live.service';
 import { LiveRtcService } from '../rtc/live-rtc.service';
 import { recordingStage } from './recording-stage';
+import { recordingIntent, syncCaptureSpans } from '../transcription/capture-state';
 export { recordingStage } from './recording-stage';
 export type { RecordingFailure, RecordingStage } from './recording-stage';
 
@@ -78,15 +79,38 @@ export class LiveRecordingService {
       this.logger.log(
         `live.recording.requested liveSession=${id} recording=${r.rec.id} actor=${actorUserId}`,
       );
+      // The lesson's words follow the teacher's intent from this moment —
+      // not whether the video recorder manages to start (capture-state.ts).
+      await syncCaptureSpans(this.prisma, id, run).catch((e) =>
+        this.logger.warn(`live.capture.span liveSession=${id}: ${(e as Error).message}`),
+      );
       this.rtc.changed(id);
     }
     return this.view(r.rec);
   }
 
-  /** Stop. The recorder notices within seconds, closes the file, uploads it. */
+  /**
+   * Stop. The recorder notices within seconds, closes the file, uploads it.
+   *
+   * Stopping is the teacher's intent, and ends it whatever the recorder did:
+   * a recording that failed to start (or gave up) still has the teacher's
+   * "record" standing — the lesson's audio is still being kept on its account
+   * — and the stop is what ends that too.
+   */
   async stop(scope: LiveScope, id: string) {
-    await this.live.ownedSession(scope, id);
+    const s = await this.live.ownedSession(scope, id);
     const now = new Date();
+    if (s.roomName) {
+      await this.prisma.liveRecording.updateMany({
+        where: {
+          sessionId: id,
+          roomName: s.roomName,
+          stopRequestedAt: null,
+          status: { notIn: [...ACTIVE_RECORDING] },
+        },
+        data: { stopRequestedAt: now },
+      });
+    }
     const active = await this.prisma.liveRecording.findMany({
       where: { sessionId: id, status: { in: [...ACTIVE_RECORDING] }, stopRequestedAt: null },
     });
@@ -113,8 +137,11 @@ export class LiveRecordingService {
       this.logger.log(
         `live.recording.stop_requested liveSession=${id} recordings=${active.length}`,
       );
-      this.rtc.changed(id);
     }
+    await syncCaptureSpans(this.prisma, id, s.roomName).catch((e) =>
+      this.logger.warn(`live.capture.span liveSession=${id}: ${(e as Error).message}`),
+    );
+    this.rtc.changed(id);
     return { id, stopping: active.length };
   }
 
@@ -129,6 +156,18 @@ export class LiveRecordingService {
       },
     });
     return n > 0;
+  }
+
+  /**
+   * The run's latest recording as the classroom shows it: its stage (what the
+   * recorder is actually doing), and whether the teacher's "record" stands.
+   */
+  async runView(sessionId: string, roomName: string) {
+    const r = await this.prisma.liveRecording.findFirst({
+      where: { sessionId, roomName },
+      orderBy: { createdAt: 'desc' },
+    });
+    return r ? this.view(r) : null;
   }
 
   /**
@@ -204,7 +243,12 @@ export class LiveRecordingService {
       sessionId: r.sessionId,
       status: r.status,
       ...recordingStage(r),
+      /** The teacher's "record" stands (not stopped by them, the class still on this run). */
+      intent: recordingIntent(r),
+      requestedAt: r.createdAt,
       startedAt: r.startedAt,
+      /** When media first reached the recorder — "actually recording". */
+      captureStartedAt: r.captureStartedAt,
       stopRequestedAt: r.stopRequestedAt,
       durationSec: r.durationSec,
     };
@@ -242,12 +286,16 @@ export class LiveRecordingService {
     });
     let notStarted = 0;
     for (const r of unclaimed) {
+      // The video failed to start; the teacher's "record" still stands. The
+      // stop is theirs to make (or the class end's), so stopRequestedAt is not
+      // set here: the lesson's audio keeps being captured on that intent, and
+      // the classroom shows the recorder's failure instead of a badge that
+      // silently disappears.
       const done = await this.prisma.liveRecording.updateMany({
         where: { id: r.id, status: 'REQUESTED' },
         data: {
           status: 'FAILED',
           error: r.createdAt.getTime() < now - UNCLAIMED_AFTER_MS ? 'NOT_CLAIMED' : 'NEVER_STARTED',
-          stopRequestedAt: new Date(now),
           failedAt: new Date(now),
         },
       });

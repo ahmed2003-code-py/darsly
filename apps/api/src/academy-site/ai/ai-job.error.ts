@@ -1,3 +1,5 @@
+import type { ProviderFailureKind } from './provider-failure';
+
 export type AiErrorClass = 'RETRYABLE' | 'TERMINAL';
 
 /**
@@ -21,6 +23,13 @@ export class AiJobError extends Error {
      * the retry is claimable at once, which is what every existing caller gets.
      */
     readonly retryAfterMs?: number,
+    /**
+     * What kind of provider failure this was (provider-failure.ts), when it
+     * came from a provider: lets a caller say "the AI service is unavailable"
+     * instead of showing the provider's own words, and stop instead of retrying
+     * an account that cannot be served.
+     */
+    readonly providerKind?: ProviderFailureKind,
   ) {
     super(message);
     this.name = 'AiJobError';

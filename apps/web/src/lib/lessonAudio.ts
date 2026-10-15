@@ -17,6 +17,8 @@
  * the page uploads what is left of it when it comes back (`recover`).
  */
 import type { PieceStore } from './lessonAudioStore';
+import type { PieceSink } from './lessonAudioOutbox';
+import { lessonAudioContext } from './lessonAudioContext';
 
 /** How long one piece runs. */
 export const PIECE_MS = 3 * 60_000;
@@ -27,6 +29,8 @@ const LEVEL_EVERY_MS = 400;
 const MIN_PIECE_BYTES = 2_000;
 /** The recorder hands over (and the store keeps) a chunk this often. */
 const CHUNK_MS = 5_000;
+/** A context still not running after this long is reported: capture is not really running. */
+export const SUSPENDED_REPORT_MS = 4_000;
 
 export type UploadPiece = (seq: number, blob: Blob, durationMs?: number) => Promise<void>;
 
@@ -88,6 +92,9 @@ export class LessonAudio {
   private readonly mime: string | null;
 
   private currentId: string | null = null;
+  private suspendedSince: number | null = null;
+  /** The context is the page's shared one (lessonAudioContext.ts): never closed here. */
+  private sharedCtx = false;
 
   constructor(
     private readonly upload: UploadPiece,
@@ -96,8 +103,27 @@ export class LessonAudio {
     private readonly store: PieceStore | null = null,
     /** The class, so leftovers go to the right one. */
     private readonly session = '',
+    /**
+     * Where finished pieces go (lessonAudioOutbox.ts): owed until delivered,
+     * silence reported, audio health told. Without one, the old behaviour.
+     */
+    private readonly sink: PieceSink | null = null,
   ) {
     this.mime = pickAudioMime();
+  }
+
+  /** The pieces being recorded right now (never delivered from leftovers meanwhile). */
+  currentIds(): string[] {
+    return this.currentId ? [this.currentId] : [];
+  }
+
+  /** The page is going away: hand over what the recorder holds, so the store has it. */
+  flushForUnload() {
+    try {
+      if (this.rec?.rec.state === 'recording') this.rec.rec.requestData();
+    } catch {
+      /* best effort */
+    }
   }
 
   /**
@@ -105,7 +131,8 @@ export class LessonAudio {
    * crash): pieces recorded but never sent. Silent ones are just dropped.
    */
   async recover(): Promise<number> {
-    if (!this.store) return 0;
+    // With a sink, its outbox delivers leftovers (and keeps what it cannot).
+    if (!this.store || this.sink) return 0;
     const left = await this.store.leftovers(this.session, this.currentId ? [this.currentId] : []);
     let sent = 0;
     for (const { meta, blob } of left) {
@@ -121,7 +148,10 @@ export class LessonAudio {
   /** False when this browser cannot record audio at all. */
   start(): boolean {
     if (!this.mime || typeof AudioContext === 'undefined') return false;
-    this.ctx = new AudioContext();
+    // With a sink: the page's one context, primed from the teacher's click.
+    const shared = this.sink ? lessonAudioContext() : null;
+    this.sharedCtx = !!shared;
+    this.ctx = shared ?? new AudioContext();
     this.dest = this.ctx.createMediaStreamDestination();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 1024;
@@ -168,8 +198,27 @@ export class LessonAudio {
     for (const node of this.sources.values()) node.disconnect();
     this.sources.clear();
     if (this.meter) clearInterval(this.meter);
-    void this.ctx?.close().catch(() => undefined);
+    if (this.sharedCtx) {
+      this.analyser?.disconnect();
+    } else {
+      void this.ctx?.close().catch(() => undefined);
+    }
     this.ctx = null;
+  }
+
+  /** Whether the context really runs; told to the sink once it has been held back a while. */
+  private checkHealth() {
+    if (!this.sink || !this.ctx) return;
+    if (this.ctx.state === 'running') {
+      this.suspendedSince = null;
+      this.sink.health(true);
+      return;
+    }
+    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+    this.suspendedSince ??= Date.now();
+    if (Date.now() - this.suspendedSince >= SUSPENDED_REPORT_MS) {
+      this.sink.health(false, 'AUDIO_CONTEXT_SUSPENDED');
+    }
   }
 
   // ── Pieces ────────────────────────────────────────────────────────────────
@@ -192,6 +241,7 @@ export class LessonAudio {
     const id = `${this.session}:${seq}`;
     this.currentId = id;
     const store = this.store;
+    const leaseId = this.sink?.leaseId();
     void store?.begin({
       id,
       session: this.session,
@@ -200,10 +250,12 @@ export class LessonAudio {
       startedAt,
       lastAt: startedAt,
       voiced: false,
+      leaseId,
     });
     if (this.meter) clearInterval(this.meter);
     const buf = new Float32Array(this.analyser!.fftSize);
     this.meter = setInterval(() => {
+      this.checkHealth();
       if (voiced || !this.analyser) return;
       this.analyser.getFloatTimeDomainData(buf);
       let sum = 0;
@@ -219,6 +271,20 @@ export class LessonAudio {
     const done = new Promise<void>((resolve) => {
       rec.onstop = () => {
         const blob = new Blob(chunks, { type: this.mime ?? 'audio/webm' });
+        if (this.sink) {
+          const ms = Date.now() - startedAt;
+          if (voiced && blob.size >= MIN_PIECE_BYTES) {
+            const p = this.sink
+              .owe({ id, seq, blob, durationMs: ms, leaseId })
+              .finally(() => this.pending.delete(p));
+            this.pending.add(p);
+          } else {
+            void store?.remove(id);
+            this.sink.silent({ id, seq, durationMs: ms });
+          }
+          resolve();
+          return;
+        }
         if (voiced && blob.size >= MIN_PIECE_BYTES) {
           const ms = Date.now() - startedAt;
           const p = uploadWithRetry((s, b) => this.upload(s, b, ms), seq, blob)

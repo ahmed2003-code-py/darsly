@@ -3771,7 +3771,47 @@
       "page": "Student cameras {{page}}",
       "prevPage": "Previous student cameras",
       "nextPage": "Next student cameras"
-    }
+    },
+    "endConfirmBodyRecording": "The class is being recorded. Ending it stops the recording for everyone; the video and the transcript are prepared afterwards.",
+    "rec": {
+      "STARTING": "Starting recording…",
+      "RECORDING": "Recording",
+      "STOPPING": "Stopping recording…",
+      "PROCESSING": "Preparing the recording",
+      "COMPLETED": "Recording saved",
+      "FAILED": "Recording did not start",
+      "failure": {
+        "NOT_STARTED": "The video recorder did not start.",
+        "NOTHING_RECORDED": "No sound or picture reached the recording.",
+        "PROCESSING_FAILED": "The video could not be prepared.",
+        "INTERRUPTED": "The recording was interrupted; what was recorded so far is being saved."
+      },
+      "transcriptContinues": "The transcript is still being kept.",
+      "retry": "Try again"
+    },
+    "recConfirm": {
+      "startTitle": "Record this class?",
+      "startBody": "Students will see that the class is being recorded.",
+      "startBodyTranscript": "Students will see that the class is being recorded, and what is said will be kept for the transcript and summary.",
+      "start": "Start recording",
+      "stopTitle": "Stop recording?",
+      "stopBody": "What was recorded will then be processed. You can start a new recording at any time.",
+      "stop": "Stop recording",
+      "keep": "Keep recording"
+    },
+    "leaveConfirm": {
+      "title": "Leave the class?",
+      "body": "The transcript is being kept from this page. If you leave, what is said from now on won't be kept until you come back.",
+      "leave": "Leave",
+      "stay": "Stay"
+    },
+    "capture": {
+      "elsewhere": "The transcript is being kept from another tab or device.",
+      "audioProblem": "Audio isn't running for the transcript. Click anywhere on the page to start it.",
+      "pending_one": "One piece of audio is waiting to be sent — it goes as soon as you are back online.",
+      "pending_other": "{{count}} pieces of audio are waiting to be sent — they go as soon as you are back online."
+    },
+    "connecting": "Connecting…"
   },
   "summary": {
     "title": "AI lesson summary",

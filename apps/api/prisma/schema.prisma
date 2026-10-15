@@ -3315,6 +3315,9 @@ model LiveSession {
   admissions     LiveAdmissionRequest[]
   recordings     LiveRecording[]
   audioSegments  LiveAudioSegment[]
+  captureSpans   LiveCaptureSpan[]
+  captureLeases  LiveCaptureLease[]
+  audioManifest  LiveAudioManifest[]
   replays        LiveReplaySession[]
   derivedLessons Lesson[]                 @relation("liveDerivedLessons")
 
@@ -3326,6 +3329,65 @@ model LiveSession {
   /// The end sweep: LIVE classes that have started, oldest first
   /// (LiveService.overdueLiveSessionIds). Bounded to what is running now.
   @@index([status, startsAt])
+}
+
+/// A stretch of a class whose words were meant to be kept: opened when capture
+/// is asked for (record pressed in AUTO_WHEN_RECORDING, capture switched on in
+/// MANUAL) and closed when it is asked to stop, or the class ends. What a
+/// transcript's completeness is measured against — the teacher's intent, never
+/// whether the video recorder managed to start.
+model LiveCaptureSpan {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName  String
+  /// RECORDING (AUTO_WHEN_RECORDING) or MANUAL.
+  source    String
+  startedAt DateTime    @default(now())
+  endedAt   DateTime?
+
+  @@index([sessionId, roomName])
+}
+
+/// The one teacher tab capturing a class's audio — a lease renewed by its
+/// heartbeat, so a second tab or device never records the same lesson twice.
+/// It also carries what the tab reports about its capture (pieces made, sent,
+/// owed, dropped; whether audio really runs).
+model LiveCaptureLease {
+  id           String      @id @default(cuid())
+  sessionId    String
+  session      LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName     String
+  userId       String
+  /// Stable per browser tab (sessionStorage), so a reload keeps its lease.
+  tabId        String
+  startedAt    DateTime    @default(now())
+  lastBeatAt   DateTime    @default(now())
+  releasedAt   DateTime?
+  audioOk      Boolean     @default(true)
+  audioProblem String?
+  stats        Json?
+
+  @@index([sessionId, roomName, releasedAt])
+}
+
+/// Every piece the capturing tab made — sent, silent or given up on — so a
+/// transcript can tell a piece that never arrived from one that was never made.
+model LiveAudioManifest {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  roomName   String
+  seq        Int
+  durationMs Int
+  /// QUEUED (owed an upload) | SILENT (nobody spoke: nothing to send) | DROPPED (refused for good).
+  state      String
+  reason     String?
+  leaseId    String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique([sessionId, roomName, seq])
 }
 
 /// A piece of a live class's audio, captured in the teacher's browser (their

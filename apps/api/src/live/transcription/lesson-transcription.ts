@@ -1,4 +1,5 @@
 import type { LiveTranscriptionMode } from '@prisma/client';
+import { classifyHttpFailure, providerCodeFromBody } from '../../academy-site/ai/provider-failure';
 import { AiJobError } from '../../academy-site/ai/ai-job.error';
 import type { StoredSpeaker } from './speakers';
 
@@ -144,45 +145,31 @@ export class SttError extends AiJobError {
   }
 }
 
-/** Provider error codes that mean the account itself cannot be served. */
-const ACCOUNT_CODES = new Set([
-  'insufficient_quota',
-  'billing_hard_limit_reached',
-  'billing_not_active',
-  'access_terminated',
-  'account_deactivated',
-  'invalid_api_key',
-  'invalid_organization',
-]);
-
 /** An HTTP refusal from the transcription endpoint → what kind of failure it is. */
 export function classifySttRefusal(
   status: number,
   body: string,
   retryAfter?: string | null,
 ): SttError {
-  let code = '';
-  try {
-    const e = (JSON.parse(body) as { error?: { code?: string; type?: string } }).error;
-    code = String(e?.code || e?.type || '');
-  } catch {
-    // Not JSON (a proxy's page): the status alone decides.
-    code = /insufficient_quota/.test(body) ? 'insufficient_quota' : '';
-  }
+  // The shared classification (academy-site/ai/provider-failure.ts), with the
+  // one distinction only transcription needs: a 400/413/415 is this file.
+  const code = providerCodeFromBody(body);
+  const f = classifyHttpFailure(status, code, retryAfter);
   const detail = `${status}${code ? ` ${code.slice(0, 60)}` : ''}`;
-  if (status === 401 || status === 403 || ACCOUNT_CODES.has(code))
-    return new SttError('ACCOUNT', detail);
-  if (status === 429) {
-    const secs = Number(retryAfter);
-    return new SttError(
-      'RATE_LIMIT',
-      detail,
-      Number.isFinite(secs) && secs > 0 ? secs * 1000 : undefined,
-    );
+  switch (f.kind) {
+    case 'ACCOUNT':
+      return new SttError('ACCOUNT', detail);
+    case 'RATE_LIMIT':
+      return new SttError('RATE_LIMIT', detail, f.retryAfterMs);
+    case 'TRANSIENT':
+      return new SttError('SERVER', detail);
+    case 'TIMEOUT':
+      return new SttError('TIMEOUT', detail);
+    default:
+      return status === 400 || status === 413 || status === 415
+        ? new SttError('BAD_AUDIO', detail)
+        : new SttError('REQUEST', detail);
   }
-  if (status >= 500) return new SttError('SERVER', detail);
-  if (status === 400 || status === 413 || status === 415) return new SttError('BAD_AUDIO', detail);
-  return new SttError('REQUEST', detail);
 }
 
 /** Any error a transcriber threw → its kind (a stand-in transcriber in tests may throw plain errors). */

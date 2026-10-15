@@ -10,6 +10,7 @@ import { LiveRtcService } from './rtc/live-rtc.service';
 import { LiveBonusService } from './bonus/live-bonus.service';
 import { LiveAdmissionService } from './admission/live-admission.service';
 import { LiveRecordingService } from './recording/live-recording.service';
+import { LiveCaptureService } from './transcription/capture-lease.service';
 import { LiveRecorderWorker } from './recording/live-recorder.worker';
 import { VideoModule } from '../video/video.module';
 import { LiveReplayService } from './replay/live-replay.service';
@@ -45,6 +46,8 @@ import { LiveCommerceWorker } from './commerce/live-commerce.worker';
     // "طلب الانضمام": a one-person exception to a full booking capacity.
     LiveAdmissionService,
     LiveRecordingService,
+    // The one tab that captures a class's audio, and the manifest of what it made.
+    LiveCaptureService,
     LiveRecorderWorker,
     LiveReplayService,
     LiveRetentionService,

@@ -35,7 +35,12 @@ interface Controls {
   cameraReport: CameraReport | null;
 }
 const DEFAULT_CONTROLS: Controls = { mic: 'DEFAULT', camera: 'DEFAULT', cameraReport: null };
-import { transcriptCaptureState } from '../transcription/capture-state';
+import {
+  CAPTURE_LEASE_TTL_MS,
+  recordingIntent,
+  transcriptCaptureState,
+} from '../transcription/capture-state';
+import { recordingStage } from '../recording/recording-stage';
 import { bonusTotals } from '../bonus/bonus-totals';
 
 /**
@@ -102,6 +107,24 @@ export interface RtcState {
   policies: { mic: MicPolicy; camera: CameraPolicy };
   /** A recording of this run is being made (the REC badge). */
   recording: boolean;
+  /** The teacher's view: the run's latest recording, as the recorder really has it. */
+  recordingState?: {
+    id: string;
+    stage: string;
+    failure: string | null;
+    /** The teacher's "record" stands (they have not stopped it). */
+    intent: boolean;
+    requestedAt: string;
+    captureStartedAt: string | null;
+  };
+  /** The teacher's view: which tab captures the lesson's audio, and whether it runs. */
+  captureLease?: {
+    id: string;
+    mine: boolean;
+    tabId: string | null;
+    audioOk: boolean;
+    audioProblem: string | null;
+  } | null;
   /** The lesson's words are being kept for its transcript (everyone is told). */
   transcribing: boolean;
   /** The teacher's view only: the lesson's transcription mode (for the MANUAL switch). */
@@ -848,14 +871,11 @@ export class LiveRtcService {
         where: { sessionId, roomName: run, state: { not: 'IDLE' } },
         select: { userId: true, state: true, raisedAt: true },
       }),
-      // Everyone in the room is shown that it is being recorded.
-      this.prisma.liveRecording.count({
-        where: {
-          sessionId,
-          roomName: run,
-          status: { in: ['REQUESTED', 'RECORDING', 'STOPPING'] },
-          stopRequestedAt: null,
-        },
+      // Everyone in the room is shown that it is being recorded; the teacher
+      // also sees what the recorder is really doing (its stage).
+      this.prisma.liveRecording.findFirst({
+        where: { sessionId, roomName: run },
+        orderBy: { createdAt: 'desc' },
       }),
       // …and that its words are being kept, when they are (OFF / MANUAL /
       // AUTO_WHEN_RECORDING, decided in one place).
@@ -893,6 +913,22 @@ export class LiveRtcService {
       ? await this.notJoined(sessionId, new Set(roleOf.keys()))
       : undefined;
     const bonus = await bonusTotals(this.prisma, sessionId);
+    // The tab capturing the lesson's audio (teacher side only).
+    const lease =
+      g.role === 'TEACHER'
+        ? await this.prisma.liveCaptureLease.findFirst({
+            where: {
+              sessionId,
+              roomName: run,
+              releasedAt: null,
+              lastBeatAt: { gt: new Date(Date.now() - CAPTURE_LEASE_TTL_MS) },
+            },
+            orderBy: { lastBeatAt: 'desc' },
+            select: { id: true, userId: true, tabId: true, audioOk: true, audioProblem: true },
+          })
+        : null;
+    const recIntent = recordingIntent(recording);
+    const recStage = recording ? recordingStage(recording) : null;
     const admissions = g.moderator ? await this.admissionsView(sessionId) : undefined;
     const guests = g.moderator
       ? new Set(
@@ -919,8 +955,34 @@ export class LiveRtcService {
       },
       maxSpeakers: maxSpeakers(),
       policies: { mic: g.s.micPolicy, camera: g.s.cameraPolicy },
-      recording: recording > 0,
+      // The REC badge: the teacher asked for it and the recorder has not failed.
+      recording: recIntent && recStage?.stage !== 'FAILED',
+      ...(g.role === 'TEACHER' && recording
+        ? {
+            recordingState: {
+              id: recording.id,
+              stage: recStage!.stage,
+              failure: recStage!.failure,
+              intent: recIntent,
+              requestedAt: recording.createdAt.toISOString(),
+              captureStartedAt: recording.captureStartedAt?.toISOString() ?? null,
+            },
+          }
+        : {}),
       transcribing: capture.active,
+      ...(g.role === 'TEACHER'
+        ? {
+            captureLease: lease
+              ? {
+                  id: lease.id,
+                  mine: lease.userId === userId,
+                  tabId: lease.userId === userId ? lease.tabId : null,
+                  audioOk: lease.audioOk,
+                  audioProblem: lease.audioProblem,
+                }
+              : null,
+          }
+        : {}),
       transcription:
         g.role === 'TEACHER' ? { mode: capture.mode, available: capture.available } : undefined,
       participants: [...roleOf.entries()].map(([uid, role]) => ({

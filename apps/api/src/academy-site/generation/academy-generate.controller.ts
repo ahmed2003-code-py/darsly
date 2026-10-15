@@ -6,7 +6,13 @@ import { AcademyStaff } from '../../academy/academy-staff.decorator';
 import { AiFeatureEnabledGuard } from '../ai-feature.guard';
 import { AiJobService } from '../jobs/ai-job.service';
 import { GenerateSiteDto, RegenerateSectionDto } from './dto/generate.dto';
+import { jobErrorCode } from '../jobs/job-error-code';
 
+/**
+ * A job as the Studio shows it. Never the provider's own error text: a stable
+ * code (job-error-code.ts) the page puts in the teacher's language. The color
+ * the job was asked for comes back too, so the page keeps the teacher's pick.
+ */
 function jobView(job: {
   id: string;
   status: string;
@@ -14,6 +20,7 @@ function jobView(job: {
   attempts: number;
   error: string | null;
   costCents: number;
+  input?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -22,7 +29,8 @@ function jobView(job: {
     status: job.status,
     stage: job.stage,
     attempts: job.attempts,
-    error: job.error,
+    errorCode: job.status === 'FAILED' ? jobErrorCode(job.error) : null,
+    paletteKey: ((job.input ?? {}) as { paletteKey?: string | null }).paletteKey ?? null,
     costCents: job.costCents,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,

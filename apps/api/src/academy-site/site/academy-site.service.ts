@@ -9,6 +9,7 @@ import { AuditService } from '../../audit/audit.service';
 import { brandTokensFromTheme } from '../../branding/app-theme';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AcademySiteConfig } from '../academy-site.config';
+import { jobErrorCode } from '../jobs/job-error-code';
 import { ContentProfile } from '../pipeline/content-profile';
 import { QualityGateService } from '../pipeline/quality-gate.service';
 import { needsUpgrade, upgradeToComposition } from '../pipeline/upgrade';
@@ -54,7 +55,7 @@ export class AcademySiteService {
     const lastJob = await this.prisma.aiJob.findFirst({
       where: { academyId, type: 'SITE_GENERATE' },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, status: true, stage: true, error: true, createdAt: true },
+      select: { id: true, status: true, stage: true, error: true, input: true, createdAt: true },
     });
 
     // What the quality gate thinks of the current draft, and why the design
@@ -94,7 +95,19 @@ export class AcademySiteService {
       version: site?.version ?? 0,
       moderationApproved: site?.moderationApproved ?? false,
       moderationReason: site?.moderationReason ?? null,
-      lastJob,
+      // The provider's own words stay on the job (operators read them there);
+      // the page gets a stable code, and the color the teacher picked.
+      lastJob: lastJob
+        ? {
+            id: lastJob.id,
+            status: lastJob.status,
+            stage: lastJob.stage,
+            errorCode: lastJob.status === 'FAILED' ? jobErrorCode(lastJob.error) : null,
+            paletteKey:
+              ((lastJob.input ?? {}) as { paletteKey?: string | null }).paletteKey ?? null,
+            createdAt: lastJob.createdAt,
+          }
+        : null,
       quality,
       rationale,
     };

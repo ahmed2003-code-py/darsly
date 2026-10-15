@@ -2,6 +2,7 @@ import { AnimatePresence, m, MotionConfig } from 'framer-motion';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { askConfirm } from '../../../lib/confirm';
+import type { RecordingPhase } from '../../../lib/recordingPhase';
 import type { Participant } from '../../../lib/useDailyMeeting';
 import type { LiveMeeting } from '../../../lib/useLiveMeeting';
 import { useLiveChat } from '../../../lib/useLiveChat';
@@ -33,6 +34,7 @@ function Ctl({
   tone,
   showLabel,
   labelLg,
+  busy,
 }: {
   icon: string;
   label: string;
@@ -40,6 +42,8 @@ function Ctl({
   active?: boolean;
   off?: boolean;
   disabled?: boolean;
+  /** A change is under way (the camera opening, a recording starting): said, not hidden. */
+  busy?: boolean;
   badge?: number | 'dot';
   tone?: 'danger';
   showLabel?: boolean;
@@ -61,6 +65,7 @@ function Ctl({
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
+        aria-busy={busy || undefined}
         aria-pressed={active ?? (off !== undefined ? !off : undefined)}
         className={`relative inline-flex h-11 items-center justify-center gap-2 rounded-full transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40 ${
           showLabel ? 'px-4' : labelLg ? 'w-11 lg:w-auto lg:px-4' : 'w-11'
@@ -69,6 +74,12 @@ function Ctl({
         <span aria-hidden className="material-symbols-outlined text-[22px]">
           {icon}
         </span>
+        {busy && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-full border-2 border-current border-t-transparent opacity-60 motion-safe:animate-spin"
+          />
+        )}
         {showLabel && <span className="text-sm font-semibold">{label}</span>}
         {labelLg && <span className="hidden text-sm font-semibold lg:inline">{label}</span>}
         {badge !== undefined && badge !== 0 && (
@@ -167,7 +178,17 @@ export interface ClassroomProps {
   meeting: LiveMeeting;
   anchor: ClockAnchor | null;
   extend: { run: () => void; pending: boolean; note: string | null };
-  recording: { active: boolean; pending: boolean; toggle: () => void };
+  /** The recording's lifecycle (recordingPhase.ts) and the two things the button does. */
+  recording: {
+    phase: RecordingPhase;
+    failure: string | null;
+    /** The teacher's "record" stands (the transcript is kept on its account). */
+    intent: boolean;
+    action: 'start' | 'stop' | null;
+    pending: boolean;
+    start: () => void;
+    stop: () => void;
+  };
   onLeave: () => void;
   onEndClass: () => void;
   ending: boolean;
@@ -303,15 +324,62 @@ export default function Classroom(props: ClassroomProps) {
       ? t('meeting.reconnecting')
       : (extend.note ?? (meeting.notice ? t(`meeting.notice.${meeting.notice}`) : null));
 
+  // The lesson's audio is being kept from this tab, or a recording stands.
+  const keeping = amOwner && (recording.intent || cf?.capture.status === 'on');
   const endClass = async () => {
-    const ok = await askConfirm(t('meeting.endConfirmBody'), {
-      title: t('meeting.endConfirmTitle'),
-      confirmLabel: t('meeting.endForAll'),
-      cancelLabel: t('meeting.keepTeaching'),
-      danger: true,
-    });
+    const ok = await askConfirm(
+      t(keeping ? 'meeting.endConfirmBodyRecording' : 'meeting.endConfirmBody'),
+      {
+        title: t('meeting.endConfirmTitle'),
+        confirmLabel: t('meeting.endForAll'),
+        cancelLabel: t('meeting.keepTeaching'),
+        danger: true,
+      },
+    );
     if (ok) props.onEndClass();
   };
+
+  // Leaving while this tab keeps the lesson's words: they stop being kept.
+  const leave = async () => {
+    if (keeping) {
+      const ok = await askConfirm(t('meeting.leaveConfirm.body'), {
+        title: t('meeting.leaveConfirm.title'),
+        confirmLabel: t('meeting.leaveConfirm.leave'),
+        cancelLabel: t('meeting.leaveConfirm.stay'),
+      });
+      if (!ok) return;
+    }
+    props.onLeave();
+  };
+
+  const transcriptWithRecording =
+    !!cf?.transcription?.available && cf.transcription.mode === 'AUTO_WHEN_RECORDING';
+  const pressRecord = async () => {
+    if (recording.action === 'start') {
+      const ok = await askConfirm(
+        t(
+          transcriptWithRecording
+            ? 'meeting.recConfirm.startBodyTranscript'
+            : 'meeting.recConfirm.startBody',
+        ),
+        {
+          title: t('meeting.recConfirm.startTitle'),
+          confirmLabel: t('meeting.recConfirm.start'),
+        },
+      );
+      if (ok) recording.start();
+    } else if (recording.action === 'stop') {
+      const ok = await askConfirm(t('meeting.recConfirm.stopBody'), {
+        title: t('meeting.recConfirm.stopTitle'),
+        confirmLabel: t('meeting.recConfirm.stop'),
+        cancelLabel: t('meeting.recConfirm.keep'),
+      });
+      if (ok) recording.stop();
+    }
+  };
+  const recOn = recording.action === 'stop';
+  const recBusy =
+    recording.pending || recording.phase === 'STARTING' || recording.phase === 'STOPPING';
 
   const toggle = (p: Exclude<Panel, null>) => setPanel((cur) => (cur === p ? null : p));
 
@@ -489,7 +557,74 @@ export default function Classroom(props: ClassroomProps) {
                 {extend.pending ? t('meeting.extending') : t('meeting.extend')}
               </button>
             )}
-            {recording.active && (
+            {amOwner && recording.phase !== 'IDLE' && recording.phase !== 'RECORDING' && (
+              // The teacher sees what the recorder is really doing — starting,
+              // stopping, preparing, done, or failed and why — never a badge
+              // that silently comes and goes.
+              <span
+                role="status"
+                title={
+                  recording.phase === 'FAILED' && recording.failure
+                    ? t(`meeting.rec.failure.${recording.failure}`)
+                    : undefined
+                }
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                  recording.phase === 'FAILED'
+                    ? 'bg-amber-500/15 text-amber-200'
+                    : 'bg-on-surface/[0.08] text-on-surface-variant'
+                }`}
+              >
+                <span aria-hidden className="material-symbols-outlined text-[14px]">
+                  {recording.phase === 'FAILED'
+                    ? 'error'
+                    : recording.phase === 'COMPLETED'
+                      ? 'check_circle'
+                      : 'hourglass_top'}
+                </span>
+                {t(`meeting.rec.${recording.phase}`)}
+                {recording.phase === 'FAILED' && recording.failure && (
+                  <span className="hidden font-normal sm:inline">
+                    {t(`meeting.rec.failure.${recording.failure}`)}
+                    {recording.intent &&
+                      meeting.transcribing &&
+                      ` ${t('meeting.rec.transcriptContinues')}`}
+                  </span>
+                )}
+                {recording.phase === 'FAILED' && !recording.pending && (
+                  <button
+                    type="button"
+                    className="ms-1 underline"
+                    onClick={() => recording.start()}
+                  >
+                    {t('meeting.rec.retry')}
+                  </button>
+                )}
+              </span>
+            )}
+            {amOwner &&
+              cf &&
+              (cf.capture.heldElsewhere || !cf.capture.audioOk || cf.capture.pending > 0) && (
+                <span
+                  role="status"
+                  className="inline-flex max-w-xs items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-200"
+                >
+                  <span aria-hidden className="material-symbols-outlined text-[14px]">
+                    {cf.capture.heldElsewhere
+                      ? 'devices'
+                      : !cf.capture.audioOk
+                        ? 'mic_off'
+                        : 'cloud_upload'}
+                  </span>
+                  <span className="truncate">
+                    {cf.capture.heldElsewhere
+                      ? t('meeting.capture.elsewhere')
+                      : !cf.capture.audioOk
+                        ? t('meeting.capture.audioProblem')
+                        : t('meeting.capture.pending', { count: cf.capture.pending })}
+                  </span>
+                </span>
+              )}
+            {meeting.recording && (
               // Everyone is told, not only the teacher: being recorded is
               // something a class is entitled to know at a glance.
               <span
@@ -817,6 +952,7 @@ export default function Classroom(props: ClassroomProps) {
                 <Ctl
                   icon={meeting.micOn ? 'mic' : 'mic_off'}
                   off={!meeting.micOn}
+                  busy={!!cf?.pendingDevice.AUDIO}
                   label={meeting.micOn ? t('meeting.muteMic') : t('meeting.unmuteMic')}
                   onClick={meeting.toggleMic}
                 />
@@ -825,7 +961,14 @@ export default function Classroom(props: ClassroomProps) {
                 <Ctl
                   icon={meeting.camOn ? 'videocam' : 'videocam_off'}
                   off={!meeting.camOn}
-                  label={meeting.camOn ? t('meeting.camOff') : t('meeting.camOn')}
+                  busy={!!cf?.pendingDevice.VIDEO}
+                  label={
+                    cf?.pendingDevice.VIDEO
+                      ? t('meeting.connecting')
+                      : meeting.camOn
+                        ? t('meeting.camOff')
+                        : t('meeting.camOn')
+                  }
                   onClick={meeting.toggleCam}
                 />
               )}
@@ -880,10 +1023,19 @@ export default function Classroom(props: ClassroomProps) {
                 {amOwner && (
                   <Ctl
                     icon="radio_button_checked"
-                    active={recording.active}
-                    disabled={recording.pending}
-                    label={recording.active ? t('meeting.stopRec') : t('meeting.startRec')}
-                    onClick={recording.toggle}
+                    active={recOn}
+                    busy={recBusy}
+                    disabled={recording.pending || recording.action === null}
+                    label={
+                      recBusy
+                        ? t(
+                            `meeting.rec.${recording.phase === 'STOPPING' ? 'STOPPING' : 'STARTING'}`,
+                          )
+                        : recOn
+                          ? t('meeting.stopRec')
+                          : t('meeting.startRec')
+                    }
+                    onClick={() => void pressRecord()}
                   />
                 )}
                 {amOwner && cf?.transcription?.available && cf.transcription.mode === 'MANUAL' && (
@@ -972,13 +1124,13 @@ export default function Classroom(props: ClassroomProps) {
                 icon="call_end"
                 tone="danger"
                 label={t('meeting.leave')}
-                onClick={props.onLeave}
+                onClick={() => void leave()}
               />
             </div>
           </div>
 
           <div className="hidden items-center justify-end gap-2 md:flex">
-            <Ctl icon="logout" label={t('meeting.leave')} onClick={props.onLeave} showLabel />
+            <Ctl icon="logout" label={t('meeting.leave')} onClick={() => void leave()} showLabel />
             {amOwner && (
               <button
                 type="button"

@@ -46,6 +46,9 @@ const asStrings = (v: unknown): string[] =>
  *   → assemble (deterministic block layout, validated against the schema)
  * Two model calls; everything between them is deterministic.
  */
+/** One page-copy call: answered in well under a minute; two minutes is an outage. */
+export const SITE_CALL_TIMEOUT_MS = 120_000;
+
 @Injectable()
 export class SiteGeneratorService {
   private readonly logger = new Logger(SiteGeneratorService.name);
@@ -222,6 +225,12 @@ export class SiteGeneratorService {
       maxTokens: 4000,
       schemaName: FIXED_COPY_SCHEMA_NAME,
       schema: fixedCopyJsonSchema,
+      // Bounded: the SDK's default (ten minutes, two retries) let one stalled
+      // call hold the teacher's spinner for half an hour, three job attempts
+      // over. A failure is retried by the job queue — classified first, so an
+      // account the provider will not serve is not retried at all.
+      timeoutMs: SITE_CALL_TIMEOUT_MS,
+      maxRetries: 1,
     });
     const parsed = parseFixedCopy(completion.data);
     if (parsed.error) {

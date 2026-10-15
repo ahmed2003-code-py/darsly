@@ -605,3 +605,87 @@ describe('P6 on Postgres: manual match of a wallet + transfer payment', () => {
     expect(err.getResponse()).toMatchObject({ code: 'AMOUNT_MISMATCH' });
   });
 });
+
+describe('the summary when the provider refuses the account, and from an incomplete transcript', () => {
+  const okNotes = JSON.stringify({
+    summary: 'ملخص',
+    topics: [],
+    keyPoints: [],
+    questionsAndAnswers: [],
+    actionItems: [],
+  });
+  const handlerWith = (ai: AiClient) =>
+    new LiveSummaryHandler(
+      prisma,
+      ai,
+      dailyProviders({ transcriptFor: jest.fn(), transcriptionAvailable: jest.fn() }),
+      { create: jest.fn(async () => ({})) } as any,
+    );
+
+  it('no credits (429 insufficient_quota): one attempt, FAILED as PROVIDER_UNAVAILABLE, never retried', async () => {
+    if (!guard()) return;
+    await prisma.aiJob.updateMany({
+      where: { status: { in: ['QUEUED', 'RUNNING'] } },
+      data: { status: 'CANCELED' },
+    });
+    const w = await world({ transcriptText: 'المدرس: '.padEnd(400, 'ا') });
+    const config = aiConfig();
+    const jobs = new AiJobService(prisma, config);
+    await liveService(jobs).requestSummary(w.scope, w.ls.id);
+    const ai = new AiClient(config, prisma);
+    const create = jest.fn().mockRejectedValue(
+      Object.assign(new Error('You exceeded your current quota'), {
+        status: 429,
+        error: { code: 'insufficient_quota', type: 'insufficient_quota' },
+      }),
+    );
+    (ai as any).client = { responses: { create } };
+    const worker = new AiJobWorker(config, jobs, [handlerWith(ai)]);
+    const job = await jobs.claimNext(60_000);
+    await (worker as any).process(job);
+    const after = await prisma.aiJob.findUniqueOrThrow({ where: { id: job!.id } });
+    expect(after.status).toBe('FAILED');
+    expect(after.attempts).toBe(1);
+    expect(after.errorClass).toBe('TERMINAL');
+    expect(create).toHaveBeenCalledTimes(1);
+    const row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+    expect(row.summaryStatus).toBe('FAILED');
+    expect(row.summaryError).toBe('PROVIDER_UNAVAILABLE');
+  });
+
+  it('a PARTIAL transcript makes an explicitly partial summary — told so, and shown so', async () => {
+    if (!guard()) return;
+    await prisma.aiJob.updateMany({
+      where: { status: { in: ['QUEUED', 'RUNNING'] } },
+      data: { status: 'CANCELED' },
+    });
+    const w = await world({
+      provider: 'CLOUDFLARE',
+      status: 'ENDED',
+      endedAt: new Date(Date.now() - 60_000),
+      transcriptStatus: 'PARTIAL',
+      transcriptText: 'المدرس: '.padEnd(400, 'ا'),
+    });
+    const config = aiConfig();
+    const jobs = new AiJobService(prisma, config);
+    await liveService(jobs).requestSummary(w.scope, w.ls.id);
+    const ai = new AiClient(config, prisma);
+    const create = jest.fn().mockResolvedValue({
+      id: 'resp_ok',
+      status: 'completed',
+      output_text: okNotes,
+      usage: { input_tokens: 100, output_tokens: 100 },
+    });
+    (ai as any).client = { responses: { create } };
+    const worker = new AiJobWorker(config, jobs, [handlerWith(ai)]);
+    const job = await jobs.claimNext(60_000);
+    await (worker as any).process(job);
+    // The model was told the transcript has gaps…
+    const system = create.mock.calls[0][0].input.find((m: any) => m.role === 'system').content;
+    expect(system).toMatch(/could not be transcribed/);
+    // …and the summary is stored, and read back, as partial.
+    const row = await prisma.liveSession.findUniqueOrThrow({ where: { id: w.ls.id } });
+    expect(row.summaryStatus).toBe('READY');
+    expect((row.summaryMeta as { partial?: boolean }).partial).toBe(true);
+  });
+});

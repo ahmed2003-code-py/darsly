@@ -37,7 +37,9 @@ export type TranscriptUnavailable =
   /** Transcription was on, but nothing was captured (never switched on, or silence). */
   | 'NOTHING_CAPTURED'
   /** FAILED: the transcription service refused to work (its account); the audio is kept for a retry. */
-  | 'SERVICE_UNAVAILABLE';
+  | 'SERVICE_UNAVAILABLE'
+  /** FAILED: capture was asked for but never ran (no audio, not even silence, reached the server). */
+  | 'CAPTURE_FAILED';
 
 export type SummaryStage =
   'WAITING_FOR_TRANSCRIPT' | 'NOT_STARTED' | 'GENERATING' | 'READY' | 'FAILED' | 'UNAVAILABLE';
@@ -95,7 +97,12 @@ export function pipelineStages(x: PipelineInput): {
   } else if (x.transcriptStatus === 'FAILED') {
     transcript = {
       stage: 'FAILED',
-      reason: x.transcriptFailReason === 'PROVIDER_UNAVAILABLE' ? 'SERVICE_UNAVAILABLE' : null,
+      reason:
+        x.transcriptFailReason === 'PROVIDER_UNAVAILABLE'
+          ? 'SERVICE_UNAVAILABLE'
+          : x.transcriptFailReason === 'NOT_CAPTURED'
+            ? 'CAPTURE_FAILED'
+            : null,
     };
   } else if (!x.transcriptionOn) {
     transcript = { stage: 'UNAVAILABLE', reason: 'TRANSCRIPTION_OFF' };

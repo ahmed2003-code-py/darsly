@@ -18,6 +18,8 @@ import { memoryStorage } from 'multer';
 import type { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -29,6 +31,8 @@ import {
   MaxLength,
   Min,
   MinLength,
+  IsObject,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { IsOptionalId, LIMITS } from '../common/validation';
@@ -52,6 +56,7 @@ import { LiveBonusService } from './bonus/live-bonus.service';
 import { LiveAdmissionService } from './admission/live-admission.service';
 import { LiveRecordingService } from './recording/live-recording.service';
 import { LiveReplayService } from './replay/live-replay.service';
+import { LiveCaptureService } from './transcription/capture-lease.service';
 import { AUDIO_SEGMENT_MAX_BYTES, transcriptionConfig } from './transcription/lesson-transcription';
 
 /**
@@ -112,6 +117,36 @@ class AudioPieceDto {
   @IsOptional() @IsString() @MaxLength(12) durationMs?: string;
   /** Whose microphone this piece is, as the page says — verified by the server, never trusted. */
   @IsOptional() @IsString() @MaxLength(LIMITS.ID) speakerUserId?: string;
+  /** The capture lease the piece was made under (capture-lease.service.ts). */
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) leaseId?: string;
+}
+
+class CaptureClaimDto {
+  /** This browser tab, stable across a reload (sessionStorage). */
+  @IsString() @MinLength(8) @MaxLength(64) tabId!: string;
+}
+
+class CapturePieceDto {
+  @IsInt() seq!: number;
+  @IsInt() @Min(0) @Max(30 * 60_000) durationMs!: number;
+  @IsIn(['QUEUED', 'SILENT', 'DROPPED']) state!: 'QUEUED' | 'SILENT' | 'DROPPED';
+  @IsOptional() @IsString() @MaxLength(120) reason?: string;
+  @IsOptional() @IsString() @MaxLength(LIMITS.ID) leaseId?: string;
+}
+
+class CaptureBeatDto {
+  @IsString() @MaxLength(LIMITS.ID) leaseId!: string;
+  @IsString() @MinLength(8) @MaxLength(64) tabId!: string;
+  @IsOptional() @IsBoolean() audioOk?: boolean;
+  @IsOptional() @IsString() @MaxLength(120) audioProblem?: string | null;
+  /** Counters the page keeps: created, uploaded, pending, dropped, silent. */
+  @IsOptional() @IsObject() stats?: Record<string, number>;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ValidateNested({ each: true })
+  @Type(() => CapturePieceDto)
+  pieces?: CapturePieceDto[];
 }
 
 class RecordingStartedDto {
@@ -186,6 +221,7 @@ export class LiveController {
     private readonly admission: LiveAdmissionService,
     private readonly recordings: LiveRecordingService,
     private readonly replays: LiveReplayService,
+    private readonly capture: LiveCaptureService,
   ) {}
 
   // ── Teacher ──────────────────────────────────────────────────────────────
@@ -445,7 +481,50 @@ export class LiveController {
     return this.live.storeAudioPiece(scopeOf(ctx), id, Number(seq), file, Number(dto?.durationMs), {
       uploaderUserId: u.sub,
       speakerUserId: dto?.speakerUserId,
+      leaseId: dto?.leaseId,
     });
+  }
+
+  /**
+   * The one tab that captures this class's audio (a lease). A second tab or
+   * device is refused with CAPTURE_ELSEWHERE while the holder keeps beating.
+   */
+  @Post('teacher/live/:id/capture/claim')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] Claim the capture of this class for this tab' })
+  captureClaim(
+    @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: CaptureClaimDto,
+  ) {
+    return this.capture.claim(scopeOf(ctx), id, u.sub, dto.tabId);
+  }
+
+  @Post('teacher/live/:id/capture/beat')
+  @AcademyStaff('live.manage')
+  @ApiOperation({
+    summary: '[academy] The capturing tab: still here, its pieces, its audio health',
+  })
+  captureBeat(
+    @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: CaptureBeatDto,
+  ) {
+    return this.capture.beat(scopeOf(ctx), id, u.sub, dto);
+  }
+
+  @Post('teacher/live/:id/capture/release')
+  @AcademyStaff('live.manage')
+  @ApiOperation({ summary: '[academy] The capturing tab stopped capturing' })
+  captureRelease(
+    @CurrentAcademy() ctx: AcademyContext,
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Body() dto: CaptureBeatDto,
+  ) {
+    return this.capture.release(scopeOf(ctx), id, u.sub, dto);
   }
 
   @Patch('teacher/live/:id/transcription')

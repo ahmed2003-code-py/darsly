@@ -113,6 +113,8 @@ describe('the lesson-audio upload', () => {
       offAt?: Date | null;
       recording?: any;
       recent?: number;
+      /** A capture span covering the piece (late delivery). */
+      span?: boolean;
     } = {},
   ) {
     const rows: any[] = [];
@@ -131,6 +133,9 @@ describe('the lesson-audio upload', () => {
             ? { status: 'RECORDING', stopRequestedAt: null, stoppedAt: null }
             : opts.recording,
         ),
+      },
+      liveCaptureSpan: {
+        findFirst: jest.fn(async () => (opts.span ? { id: 'span1' } : null)),
       },
       liveAudioSegment: {
         findUnique: jest.fn(
@@ -276,6 +281,27 @@ describe('the lesson-audio upload', () => {
       expect(
         await code(setup(live, stopped(10 * 60_000)).svc.storeAudioPiece(scope, 's1', T(), file())),
       ).toBe('CAPTURE_OFF');
+    });
+
+    it('takes a late piece spoken inside a capture span, after the live windows closed', async () => {
+      // Offline for ten minutes after the class ended: the piece is still owed.
+      const longAgo = { ...live, status: 'ENDED', endedAt: new Date(Date.now() - 10 * 60_000) };
+      expect(
+        await code(setup(longAgo, { span: true }).svc.storeAudioPiece(scope, 's1', T(), file())),
+      ).toBe('ok');
+      // Capture stopped long ago, the class still running: inside its span, still owed.
+      expect(
+        await code(
+          setup(live, {
+            recording: {
+              status: 'UPLOADING',
+              stopRequestedAt: new Date(Date.now() - 10 * 60_000),
+              stoppedAt: null,
+            },
+            span: true,
+          }).svc.storeAudioPiece(scope, 's1', T(), file()),
+        ),
+      ).toBe('ok');
     });
 
     it('takes the last piece just after the end, and nothing later', async () => {

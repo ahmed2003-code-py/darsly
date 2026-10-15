@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from './api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { api, apiKeepalive } from './api';
 import { getSocket } from './socket';
 import type { Participant } from './useDailyMeeting';
 import { initialLayer, nextLayer, type LayerState } from './simulcast';
@@ -7,6 +7,9 @@ import { audioConstraint, videoConstraint } from './liveDevices';
 import { LessonAudio } from './lessonAudio';
 import { SpeakerCapture } from './speakerCapture';
 import { idbPieceStore } from './lessonAudioStore';
+import { PieceOutbox, type UploadOwed } from './lessonAudioOutbox';
+import { primeLessonAudio } from './lessonAudioContext';
+import { beginOp, markOp } from './liveTimings';
 
 /**
  * The Darsly classroom over Cloudflare Realtime.
@@ -33,6 +36,45 @@ const HEARTBEAT_MS = 30_000;
 const STATE_POLL_MS = 20_000;
 /** How long a connection may sit disconnected before it is rebuilt. */
 const RECONNECT_AFTER_MS = 4_000;
+/** The capturing tab's heartbeat (its lease lasts 30 s on the server). */
+const CAPTURE_BEAT_MS = 10_000;
+/** Asking again for the capture of a class another tab holds. */
+const CAPTURE_RECLAIM_MS = 15_000;
+/** Owed pieces of the lesson's audio are tried again this often. */
+const OUTBOX_RETRY_MS = 20_000;
+
+/** This browser tab, stable across a reload (a duplicated tab gets a new one). */
+function captureTabId(): string {
+  const fresh = () =>
+    globalThis.crypto?.randomUUID?.() ??
+    `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  try {
+    const k = 'darsly-capture-tab';
+    let v = sessionStorage.getItem(k);
+    if (!v) {
+      v = fresh();
+      sessionStorage.setItem(k, v);
+    }
+    return v;
+  } catch {
+    return fresh();
+  }
+}
+
+/** One piece of the lesson's audio, to the server (its lease and speaker with it). */
+const uploadPiece =
+  (liveSessionId: string): UploadOwed =>
+  (seq, blob, durationMs, speakerUserId, leaseId) => {
+    const form = new FormData();
+    form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
+    if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
+    // Whose microphone, as this page knows it — the server checks it.
+    if (speakerUserId) form.append('speakerUserId', speakerUserId);
+    if (leaseId) form.append('leaseId', leaseId);
+    return api.post(`/teacher/live/${liveSessionId}/audio/${seq}`, form).then(() => undefined);
+  };
+
+export type CaptureStatus = 'off' | 'claiming' | 'on' | 'elsewhere';
 
 type Kind = 'AUDIO' | 'VIDEO' | 'SCREEN' | 'SCREEN_AUDIO';
 export type HandState =
@@ -58,6 +100,23 @@ export interface RtcState {
   /** The class's policies (explain the controls to everyone). */
   policies?: { mic: 'RAISE_HAND' | 'LISTEN_ONLY'; camera?: CameraPolicy };
   recording?: boolean;
+  /** The teacher's view: the run's latest recording, as the recorder really has it. */
+  recordingState?: {
+    id: string;
+    stage: string;
+    failure: string | null;
+    intent: boolean;
+    requestedAt: string;
+    captureStartedAt: string | null;
+  };
+  /** The teacher's view: which tab captures the lesson's audio. */
+  captureLease?: {
+    id: string;
+    mine: boolean;
+    tabId: string | null;
+    audioOk: boolean;
+    audioProblem: string | null;
+  } | null;
   /** The lesson's words are being captured right now (OFF / MANUAL / AUTO, decided by the server). */
   transcribing?: boolean;
   /** The teacher's view: the lesson's transcription mode. */
@@ -198,6 +257,34 @@ export function useCloudflareMeeting(
   const lessonAudio = useRef<LessonAudio | SpeakerCapture | null>(null);
   /** The server allows this page to capture (the teacher, transcription on). */
   const [mayCapture, setMayCapture] = useState(false);
+  /** This tab's capture of the lesson's audio: claiming its lease, on, or held by another tab. */
+  const [captureStatus, setCaptureStatus] = useState<CaptureStatus>('off');
+  const leaseRef = useRef<string | null>(null);
+  const claimingRef = useRef(false);
+  const [claimTick, setClaimTick] = useState(0);
+  const tabId = useRef<string>(captureTabId());
+  /** Every piece made, owed until delivered — and what was made, told to the server. */
+  const outbox = useMemo(
+    () =>
+      new PieceOutbox({
+        session: liveSessionId,
+        store: idbPieceStore(),
+        upload: uploadPiece(liveSessionId),
+      }),
+    [liveSessionId],
+  );
+  const [captureStats, setCaptureStats] = useState(() => ({
+    ...outbox.stats,
+    audioOk: true,
+    audioProblem: null as string | null,
+  }));
+  const recordingIntentRef = useRef(false);
+  /** Camera / microphone being switched: what the teacher asked for, and whether it is under way. */
+  const desired = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  const working = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  const [pendingDevice, setPendingDevice] = useState<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  /** The self-view, on screen before the SFU has confirmed the camera. */
+  const localPreview = useRef<MediaStreamTrack | null>(null);
   /** Bumped whenever a remote or local track appears or goes, to re-render tiles. */
   const [, setTick] = useState(0);
   const bump = useCallback(() => setTick((n) => n + 1), []);
@@ -286,6 +373,7 @@ export function useCloudflareMeeting(
       for (const [trackId, p] of pulled.current) {
         if (p.mid === mid) {
           p.track = e.track;
+          markOp(`recv:${trackId}`, `${p.kind}:${p.userId}`, 'remoteVisible');
           if (p.kind === 'AUDIO' || p.kind === 'SCREEN_AUDIO') playAudio(trackId, e.track);
         }
       }
@@ -716,14 +804,37 @@ export function useCloudflareMeeting(
     [openRecv, fetchState, reconcile, publish],
   );
 
-  /** The last piece of the lesson's audio is sent; capture stops. */
-  const stopCapture = useCallback(() => {
-    const la = lessonAudio.current;
-    lessonAudio.current = null;
-    setCapturing(false);
-    // Not awaited: the upload finishes in the background while the page moves on.
-    if (la) void la.stop();
-  }, []);
+  /**
+   * The last piece of the lesson's audio is sent; capture stops, and the
+   * lease is given back (unless it was lost to another tab). Not awaited:
+   * the upload finishes in the background while the page moves on, and
+   * whatever it cannot deliver stays owed (lessonAudioOutbox.ts).
+   */
+  const stopCapture = useCallback(
+    (release = true) => {
+      const la = lessonAudio.current;
+      lessonAudio.current = null;
+      setCapturing(false);
+      const leaseId = leaseRef.current;
+      leaseRef.current = null;
+      setCaptureStatus((s) => (s === 'elsewhere' ? s : 'off'));
+      void (async () => {
+        if (la) await la.stop();
+        await outbox.flush().catch(() => undefined);
+        if (!leaseId || !release) return;
+        const pieces = outbox.drainReports();
+        await api
+          .post(`/teacher/live/${liveSessionId}/capture/release`, {
+            leaseId,
+            tabId: tabId.current,
+            stats: { ...outbox.stats },
+            pieces: pieces.slice(0, 200),
+          })
+          .catch(() => outbox.requeueReports(pieces));
+      })();
+    },
+    [outbox, liveSessionId],
+  );
 
   const teardown = useCallback(async () => {
     joinedRef.current = false;
@@ -732,6 +843,8 @@ export function useCloudflareMeeting(
     local.current.clear();
     previewRef.current?.stop();
     previewRef.current = null;
+    localPreview.current?.stop();
+    localPreview.current = null;
     for (const id of [...audioEls.current.keys()]) dropAudio(id);
     pulled.current.clear();
     await Promise.all([closeConn(send), closeConn(recv)]);
@@ -961,45 +1074,172 @@ export function useCloudflareMeeting(
 
   // Start and stop capturing the lesson's words as the server says: the mode
   // (OFF / MANUAL / AUTO_WHEN_RECORDING) is decided there, once, for the
-  // badge, this page and the upload alike. Stopping flushes the piece being
-  // written.
+  // badge, this page and the upload alike. Capture starts only once this tab
+  // holds the class's capture lease — a second tab or device is told another
+  // one has it, instead of recording the lesson twice. Stopping flushes the
+  // piece being written.
   const shouldCapture = enabled && joined && mayCapture && !ended && !!state?.transcribing;
   const myUserId = state?.me.userId;
   useEffect(() => {
-    if (shouldCapture && !lessonAudio.current && myUserId) {
-      const upload = (seq: number, blob: Blob, durationMs?: number, speakerUserId?: string) => {
-        const form = new FormData();
-        form.append('file', blob, blob.type.includes('mp4') ? 'piece.m4a' : 'piece.webm');
-        if (durationMs) form.append('durationMs', String(Math.round(durationMs)));
-        // Whose microphone, as this page knows it — the server checks it.
-        if (speakerUserId) form.append('speakerUserId', speakerUserId);
-        return api.post(`/teacher/live/${liveSessionId}/audio/${seq}`, form).then(() => undefined);
-      };
-      // Each microphone on its own (who said what); the mixed capture when
-      // this browser cannot.
-      const sc = new SpeakerCapture(upload, myUserId, idbPieceStore(), liveSessionId);
-      const la = sc.start()
-        ? sc
-        : new LessonAudio(
-            (s, b, ms) => upload(s, b, ms),
-            undefined,
+    if (shouldCapture && !lessonAudio.current && myUserId && !claimingRef.current) {
+      claimingRef.current = true;
+      setCaptureStatus('claiming');
+      void api
+        .post(`/teacher/live/${liveSessionId}/capture/claim`, { tabId: tabId.current })
+        .then(({ data }) => {
+          if (lessonAudio.current) return;
+          leaseRef.current = data.leaseId;
+          outbox.setLease(data.leaseId);
+          const upload = uploadPiece(liveSessionId);
+          // Each microphone on its own (who said what); the mixed capture when
+          // this browser cannot. Both report every piece to the outbox.
+          const sc = new SpeakerCapture(
+            (q, b, ms, spk) => upload(q, b, ms ?? 0, spk, data.leaseId),
+            myUserId,
             idbPieceStore(),
             liveSessionId,
+            outbox,
           );
-      if (la === sc || (la as LessonAudio).start()) {
-        lessonAudio.current = la;
-        setCapturing(true);
-        // A piece interrupted by a reload or a crash of this page: sent now.
-        void la.recover();
-      }
+          const la = sc.start()
+            ? sc
+            : new LessonAudio(
+                (q, b, ms) => upload(q, b, ms ?? 0, undefined, data.leaseId),
+                undefined,
+                idbPieceStore(),
+                liveSessionId,
+                outbox,
+              );
+          if (la === sc || (la as LessonAudio).start()) {
+            lessonAudio.current = la;
+            setCapturing(true);
+            setCaptureStatus('on');
+            // A piece left by a reload or a crash of this page: sent now.
+            void outbox.flush(la.currentIds());
+          } else {
+            // This browser cannot record audio at all: said, never pretended.
+            outbox.health(false, 'NO_RECORDER');
+            setCaptureStatus('off');
+            setNotice('TRANSCRIPT_FAILED');
+          }
+        })
+        .catch((e) => {
+          setCaptureStatus(errCode(e) === 'CAPTURE_ELSEWHERE' ? 'elsewhere' : 'off');
+        })
+        .finally(() => {
+          claimingRef.current = false;
+        });
     } else if (!shouldCapture && lessonAudio.current) {
       stopCapture();
+    } else if (!shouldCapture) {
+      setCaptureStatus('off');
     }
-  }, [shouldCapture, myUserId, liveSessionId, stopCapture]);
+  }, [shouldCapture, myUserId, liveSessionId, stopCapture, outbox, claimTick]);
+
+  // Not capturing although it should be (another tab holds it, or a claim
+  // failed): ask again every little while — the other tab may have closed.
+  useEffect(() => {
+    if (!shouldCapture || capturing) return;
+    const h = setInterval(() => setClaimTick((n) => n + 1), CAPTURE_RECLAIM_MS);
+    return () => clearInterval(h);
+  }, [shouldCapture, capturing]);
+
+  // The capturing tab's heartbeat: still here, the pieces it made, whether its
+  // audio really runs. A lease lost to another tab stops this one's capture.
+  useEffect(() => {
+    if (captureStatus !== 'on') return;
+    const beat = async () => {
+      const leaseId = leaseRef.current;
+      if (!leaseId) return;
+      const all = outbox.drainReports();
+      const pieces = all.slice(0, 200);
+      if (all.length > 200) outbox.requeueReports(all.slice(200));
+      try {
+        await api.post(`/teacher/live/${liveSessionId}/capture/beat`, {
+          leaseId,
+          tabId: tabId.current,
+          audioOk: outbox.audioOk,
+          audioProblem: outbox.audioProblem,
+          stats: { ...outbox.stats },
+          pieces,
+        });
+      } catch (e) {
+        outbox.requeueReports(pieces);
+        if (errCode(e) === 'CAPTURE_LEASE_LOST') {
+          stopCapture(false);
+          setCaptureStatus('elsewhere');
+        }
+      }
+    };
+    void beat();
+    const h = setInterval(() => void beat(), CAPTURE_BEAT_MS);
+    return () => clearInterval(h);
+  }, [captureStatus, liveSessionId, outbox, stopCapture]);
+
+  // Owed pieces go when they can: on opening the class (a reload, a crash, the
+  // next visit), when the connection comes back, and every little while.
+  useEffect(() => {
+    if (!enabled) return;
+    const flush = () => void outbox.flush(lessonAudio.current?.currentIds() ?? []);
+    flush();
+    const off = outbox.onChange(() =>
+      setCaptureStats({
+        ...outbox.stats,
+        audioOk: outbox.audioOk,
+        audioProblem: outbox.audioProblem,
+      }),
+    );
+    window.addEventListener('online', flush);
+    const h = setInterval(() => {
+      if (outbox.stats.pending > 0) flush();
+    }, OUTBOX_RETRY_MS);
+    return () => {
+      off();
+      window.removeEventListener('online', flush);
+      clearInterval(h);
+    };
+  }, [enabled, outbox]);
+
+  // The page closing while the lesson's audio is captured here: warned first
+  // (where the browser allows), and what the recorder holds is handed to the
+  // store so the next visit can still send it.
+  useEffect(() => {
+    if (!enabled) return;
+    const onHide = () => {
+      lessonAudio.current?.flushForUnload();
+      const leaseId = leaseRef.current;
+      if (!leaseId) return;
+      apiKeepalive(`/teacher/live/${liveSessionId}/capture/beat`, {
+        leaseId,
+        tabId: tabId.current,
+        audioOk: outbox.audioOk,
+        audioProblem: outbox.audioProblem,
+        stats: { ...outbox.stats },
+        pieces: outbox.drainReports().slice(0, 200),
+      });
+    };
+    const onBefore = (e: BeforeUnloadEvent) => {
+      if (lessonAudio.current || outbox.stats.pending > 0 || recordingIntentRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onBefore);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onBefore);
+    };
+  }, [enabled, liveSessionId, outbox]);
+
+  useEffect(() => {
+    recordingIntentRef.current = !!state?.recordingState?.intent;
+  }, [state?.recordingState?.intent]);
 
   /** MANUAL mode: the teacher switches capture on or off. */
   const setTranscriptCapture = useCallback(
     async (on: boolean) => {
+      // From the teacher's click: the audio context may start here.
+      if (on) primeLessonAudio();
       try {
         await api.patch(`/teacher/live/${liveSessionId}/transcription`, { capture: on });
       } catch {
@@ -1043,69 +1283,131 @@ export function useCloudflareMeeting(
 
   // ── Controls ──────────────────────────────────────────────────────────────
 
+  /**
+   * Bring one device to what the teacher asked for, one change at a time.
+   *
+   * A press records what is wanted; whatever is running finishes and the
+   * loop goes again until the device matches the last press. So ON → OFF →
+   * ON pressed quickly is one camera, never two publishes racing each other
+   * (each used to start its own getUserMedia and push a second track).
+   */
+  const converge = useCallback(
+    async (kind: 'AUDIO' | 'VIDEO') => {
+      if (working.current[kind]) return;
+      working.current[kind] = true;
+      setPendingDevice((p) => ({ ...p, [kind]: true }));
+      try {
+        for (let i = 0; i < 6; i++) {
+          const want = !!desired.current[kind];
+          const have = local.current.has(kind);
+          if (want === have) break;
+          const op = beginOp(kind === 'VIDEO' ? 'camera' : 'mic');
+          if (!want) {
+            if (kind === 'VIDEO') setCamOn(false);
+            else setMicOn(false);
+            await unpublish(kind);
+            markOp(op, kind, 'unpublished');
+            continue;
+          }
+          const me = stateRef.current?.me;
+          if (!me?.canPublish || (me.policy && !me.policy.publish[kind])) {
+            setNotice(
+              kind === 'AUDIO' && me?.policy?.micBlocked ? 'MIC_BLOCKED' : 'NOT_ALLOWED_TO_SPEAK',
+            );
+            desired.current[kind] = false;
+            markOp(op, kind, 'failed');
+            break;
+          }
+          let track: MediaStreamTrack;
+          try {
+            track = kind === 'VIDEO' ? await getCam(me.role === 'TEACHER') : await getMic();
+          } catch (e) {
+            desired.current[kind] = false;
+            markOp(op, kind, 'failed');
+            if (kind === 'AUDIO') {
+              setNotice('MIC_FAILED');
+              break;
+            }
+            setNotice('CAM_FAILED');
+            // Told to the teacher, as the device reported it (never a reason to remove anyone).
+            const name = (e as { name?: string })?.name;
+            const report =
+              name === 'NotAllowedError' || name === 'SecurityError'
+                ? 'DENIED'
+                : name === 'NotFoundError' || name === 'OverconstrainedError'
+                  ? 'NO_DEVICE'
+                  : 'FAILED';
+            if (me.role === 'STUDENT' && cameraReported.current !== report) {
+              cameraReported.current = report;
+              void api.post(`${base}/device-report`, { camera: report }).catch(() => undefined);
+            }
+            break;
+          }
+          markOp(op, kind, 'deviceReady');
+          // Asked off again while the device was opening: nothing to send.
+          if (!desired.current[kind]) {
+            track.stop();
+            markOp(op, kind, 'unpublished');
+            continue;
+          }
+          if (kind === 'VIDEO') {
+            // The self-view is the teacher's own camera: shown the moment it
+            // opens, not after the SFU round trip (it still says "connecting"
+            // through the pending state until the class can see it).
+            localPreview.current?.stop();
+            localPreview.current = track;
+            setCamOn(true);
+            bump();
+            markOp(op, kind, 'localPreview');
+          }
+          try {
+            markOp(op, kind, 'publishRequest');
+            await publish(kind, track);
+            markOp(op, kind, 'sfuConfirmed');
+            if (kind === 'VIDEO') {
+              if (localPreview.current === track) localPreview.current = null;
+              setNudged(false);
+              if (cameraReported.current) {
+                cameraReported.current = null;
+                void api.post(`${base}/device-report`, { camera: null }).catch(() => undefined);
+              }
+            } else {
+              setMicOn(true);
+            }
+          } catch (e) {
+            track.stop();
+            if (localPreview.current === track) localPreview.current = null;
+            desired.current[kind] = false;
+            if (kind === 'VIDEO') setCamOn(false);
+            markOp(op, kind, 'failed');
+            const code = errCode(e) === 'NOT_ALLOWED_TO_SPEAK' ? 'NOT_ALLOWED_TO_SPEAK' : null;
+            setNotice(code ?? (kind === 'VIDEO' ? 'CAM_FAILED' : 'MIC_FAILED'));
+            bump();
+            break;
+          }
+        }
+      } finally {
+        working.current[kind] = false;
+        setPendingDevice((p) => ({ ...p, [kind]: false }));
+        // A device another path changed (a revoke) keeps the switch truthful.
+        if (kind === 'VIDEO') setCamOn(local.current.has('VIDEO'));
+        else setMicOn(local.current.has('AUDIO'));
+      }
+    },
+    [publish, unpublish, base, bump],
+  );
+
   const toggleMic = useCallback(async () => {
-    if (local.current.has('AUDIO')) {
-      setMicOn(false);
-      await unpublish('AUDIO');
-      return;
-    }
-    const me = stateRef.current?.me;
-    if (!me?.canPublish || (me.policy && !me.policy.publish.AUDIO)) {
-      setNotice(me?.policy?.micBlocked ? 'MIC_BLOCKED' : 'NOT_ALLOWED_TO_SPEAK');
-      return;
-    }
-    try {
-      const mic = await getMic();
-      await publish('AUDIO', mic);
-      setMicOn(true);
-    } catch (e) {
-      setNotice(errCode(e) === 'NOT_ALLOWED_TO_SPEAK' ? 'NOT_ALLOWED_TO_SPEAK' : 'MIC_FAILED');
-    }
-  }, [publish, unpublish]);
+    const now = desired.current.AUDIO ?? local.current.has('AUDIO');
+    desired.current.AUDIO = !now;
+    await converge('AUDIO');
+  }, [converge]);
 
   const toggleCam = useCallback(async () => {
-    if (local.current.has('VIDEO')) {
-      setCamOn(false);
-      await unpublish('VIDEO');
-      return;
-    }
-    const me = stateRef.current?.me;
-    if (!me?.canPublish || (me.policy && !me.policy.publish.VIDEO)) {
-      setNotice('NOT_ALLOWED_TO_SPEAK');
-      return;
-    }
-    let cam: MediaStreamTrack;
-    try {
-      cam = await getCam(me.role === 'TEACHER');
-    } catch (e) {
-      setNotice('CAM_FAILED');
-      // Told to the teacher, as the device reported it (never a reason to remove anyone).
-      const name = (e as { name?: string })?.name;
-      const report =
-        name === 'NotAllowedError' || name === 'SecurityError'
-          ? 'DENIED'
-          : name === 'NotFoundError' || name === 'OverconstrainedError'
-            ? 'NO_DEVICE'
-            : 'FAILED';
-      if (me.role === 'STUDENT' && cameraReported.current !== report) {
-        cameraReported.current = report;
-        void api.post(`${base}/device-report`, { camera: report }).catch(() => undefined);
-      }
-      return;
-    }
-    try {
-      await publish('VIDEO', cam);
-      setCamOn(true);
-      setNudged(false);
-      if (cameraReported.current) {
-        cameraReported.current = null;
-        void api.post(`${base}/device-report`, { camera: null }).catch(() => undefined);
-      }
-    } catch (e) {
-      cam.stop();
-      setNotice(errCode(e) === 'NOT_ALLOWED_TO_SPEAK' ? 'NOT_ALLOWED_TO_SPEAK' : 'CAM_FAILED');
-    }
-  }, [publish, unpublish, base]);
+    const now = desired.current.VIDEO ?? local.current.has('VIDEO');
+    desired.current.VIDEO = !now;
+    await converge('VIDEO');
+  }, [converge]);
 
   const canShare =
     typeof navigator !== 'undefined' &&
@@ -1304,7 +1606,7 @@ export function useCloudflareMeeting(
         audio: micOn,
         video: camOn,
         screen: sharing,
-        track: local.current.get('VIDEO')?.track ?? null,
+        track: local.current.get('VIDEO')?.track ?? localPreview.current ?? null,
         screenTrack: local.current.get('SCREEN')?.track ?? null,
       };
     }
@@ -1359,6 +1661,20 @@ export function useCloudflareMeeting(
     toggleCam,
     toggleShare,
     recording: !!state?.recording,
+    /** The teacher's view: the recorder's real stage (recordingPhase.ts reads it). */
+    recordingState: state?.recordingState ?? null,
+    /** This tab's capture of the lesson's audio, and its counts. */
+    capture: {
+      status: captureStatus,
+      heldElsewhere:
+        captureStatus === 'elsewhere' ||
+        (!!state?.captureLease && !state.captureLease.mine && !!state?.transcribing),
+      ...captureStats,
+    },
+    /** A camera or microphone switch under way. */
+    pendingDevice,
+    /** Call from the teacher's click: lets the lesson's audio start there. */
+    primeAudio: primeLessonAudio,
     // Everyone sees it; the teacher's page is the one capturing.
     transcribing: capturing || !!state?.transcribing,
     transcription: state?.transcription ?? null,

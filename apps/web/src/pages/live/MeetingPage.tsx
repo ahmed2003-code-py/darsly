@@ -10,6 +10,13 @@ import { useAuthStore } from '../../stores/auth';
 import { getSocket } from '../../lib/socket';
 import { resolveError } from '../../lib/errorMessage';
 import { useClockAnchor, type SessionTiming } from '../../lib/useSessionClock';
+import {
+  booleanRecording,
+  recordingAction,
+  recordingPhase,
+  type PendingPress,
+  type ServerRecording,
+} from '../../lib/recordingPhase';
 import Lobby from './meeting/Lobby';
 import Classroom from './meeting/Classroom';
 
@@ -108,18 +115,48 @@ export default function MeetingPage() {
   /** A Cloudflare student enters listening: no preview, no devices asked for. */
   const listenOnly = meeting.provider === 'cloudflare' && !!entry.data && !amOwner;
 
+  // The recording's lifecycle (recordingPhase.ts): the recorder's real stage
+  // from the server, and the teacher's press held until the server has caught
+  // up with it — so a stale read never visibly undoes the press.
+  const serverRec: ServerRecording | null =
+    meeting.provider === 'cloudflare'
+      ? (meeting.recordingState ?? null)
+      : booleanRecording(meeting.recording);
+  const [press, setPress] = useState<PendingPress | null>(null);
+  const [, setNowTick] = useState(0);
+  const recView = recordingPhase(serverRec, press);
+  useEffect(() => {
+    if (press && recView.settled) setPress(null);
+  }, [press, recView.settled]);
+  // A press waiting on the server is re-judged every second (its timeout).
+  useEffect(() => {
+    if (!press) return;
+    const h = setInterval(() => setNowTick((n) => n + 1), 1_000);
+    return () => clearInterval(h);
+  }, [press]);
   const recording = useMutation({
-    mutationFn: async (startIt: boolean) => {
-      if (startIt) {
+    mutationFn: async (kind: 'start' | 'stop') => {
+      if (kind === 'start') {
         const rid = await meeting.startRecording();
         return (
           await api.post(`/teacher/live/${id}/recording/start`, { recordingId: rid ?? undefined })
-        ).data;
+        ).data as { id?: string };
       }
       await meeting.stopRecording();
-      return (await api.post(`/teacher/live/${id}/recording/stop`)).data;
+      return (await api.post(`/teacher/live/${id}/recording/stop`)).data as { id?: string };
     },
-    onError: (e) => setExtendNote(resolveError(e).message || t('meeting.notice.RECORDING_FAILED')),
+    onMutate: (kind) => {
+      setPress({ kind, at: Date.now(), prevId: serverRec?.id ?? null });
+      // From the teacher's click: the lesson's audio may start here.
+      if (kind === 'start' && meeting.provider === 'cloudflare') meeting.primeAudio();
+    },
+    onSuccess: (data, kind) => {
+      if (kind === 'start' && data?.id) setPress((p) => (p ? { ...p, recId: data.id } : p));
+    },
+    onError: (e) => {
+      setPress(null);
+      setExtendNote(resolveError(e).message || t('meeting.notice.RECORDING_FAILED'));
+    },
   });
 
   /** "+15 minutes", done by the server; nothing on screen moves until it answers. */
@@ -323,9 +360,13 @@ export default function MeetingPage() {
       anchor={clock.anchor}
       extend={{ run: () => extend.mutate(), pending: extend.isPending, note: extendNote }}
       recording={{
-        active: meeting.recording,
+        phase: recView.phase,
+        failure: recView.failure,
+        intent: recView.intent,
+        action: recordingAction(recView),
         pending: recording.isPending,
-        toggle: () => recording.mutate(!meeting.recording),
+        start: () => recording.mutate('start'),
+        stop: () => recording.mutate('stop'),
       }}
       onLeave={() => void leave()}
       onEndClass={() => end.mutate()}

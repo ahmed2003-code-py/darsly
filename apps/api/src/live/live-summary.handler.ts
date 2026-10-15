@@ -179,22 +179,34 @@ export class LiveSummaryHandler implements AiJobHandler {
       const usage = e instanceof AiJobError ? e.usage : undefined;
       if (usage) spent += this.ai.costMillicents(usage.inputTokens, usage.outputTokens, price);
       await this.chargeJob(job.id, priorMillicents + spent);
+      // Classified by the shared client (provider-failure.ts). An account the
+      // provider will not serve (no credits, billing, a bad key) or a request
+      // it refuses outright will be refused again: the summary fails now,
+      // with a code the page can explain, instead of three retries that pay
+      // for nothing and leave "generating" on screen.
+      const kind = e instanceof AiJobError ? e.providerKind : undefined;
+      const terminal = e instanceof AiJobError && e.errorClass === 'TERMINAL';
+      const reason = kind === 'ACCOUNT' ? 'PROVIDER_UNAVAILABLE' : 'AI_FAILED';
       // Still being worked on until the last attempt: the page keeps saying so
       // rather than flashing "failed" between retries.
-      if (lastTry) {
+      if (lastTry || terminal) {
         await this.prisma.liveSession.update({
           where: { id: liveSessionId },
-          data: { summaryStatus: 'FAILED', summaryError: 'AI_FAILED' },
+          data: { summaryStatus: 'FAILED', summaryError: reason },
         });
       }
       this.logger.warn(
-        `live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=AI_FAILED last=${lastTry}`,
+        `live.summary.failed liveSession=${liveSessionId} job=${job.id} reason=${reason}` +
+          ` kind=${kind ?? '-'} last=${lastTry || terminal}`,
       );
       throw new AiJobError(
         `Summary generation failed: ${(e as Error).message}`,
-        'RETRYABLE',
+        terminal ? 'TERMINAL' : 'RETRYABLE',
         undefined,
-        SUMMARY_RETRY_MS,
+        terminal
+          ? undefined
+          : Math.max(SUMMARY_RETRY_MS, (e instanceof AiJobError && e.retryAfterMs) || 0),
+        kind,
       );
     }
 

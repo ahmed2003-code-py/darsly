@@ -31,6 +31,29 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * A POST that survives the page closing (`fetch` with `keepalive`), with the
+ * same headers the interceptor adds. For the last word of a page that is
+ * going away — never awaited, never retried, best effort by design.
+ */
+export function apiKeepalive(path: string, body: unknown): void {
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const token = useAuthStore.getState().accessToken;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const staffAcademyId = useStaffAcademyStore.getState().academyId;
+    if (staffAcademyId) headers['X-Academy-Id'] = staffAcademyId;
+    void fetch(`${api.defaults.baseURL}${path}`, {
+      method: 'POST',
+      keepalive: true,
+      headers,
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  } catch {
+    /* the page is going away anyway */
+  }
+}
+
 // Transparent refresh: on 401, rotate the refresh token once and retry.
 let refreshing: Promise<string | null> | null = null;
 

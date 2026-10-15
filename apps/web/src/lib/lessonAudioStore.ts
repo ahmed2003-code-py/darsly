@@ -5,7 +5,8 @@
  *
  * The recorder hands over a chunk every few seconds; each is kept here (the
  * browser's IndexedDB) as it arrives. A piece is removed once it has been
- * uploaded. When the teacher's page comes back, whatever is left of an
+ * delivered — or refused for good — never merely because an upload failed:
+ * a finished piece stays here, owed, until lessonAudioOutbox.ts delivers it. When the teacher's page comes back, whatever is left of an
  * interrupted piece is uploaded then: its chunks joined are a valid, if
  * truncated, WebM/MP4 — the same kind of file a normal piece is.
  *
@@ -24,12 +25,20 @@ export interface PieceMeta {
   voiced: boolean;
   /** Whose microphone (per-speaker capture); absent on a mixed piece. */
   speaker?: string;
+  /** The capture lease it was made under (capture-lease.service.ts on the server). */
+  leaseId?: string;
+  /** Recording finished; the piece is owed to the server until delivered (lessonAudioOutbox.ts). */
+  finished?: boolean;
+  /** Its length, once finished. */
+  durationMs?: number;
 }
 
 export interface PieceStore {
   begin(meta: PieceMeta): Promise<void>;
   append(id: string, chunk: Blob, at: number, voiced: boolean): Promise<void>;
   remove(id: string): Promise<void>;
+  /** Update a piece's description (finished, its length) without touching its audio. */
+  mark(id: string, patch: Partial<PieceMeta>): Promise<void>;
   /** Pieces of this class left from an earlier page, oldest first. */
   leftovers(session: string, excludeIds: string[]): Promise<{ meta: PieceMeta; blob: Blob }[]>;
 }
@@ -108,6 +117,18 @@ export function idbPieceStore(): PieceStore | null {
         await done(tx);
       }, undefined),
     remove: (id) => safe(async () => removeNow(await db(), id), undefined),
+    mark: (id, patch) =>
+      safe(async () => {
+        const tx = (await db()).transaction('pieces', 'readwrite');
+        const pieces = tx.objectStore('pieces');
+        const cur = await new Promise<PieceMeta | undefined>((res) => {
+          const g = pieces.get(id);
+          g.onsuccess = () => res(g.result as PieceMeta | undefined);
+          g.onerror = () => res(undefined);
+        });
+        if (cur) pieces.put({ ...cur, ...patch, id });
+        await done(tx);
+      }, undefined),
     leftovers: (session, excludeIds) =>
       safe(async () => {
         const d = await db();

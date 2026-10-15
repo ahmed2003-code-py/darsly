@@ -1,16 +1,13 @@
-import {
-  BadRequestException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EntryExamService } from '../courses/entry-exam.service';
+import { assertStudentLessonAccess } from '../catalog/course-access';
 
 /**
- * Access gating shared by quizzes and assignments. Mirrors the playback
- * service's enrollment/drip rules (minus video readiness) so an assessment is
- * only reachable by the owner teacher or a student with live, unlocked access.
+ * Access gating shared by quizzes and assignments: the same rule as the
+ * lesson's video (catalog/course-access.ts — year, preview or enrolment, drip)
+ * plus the course's entry exam, so an assessment is only reachable by the
+ * owner teacher or a student with live, unlocked access.
  */
 @Injectable()
 export class LessonAccessService {
@@ -20,13 +17,17 @@ export class LessonAccessService {
   ) {}
 
   async studentIdOf(userId: string): Promise<string> {
+    return (await this.studentOf(userId)).id;
+  }
+
+  private async studentOf(userId: string) {
     const s = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!s)
       throw new BadRequestException({
         message: 'No student profile for this account',
         code: 'STUDENT_ACCOUNT_REQUIRED',
       });
-    return s.id;
+    return s;
   }
 
   /** Student can reach this lesson's assessment (active enrollment + drip). */
@@ -42,29 +43,18 @@ export class LessonAccessService {
       throw new NotFoundException('Lesson not found');
     }
     const course = lesson.unit.course;
-    const studentId = await this.studentIdOf(userId);
+    const student = await this.studentOf(userId);
+    const studentId = student.id;
 
+    // The course's year, then a free preview or an active enrolment past its
+    // drip date — the rule the lesson's video plays by (catalog/course-access.ts).
+    await assertStudentLessonAccess(this.prisma, {
+      studentId,
+      gradeId: student.gradeId,
+      courseId: course.id,
+      lesson,
+    });
     if (!lesson.isFreePreview) {
-      const enrollment = await this.prisma.enrollment.findUnique({
-        where: { studentId_courseId: { studentId, courseId: course.id } },
-      });
-      const active =
-        enrollment?.status === 'ACTIVE' &&
-        (!enrollment.expiresAt || enrollment.expiresAt > new Date());
-      if (!active) throw new ForbiddenException('Not enrolled in this course');
-
-      const now = Date.now();
-      if (lesson.dripUnlockAt && lesson.dripUnlockAt.getTime() > now) {
-        throw new ForbiddenException('Lesson is not unlocked yet');
-      }
-      if (
-        lesson.dripAfterEnrollDays != null &&
-        enrollment!.approvedAt &&
-        enrollment!.approvedAt.getTime() + lesson.dripAfterEnrollDays * 86_400_000 > now
-      ) {
-        throw new ForbiddenException('Lesson is not unlocked yet');
-      }
-
       // The exam does not lock itself, and it does not lock what it sends a
       // student to watch. Everything else in the course waits for a pass.
       await this.entryExam.requirePassed(course.id, studentId, lessonId, lesson.isFreePreview);

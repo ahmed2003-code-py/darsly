@@ -13,6 +13,7 @@ import { CertificatesService } from '../assessments/certificates.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EntryExamService } from '../courses/entry-exam.service';
+import { assertStudentLessonAccess } from '../catalog/course-access';
 import { ProgressService } from '../progress/progress.service';
 import { GamificationService } from '../gamification/gamification.service';
 import { GamificationOutcome } from '../gamification/gamification.types';
@@ -134,30 +135,17 @@ export class PlaybackService {
       throw new ForbiddenException('Not your course');
     }
 
-    // Students: free preview is open; otherwise require an active enrollment.
+    // Students: the course's year, then a free preview or an active enrolment
+    // past its drip date — the shared rule (catalog/course-access.ts), so the
+    // video, the class notes, attachments and assessments cannot disagree.
     const student = await this.studentOf(userId);
+    await assertStudentLessonAccess(this.prisma, {
+      studentId: student.id,
+      gradeId: student.gradeId,
+      courseId: course.id,
+      lesson,
+    });
     if (!lesson.isFreePreview) {
-      const enrollment = await this.prisma.enrollment.findUnique({
-        where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
-      });
-      const active =
-        enrollment?.status === 'ACTIVE' &&
-        (!enrollment.expiresAt || enrollment.expiresAt > new Date());
-      if (!active) throw new ForbiddenException('Not enrolled in this course');
-
-      // Drip: fixed date, or N days after enrollment approval.
-      const now = Date.now();
-      if (lesson.dripUnlockAt && lesson.dripUnlockAt.getTime() > now) {
-        throw new ForbiddenException('Lesson is not unlocked yet');
-      }
-      if (
-        lesson.dripAfterEnrollDays != null &&
-        enrollment!.approvedAt &&
-        enrollment!.approvedAt.getTime() + lesson.dripAfterEnrollDays * 86_400_000 > now
-      ) {
-        throw new ForbiddenException('Lesson is not unlocked yet');
-      }
-
       // The course's own exam, if it has one. Checked here as well as in the
       // assessment gate because a ticket is what actually plays a video: a
       // gate the page respects but the API does not is decoration.

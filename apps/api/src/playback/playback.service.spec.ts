@@ -16,6 +16,8 @@ function makePrisma(overrides: any = {}) {
     teacherProfile: { findUnique: jest.fn() },
     studentProfile: { findUnique: jest.fn() },
     enrollment: { findUnique: jest.fn() },
+    // A course that names no year — the year gate admits everyone (course-access.ts).
+    courseGrade: { findMany: jest.fn().mockResolvedValue([]) },
     lessonProgress: { findUnique: jest.fn(), upsert: jest.fn(), updateMany: jest.fn() },
     playbackSession: {
       create: jest.fn(),

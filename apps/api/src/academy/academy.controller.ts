@@ -103,10 +103,12 @@ export class AcademyController {
   @Public()
   @Get('academies/:slug/courses')
   @ApiOperation({ summary: '[public] Published courses of an academy' })
-  async publicCourses(@Param('slug') slug: string) {
+  async publicCourses(@Param('slug') slug: string, @CurrentUser() viewer?: JwtPayload) {
     const a = await this.academy.getPublicBySlug(slug);
     if (!a) throw new NotFoundException('Academy not found');
-    return this.academy.publicCourses(a.id);
+    // Public, but viewer-aware: a signed-in student sees their own year's
+    // courses, as on the teacher's profile and in discovery.
+    return this.academy.publicCourses(a.id, viewer?.sub);
   }
 
   // ── Settings (owner: academy.manage) ──────────────────────────────────────

@@ -4,6 +4,7 @@ import { SubjectExclusivityService } from '../catalog/subject-exclusivity.servic
 import { PrismaService } from '../prisma/prisma.service';
 import { StudentPriceService } from '../payments/student-price.service';
 import { viewerGrade, viewerStage, viewerTrack } from '../catalog/stage.util';
+import { courseYearWhere } from '../catalog/course-access';
 import { trackFilter } from '../catalog/subject-track';
 
 export interface DiscoverTeachersQuery {
@@ -61,9 +62,7 @@ export class TeachersService {
       // systems has a subject on this side too, and stays.
       viewerTrack(this.prisma, viewerUserId),
     ]);
-    const forMyYear = gradeId
-      ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
-      : {};
+    const forMyYear = courseYearWhere(gradeId) ?? {};
     const tracks = trackFilter(track);
     const where: Prisma.TeacherProfileWhereInput = {
       status: 'APPROVED',
@@ -180,9 +179,7 @@ export class TeachersService {
     // to find the one that is theirs is the thing the year question exists to
     // stop. A visitor with no year still sees the whole catalogue.
     const gradeId = await viewerGrade(this.prisma, {}, viewerUserId);
-    const forMyYear = gradeId
-      ? { OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }
-      : {};
+    const forMyYear = courseYearWhere(gradeId) ?? {};
     const teacher = await this.prisma.teacherProfile.findFirst({
       where: {
         slug,

@@ -1,6 +1,8 @@
 import { Controller, Get, Header, Param, Query, Req, Res } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
+import { JwtPayload } from '@darsly/shared-types';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { PublicSiteService } from './public-site.service';
 import { withSignedInCta } from './signed-in-cta';
@@ -110,8 +112,14 @@ export class PublicSiteController {
   @Get('a/:slug/courses')
   @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Public: published courses for the academy (hydration)' })
-  courses(@Param('slug') slug: string, @Query('limit') limit?: string) {
-    return this.site.courses(slug, clampLimit(limit));
+  courses(
+    @Param('slug') slug: string,
+    @Query('limit') limit?: string,
+    // Public, but viewer-aware: a signed-in student is shown their own year's
+    // courses, like every other listing (catalog/course-access.ts).
+    @CurrentUser() viewer?: JwtPayload,
+  ) {
+    return this.site.courses(slug, clampLimit(limit), viewer?.sub);
   }
 
   @Get('a/:slug/reviews')

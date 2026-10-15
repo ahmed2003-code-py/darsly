@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { assertCourseYear, yearAdmits } from './course-year';
+import { assertCourseYear } from './course-year';
+import { yearState } from './course-access';
 
 /**
  * The year gate on enrolment.
@@ -16,24 +17,31 @@ import { assertCourseYear, yearAdmits } from './course-year';
  */
 describe('a course names the years it is for', () => {
   it('admits the student whose year is named', () => {
-    expect(yearAdmits(['bacc-1', 'bacc-2'], 'bacc-1')).toBe(true);
+    expect(yearState(['bacc-1', 'bacc-2'], 'bacc-1')).toBe('OK');
   });
 
   it('refuses the student whose year is not', () => {
-    expect(yearAdmits(['bacc-1'], 'secondary-3')).toBe(false);
+    expect(yearState(['bacc-1'], 'secondary-3')).toBe('OTHER_YEAR');
   });
 
   it('admits everyone when the course named no year', () => {
     // An empty list is a course that was never narrowed, which is not the same
     // as a course for nobody.
-    expect(yearAdmits([], 'secondary-3')).toBe(true);
+    expect(yearState([], 'secondary-3')).toBe('OK');
+    expect(yearState([], null)).toBe('OK');
   });
 
-  it('admits a student who never gave their year', () => {
-    // They are shown every course in discovery, so the gate is not the thing
-    // that starts refusing them.
-    expect(yearAdmits(['bacc-1'], null)).toBe(true);
-    expect(yearAdmits(['bacc-1'], undefined)).toBe(true);
+  it('asks a student who never gave their year for it, instead of letting them through', () => {
+    // An unknown year is not a matching one: this used to admit them, which
+    // made "no year on the profile" a way around every year gate.
+    expect(yearState(['bacc-1'], null)).toBe('YEAR_REQUIRED');
+    expect(yearState(['bacc-1'], undefined)).toBe('YEAR_REQUIRED');
+  });
+
+  it('keeps a course the student already held, whatever their year now', () => {
+    expect(yearState(['bacc-1'], 'secondary-3', { status: 'ACTIVE' })).toBe('OK');
+    expect(yearState(['bacc-1'], null, { status: 'EXPIRED' })).toBe('OK');
+    expect(yearState(['bacc-1'], null, { status: 'PENDING_PAYMENT' })).toBe('YEAR_REQUIRED');
   });
 });
 
@@ -60,9 +68,21 @@ describe('starting an enrolment', () => {
     expect(error.getResponse()).toMatchObject({ code: 'COURSE_OTHER_YEAR', years: ['سنة bacc-1'] });
   });
 
+  it('is refused with YEAR_REQUIRED when the student has no year', async () => {
+    const prisma = prismaFor(['bacc-1']);
+    const error = await assertCourseYear(prisma, 'c1', null).catch((e) => e);
+    expect(error).toBeInstanceOf(ForbiddenException);
+    expect(error.getResponse()).toMatchObject({ code: 'YEAR_REQUIRED' });
+  });
+
   it('goes through for the year the course is for', async () => {
     const prisma = prismaFor(['bacc-1']);
     await expect(assertCourseYear(prisma, 'c1', 'bacc-1')).resolves.toBeUndefined();
+  });
+
+  it('goes through for a course that names no year, with or without a year', async () => {
+    const prisma = prismaFor([]);
+    await expect(assertCourseYear(prisma, 'c1', null)).resolves.toBeUndefined();
   });
 
   /**

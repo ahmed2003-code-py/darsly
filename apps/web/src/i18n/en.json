@@ -451,7 +451,9 @@
     "examRemedial": "Watch the explanation first",
     "examRemedialBody": "Your teacher left a lesson covering what you missed. Watch it, then try again.",
     "examLocked": "Locked until you pass the placement exam",
-    "examPassed": "Placement exam passed ✓"
+    "examPassed": "Placement exam passed ✓",
+    "yearRequired": "This course is for {{years}}. Set your school year first to open it.",
+    "setYear": "Set your school year"
   },
   "player": {
     "protected": "Protected content",
@@ -3375,7 +3377,9 @@
     "ePeriodInFuture": "A settlement can't include days that haven't happened.",
     "ePeriodTooLong": "A settlement covers at most three months.",
     "eSessionTeacherLocked": "Only the owner can change who taught a class that has started.",
-    "eSettlementAdjustBelowPaid": "More than that was already paid to the teacher."
+    "eSettlementAdjustBelowPaid": "More than that was already paid to the teacher.",
+    "eYearRequired": "Set your school year on your profile first to open this course.",
+    "eLessonLocked": "This lesson is still locked — it opens on schedule."
   },
   "myStudio": {
     "title": "My Studio",

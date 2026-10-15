@@ -23,6 +23,7 @@ import { assertFileMatchesMime } from '../common/file-signature';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { studentLessonAccess } from '../catalog/course-access';
 import { StorageProvider } from '../storage/storage.provider';
 import { VideoProcessingService } from '../video/video-processing.service';
 
@@ -285,21 +286,26 @@ export class UploadsController {
     if (attachment.lesson.deletedAt || attachment.lesson.unit.deletedAt || course.deletedAt) {
       throw new NotFoundException('Attachment not found');
     }
-    let allowed =
-      user.role === Role.SUPER_ADMIN ||
-      user.tenantId === course.tenantId ||
-      attachment.lesson.isFreePreview;
+    let allowed = user.role === Role.SUPER_ADMIN || user.tenantId === course.tenantId;
 
     if (!allowed && user.role === Role.STUDENT) {
+      // The same rule as the lesson's video (catalog/course-access.ts): the
+      // course's year, then a free preview or an active enrolment past its drip
+      // date. This route used to skip both the year and the drip date the
+      // course page already hid the attachment behind.
       const student = await this.prisma.studentProfile.findUnique({ where: { userId: user.sub } });
       if (student) {
-        const enrollment = await this.prisma.enrollment.findUnique({
-          where: { studentId_courseId: { studentId: student.id, courseId: course.id } },
+        const { verdict } = await studentLessonAccess(this.prisma, {
+          studentId: student.id,
+          gradeId: student.gradeId,
+          courseId: course.id,
+          lesson: attachment.lesson,
         });
-        allowed =
-          enrollment?.status === 'ACTIVE' &&
-          (!enrollment.expiresAt || enrollment.expiresAt > new Date());
+        allowed = verdict.ok;
       }
+    } else if (!allowed) {
+      // Not a student: a free preview stays open, as before (no year applies).
+      allowed = attachment.lesson.isFreePreview;
     }
     if (!allowed) throw new NotFoundException('Attachment not found');
 

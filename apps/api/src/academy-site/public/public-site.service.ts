@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { courseYearWhere, studentGradeOf } from '../../catalog/course-access';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StudentPriceService } from '../../payments/student-price.service';
 
@@ -42,11 +43,17 @@ export class PublicSiteService {
     return site?.status === 'PUBLISHED' && !!site.publishedHtml;
   }
 
-  async courses(slug: string, limit: number) {
+  async courses(slug: string, limit: number, viewerUserId?: string) {
     const academy = await this.academyBySlug(slug);
     if (!academy) return [];
+    const forMyYear = courseYearWhere(await studentGradeOf(this.prisma, viewerUserId));
     const courses = await this.prisma.course.findMany({
-      where: { academyId: academy.id, status: 'PUBLISHED', deletedAt: null },
+      where: {
+        academyId: academy.id,
+        status: 'PUBLISHED',
+        deletedAt: null,
+        ...(forMyYear ?? {}),
+      },
       orderBy: { createdAt: 'desc' },
       take: limit,
       select: { id: true, title: true, thumbnailUrl: true, priceCents: true },

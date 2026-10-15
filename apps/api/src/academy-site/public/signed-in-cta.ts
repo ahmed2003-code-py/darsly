@@ -48,14 +48,50 @@ if(!done){a.appendChild(document.createTextNode(label));}}
 }catch(e){}})();</script>`;
 
 /**
+ * The page's own lists, asked as the person reading it.
+ *
+ * The course list on an academy page is filled in at view time from
+ * `/api/v1/a/<slug>/courses`. Asked anonymously, a signed-in student was shown
+ * every year's courses — the one listing on the platform that ignored their
+ * year (catalog/course-access.ts). So the session's token goes with that
+ * request, and only that one: same origin, this academy's own `courses` and
+ * `reviews` endpoints, nothing else. It runs in the head, before the page's
+ * own scripts ask. The endpoint decides; without a session it answers as before.
+ */
+const SESSION_MARK = 'darsly-session-fetch';
+const SESSION_SCRIPT = `<script data-${SESSION_MARK}>(function(){try{
+var raw=localStorage.getItem('darsly-auth');if(!raw||!window.fetch)return;
+var tok=((JSON.parse(raw)||{}).state||{}).accessToken;if(!tok)return;
+var f=window.fetch;
+window.fetch=function(u,o){try{
+var url=typeof u==='string'?u:(u&&u.url)||'';
+if(/^\\/api\\/v1\\/a\\/[^\\/?#]+\\/(courses|reviews)(\\?|$)/.test(url)){
+o=o||{};var h=new Headers(o.headers||{});
+if(!h.has('Authorization'))h.set('Authorization','Bearer '+tok);o.headers=h;}
+}catch(e){}return f.call(this,u,o);};
+}catch(e){}})();</script>`;
+
+function withSessionFetch(html: string): string {
+  if (html.includes(SESSION_MARK)) return html;
+  const head = /<head[^>]*>/i.exec(html);
+  if (head) {
+    const at = head.index + head[0].length;
+    return html.slice(0, at) + SESSION_SCRIPT + html.slice(at);
+  }
+  return SESSION_SCRIPT + html;
+}
+
+/**
  * The page with that behaviour added, or the page untouched when there is
  * nowhere sensible to put it.
  */
 export function withSignedInCta(html: string): string {
   if (!html) return html;
+  const withSession = withSessionFetch(html);
   // Never twice: a page regenerated from a template that already carries it.
-  if (html.includes("localStorage.getItem('darsly-auth')")) return html;
-  const close = html.lastIndexOf('</body>');
-  if (close === -1) return html + SCRIPT;
-  return html.slice(0, close) + SCRIPT + html.slice(close);
+  if (withSession.includes("localStorage.getItem('darsly-auth');if(!raw)return;"))
+    return withSession;
+  const close = withSession.lastIndexOf('</body>');
+  if (close === -1) return withSession + SCRIPT;
+  return withSession.slice(0, close) + SCRIPT + withSession.slice(close);
 }

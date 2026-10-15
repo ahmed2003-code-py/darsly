@@ -20,7 +20,12 @@ import { LessonDescriptionService } from '../video/lesson-description.service';
 import { VideoSource, YoutubeImportService } from '../video/youtube-import.service';
 import { DiscoverCoursesDto as DiscoverCoursesQuery } from './dto/discover-courses.dto';
 import { StudentPriceService } from '../payments/student-price.service';
-import { yearAdmits } from '../catalog/course-year';
+import {
+  courseYearWhere,
+  studentLessonVerdict,
+  yearState,
+  type YearState,
+} from '../catalog/course-access';
 import { viewerGrade, viewerTrack } from '../catalog/stage.util';
 import { trackFilter } from '../catalog/subject-track';
 import { assertSplitConfigured } from '../payments/revenue-split';
@@ -155,7 +160,7 @@ export class CoursesService {
         // and not the rest of the band. A course that named no year is still
         // shown — it was never narrowed, which is not the same as being for
         // nobody.
-        ...(gradeId ? [{ OR: [{ grades: { some: { gradeId } } }, { grades: { none: {} } }] }] : []),
+        ...(courseYearWhere(gradeId) ? [courseYearWhere(gradeId)!] : []),
         // And the other half of the same question: a language-school student
         // sits a different syllabus, so the national system's courses are not
         // theirs to take. A course with no subject was never filed under either
@@ -1428,39 +1433,31 @@ export class CoursesService {
       enrollment?.status === 'ACTIVE' &&
       (!enrollment.expiresAt || enrollment.expiresAt > new Date());
     /**
-     * Whether this course's years are the student's own.
+     * Whether this course's years admit this student — the shared rule
+     * (catalog/course-access.ts) that the video, notes, attachments, quizzes
+     * and enrolment all apply, so a padlock here never disagrees with them.
      *
      * The page is reachable without going through discovery — from the
      * teacher's public landing page, or a link a friend sent — so it is where a
-     * student first learns a course is not for their year. Sent with the page so
-     * the enrol button can say so instead of being pressed and refused.
-     *
-     * A course they have already held stays theirs: the same carve-out the
-     * enrolment gate makes, so the two never disagree on one course.
+     * student first learns a course is not for their year, or that their year
+     * is missing. Sent with the page so it can say so instead of a button being
+     * pressed and refused. A course they have already held stays theirs.
+     * Only students are asked; anyone else viewing the page is not narrowed.
      */
-    const forMyYear =
-      yearAdmits(
-        course.grades.map((g) => g.gradeId),
-        studentGrade,
-      ) ||
-      enrollment?.status === 'ACTIVE' ||
-      enrollment?.status === 'EXPIRED';
-
-    const now = Date.now();
-    const unlockedByDrip = (lesson: {
+    const year: YearState =
+      viewer?.role === Role.STUDENT && studentId
+        ? yearState(
+            course.grades.map((g) => g.gradeId),
+            studentGrade,
+            enrollment,
+          )
+        : 'OK';
+    const forMyYear = year === 'OK';
+    const lessonOpen = (l: {
+      isFreePreview: boolean;
       dripUnlockAt: Date | null;
       dripAfterEnrollDays: number | null;
-    }) => {
-      if (lesson.dripUnlockAt && lesson.dripUnlockAt.getTime() > now) return false;
-      if (
-        lesson.dripAfterEnrollDays != null &&
-        enrollment?.approvedAt &&
-        enrollment.approvedAt.getTime() + lesson.dripAfterEnrollDays * 86_400_000 > now
-      ) {
-        return false;
-      }
-      return true;
-    };
+    }) => isOwner || studentLessonVerdict({ lesson: l, enrollment, year }).ok;
 
     const rating = await this.prisma.review.aggregate({
       where: { courseId },
@@ -1508,15 +1505,17 @@ export class CoursesService {
         enrollmentStatus: enrollment?.status ?? null,
         enrollmentExpiresAt: enrollment?.expiresAt ?? null,
         hasAccess: isOwner || !!activeEnrollment,
-        /** False only when the course names years and none of them is theirs. */
+        /** False when the course names years and none of them is theirs (or theirs is unknown). */
         forMyYear: isOwner || forMyYear,
+        /** OK, OTHER_YEAR, or YEAR_REQUIRED — the student has no year on record. */
+        yearState: isOwner ? 'OK' : year,
       },
       units: course.units.map((u) => ({
         id: u.id,
         title: u.title,
         isDefault: u.isDefault,
         lessons: u.lessons.map((l) => {
-          const open = isOwner || l.isFreePreview || (!!activeEnrollment && unlockedByDrip(l));
+          const open = lessonOpen(l);
           return {
             id: l.id,
             title: l.title,

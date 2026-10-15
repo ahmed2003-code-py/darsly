@@ -14,6 +14,7 @@ import { IsInt, IsString, MaxLength, Min, MinLength } from 'class-validator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { assertStudentLessonAccess } from '../catalog/course-access';
 
 class CreateNoteDto {
   @IsInt() @Min(0) timestampSec: number;
@@ -28,10 +29,14 @@ class CreateNoteDto {
 export class NotesController {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async studentId(userId: string) {
+  private async student(userId: string) {
     const s = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!s) throw new ForbiddenException('No student profile');
-    return s.id;
+    return s;
+  }
+
+  private async studentId(userId: string) {
+    return (await this.student(userId)).id;
   }
 
   @Get('lessons/:lessonId/notes')
@@ -50,9 +55,10 @@ export class NotesController {
     @Param('lessonId') lessonId: string,
     @Body() dto: CreateNoteDto,
   ) {
-    const studentId = await this.studentId(user.sub);
-    // Only allow notes on a lesson the student can actually access (avoids
-    // writing junk note rows against arbitrary/unenrolled lessons).
+    const student = await this.student(user.sub);
+    // Only allow notes on a lesson the student can actually open (avoids
+    // writing junk note rows against arbitrary/unenrolled lessons) — the same
+    // rule the video plays by (catalog/course-access.ts).
     const lesson = await this.prisma.lesson.findFirst({
       where: { id: lessonId, deletedAt: null },
       include: { unit: { include: { course: { select: { id: true, deletedAt: true } } } } },
@@ -60,13 +66,13 @@ export class NotesController {
     if (!lesson || lesson.unit.deletedAt || lesson.unit.course.deletedAt) {
       throw new NotFoundException('Lesson not found');
     }
-    if (!lesson.isFreePreview) {
-      const enr = await this.prisma.enrollment.findUnique({
-        where: { studentId_courseId: { studentId, courseId: lesson.unit.course.id } },
-      });
-      const active = enr?.status === 'ACTIVE' && (!enr.expiresAt || enr.expiresAt > new Date());
-      if (!active) throw new ForbiddenException('Not enrolled in this course');
-    }
+    await assertStudentLessonAccess(this.prisma, {
+      studentId: student.id,
+      gradeId: student.gradeId,
+      courseId: lesson.unit.course.id,
+      lesson,
+    });
+    const studentId = student.id;
     return this.prisma.videoNote.create({
       data: { lessonId, studentId, timestampSec: dto.timestampSec, body: dto.body },
     });

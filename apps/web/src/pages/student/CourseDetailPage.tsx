@@ -110,7 +110,10 @@ export default function CourseDetailPage() {
   // buy, so the page says that where the price and the button would be. They
   // can still read it — the teacher's landing page links here, and arriving to
   // a dead end with no explanation is worse than arriving to one with a reason.
-  const otherYear = isStudent && course.viewer.forMyYear === false;
+  // A student with no year on record is asked for it rather than let in: the
+  // server refuses every door of a course that names years (YEAR_REQUIRED).
+  const yearRequired = isStudent && course.viewer.yearState === 'YEAR_REQUIRED';
+  const otherYear = isStudent && course.viewer.forMyYear === false && !yearRequired;
   // Named in the reader's own language, and joined with their own comma — the
   // sentence around them is translated, so the years inside it cannot be left
   // in Arabic for an English reader.
@@ -121,6 +124,7 @@ export default function CourseDetailPage() {
   const canEnroll =
     isStudent &&
     !otherYear &&
+    !yearRequired &&
     (!enrollmentStatus ||
       ['REJECTED', 'REVOKED', 'EXPIRED'].includes(enrollmentStatus) ||
       (enrollmentStatus === 'ACTIVE' && !course.viewer.hasAccess));
@@ -456,6 +460,17 @@ export default function CourseDetailPage() {
                   <span className="material-symbols-outlined text-base">school</span>
                   <span>{t('course.otherYear', { years: yearNames })}</span>
                 </p>
+              )}
+              {yearRequired && (
+                <div className="mb-1 rounded-xl bg-secondary-container/60 px-4 py-3 text-sm text-on-secondary-container">
+                  <p className="flex items-start gap-2 font-bold">
+                    <span className="material-symbols-outlined text-base">school</span>
+                    <span>{t('course.yearRequired', { years: yearNames })}</span>
+                  </p>
+                  <Link to="/profile" className="btn-secondary mt-3 w-full justify-center">
+                    {t('course.setYear')}
+                  </Link>
+                </div>
               )}
               {canEnroll && (
                 <>

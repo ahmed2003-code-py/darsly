@@ -1,4 +1,5 @@
 import { EARNED_LOOK_STATUSES } from './earned-academy-look';
+import { courseYearWhere, studentGradeOf } from '../catalog/course-access';
 import {
   BadRequestException,
   ConflictException,
@@ -289,9 +290,10 @@ export class AcademyService {
   }
 
   /** Public storefront: an academy's PUBLISHED courses. */
-  async publicCourses(academyId: string) {
+  async publicCourses(academyId: string, viewerUserId?: string) {
+    const forMyYear = courseYearWhere(await studentGradeOf(this.prisma, viewerUserId));
     const rows = await this.prisma.course.findMany({
-      where: { academyId, status: 'PUBLISHED', deletedAt: null },
+      where: { academyId, status: 'PUBLISHED', deletedAt: null, ...(forMyYear ?? {}) },
       orderBy: { createdAt: 'desc' },
       select: this.courseCardSelect(),
     });

@@ -1962,6 +1962,22 @@
         "amber": "Amber & gold",
         "sky": "Blue & sky",
         "slate": "Slate & blue"
+      },
+      "elapsed": "Working for {{seconds}} s…",
+      "usually": "Usually done in under a minute.",
+      "colorNotEnough": "Choosing a colour alone does not make the page — press “Generate page”.",
+      "retryLater": "Trying again right now is unlikely to work — try again once the problem is fixed.",
+      "errors": {
+        "AI_PROVIDER_UNAVAILABLE": "The AI service is unavailable right now (a problem with the service account). Your page is unchanged.",
+        "AI_PROVIDER_BUSY": "The AI service is busy right now. Try again in a minute.",
+        "AI_PROVIDER_TIMEOUT": "The AI service took too long to answer. Try again.",
+        "AI_PROVIDER_ERROR": "The AI service had a temporary problem. Try again.",
+        "AI_REQUEST_REFUSED": "The service refused this request. Check your details and try again.",
+        "AI_OUTPUT_INVALID": "The result that came back was not usable. Try again.",
+        "AI_DISABLED": "Page generation is switched off on the platform right now.",
+        "AI_FAILED": "The page could not be generated. Try again.",
+        "SITE_FACTS_MISSING": "Your details are missing — add a short bio or the subjects you teach in the “Details” step first.",
+        "SITE_GENERATION_FAILED": "The page could not be generated. Try again."
       }
     },
     "editor": {
@@ -2079,7 +2095,9 @@
         "previewH": "Review the result.",
         "publish": "Publish",
         "publishH": "Publish your page."
-      }
+      },
+      "generateFirst": "Generate your page first to preview it.",
+      "waitGenerating": "Wait for your page to finish."
     },
     "continue": "Continue",
     "stepOf": "Step {{n}} of {{total}}",
@@ -2090,7 +2108,14 @@
     "profileDoorTitle": "Public profile",
     "profileDoorHint": "All your published courses in one place, whichever Center they live in. Share it on WhatsApp.",
     "openPage": "Open page",
-    "copyLink": "Copy link"
+    "copyLink": "Copy link",
+    "notLive": {
+      "title": "Your page is not live.",
+      "draftBody": "It has been generated, but students cannot see it yet — they see the standard academy page until you publish.",
+      "emptyBody": "You have not generated your page yet — students see the standard academy page.",
+      "publish": "Publish the page",
+      "generate": "Generate the page"
+    }
   },
   "adminStudio": {
     "title": "Academy Studios",
@@ -2305,7 +2330,10 @@
     "courses": "Courses",
     "noCourses": "No published courses yet",
     "poweredBy": "Powered by",
-    "lessonCount": "{{count}} lessons"
+    "lessonCount": "{{count}} lessons",
+    "register": "Create account",
+    "notLiveForStaff": "Your Studio page is not published yet — students see this standard academy page.",
+    "openStudio": "Open the Studio"
   },
   "browse": {
     "title": "Browse courses",

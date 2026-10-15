@@ -51,7 +51,8 @@ export interface AcademyCourseCard {
   pricingModel: string;
   status: string;
   subject: { nameAr: string; nameEn: string } | null;
-  grade: { nameAr: string; nameEn: string } | null;
+  /** The years the course is for (the API sends a list; a course may name several, or none). */
+  grades: { nameAr: string; nameEn: string }[];
   teacherName: string | null;
   lessonsCount: number;
 }

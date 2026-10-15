@@ -217,17 +217,19 @@ function HomeRedirect() {
  * Where the student's look reaches, and where it stops.
  *
  * It reaches everywhere the student goes — the nav, the logo, a teacher's
- * profile, the messages — because that is the whole point of buying it. It
- * stops at a published academy storefront: that page is the teacher's shopfront
- * and the first thing a stranger sees of them, and it is not somebody else's
- * to repaint. Held here rather than in the page so it is decided by the URL,
- * which is what the rule is actually about.
+ * profile, the messages, an academy that has not published a Studio site —
+ * because that is the whole point of buying it. It stops only at a published
+ * academy site: that page is the teacher's shopfront and the first thing a
+ * stranger sees of them, and it is not somebody else's to repaint. The
+ * storefront page stands the look down itself while a published site is open
+ * (lib/storefront.ts); it used to be stood down for every `/a/*` URL, so a
+ * student lost their theme on an unpublished academy's page too. Here, only
+ * the safety net: leaving `/a/*` always restores it.
  */
 function StudioReach() {
   const { pathname } = useLocation();
   useEffect(() => {
-    const isStorefront = /^\/a\//.test(pathname);
-    setStudioSuspended(isStorefront);
+    if (!/^\/a\//.test(pathname)) setStudioSuspended(false);
   }, [pathname]);
   return null;
 }

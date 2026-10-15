@@ -13,6 +13,7 @@ import EditorTab from './studio/EditorTab';
 import PreviewTab from './studio/PreviewTab';
 import PublishTab from './studio/PublishTab';
 import OnboardingWizard from './studio/OnboardingWizard';
+import { stepOpen } from './studio/studioFlow';
 import { BrandingTab, MembersTab } from './AcademyConsolePage';
 import type { SiteOverview, SiteStatus } from './studio/types';
 
@@ -135,6 +136,32 @@ export default function AcademyStudioPage() {
             )}
           </div>
         )}
+        {ov && ov.status !== 'PUBLISHED' && (
+          // Not a small badge: whether students can see the page is the one
+          // thing a teacher must not have to guess. Until it is published,
+          // /a/<slug> shows the standard academy page instead.
+          <div
+            role="status"
+            data-studio-live="no"
+            className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+          >
+            <span className="material-symbols-outlined">visibility_off</span>
+            <span className="min-w-0 flex-1">
+              <span className="font-bold">{t('studio.notLive.title')}</span>{' '}
+              {t(ov.hasDraft ? 'studio.notLive.draftBody' : 'studio.notLive.emptyBody')}
+            </span>
+            <button
+              type="button"
+              className="btn-primary px-4 py-2 text-sm"
+              onClick={() => {
+                setMode('tabs');
+                setTab(ov.hasDraft ? 'publish' : 'generate');
+              }}
+            >
+              {t(ov.hasDraft ? 'studio.notLive.publish' : 'studio.notLive.generate')}
+            </button>
+          </div>
+        )}
       </header>
 
       {mode === 'wizard' ? (
@@ -165,10 +192,14 @@ export default function AcademyStudioPage() {
                   const meta = TABS.find((x) => x.key === key)!;
                   const on = tab === key;
                   const done = FLOW.indexOf(tab) > i;
+                  // Editor, Preview and Publish need a generated page first.
+                  const open = stepOpen(key, { hasDraft: !!ov?.hasDraft, generating: false });
                   return (
                     <button
                       key={key}
-                      onClick={() => setTab(key)}
+                      onClick={() => open && setTab(key)}
+                      disabled={!open}
+                      title={open ? undefined : t('studio.wizard.generateFirst')}
                       aria-current={on ? 'step' : undefined}
                       data-step={key}
                       className={`relative flex shrink-0 items-center justify-center gap-2 px-4 py-3 font-heading text-sm font-semibold transition-colors sm:flex-1 sm:shrink ${
@@ -177,7 +208,7 @@ export default function AcademyStudioPage() {
                           : done
                             ? 'text-on-surface hover:bg-surface-container-low'
                             : 'text-on-surface-variant hover:bg-surface-container-low'
-                      } ${i > 0 ? 'border-s border-outline-variant' : ''}`}
+                      } ${i > 0 ? 'border-s border-outline-variant' : ''} disabled:cursor-not-allowed disabled:opacity-50`}
                     >
                       <span
                         className={`material-symbols-outlined text-[19px] ${on ? '' : done ? 'text-primary' : 'text-outline'}`}
@@ -216,7 +247,9 @@ export default function AcademyStudioPage() {
 
           {tab === 'facts' && <FactsForm onSaved={() => goNext('facts')} />}
           {tab === 'media' && <MediaManager onNext={() => goNext('media')} />}
-          {tab === 'generate' && <GenerateTab onDone={() => goNext('generate')} />}
+          {tab === 'generate' && (
+            <GenerateTab academy={academy.slug} onDone={() => goNext('generate')} />
+          )}
           {tab === 'editor' && <EditorTab onNext={() => goNext('editor')} />}
           {tab === 'preview' && <PreviewTab onNext={() => goNext('preview')} />}
           {tab === 'publish' && <PublishTab slug={academy.slug} />}

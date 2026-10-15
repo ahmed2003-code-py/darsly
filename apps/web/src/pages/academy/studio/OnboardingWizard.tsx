@@ -1,5 +1,9 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { api } from '../../../lib/api';
+import type { SiteOverview } from './types';
+import { canAdvance } from './studioFlow';
 import FactsForm from './FactsForm';
 import MediaManager from './MediaManager';
 import GenerateTab from './GenerateTab';
@@ -18,6 +22,18 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
   const { t } = useTranslation();
   const [i, setI] = useState(0);
   const step = STEPS[i];
+  const overview = useQuery<SiteOverview>({
+    queryKey: ['studio-overview'],
+    queryFn: async () => (await api.get('/academy/site')).data,
+    retry: false,
+  });
+  const lastJob = overview.data?.lastJob;
+  // Next on the Generate step means "my page is made" — picking a colour is not
+  // enough (that is how Preview used to open on "no page to preview yet").
+  const gate = canAdvance(step.key, {
+    hasDraft: !!overview.data?.hasDraft,
+    generating: lastJob?.status === 'QUEUED' || lastJob?.status === 'RUNNING',
+  });
   const next = () => setI((x) => Math.min(STEPS.length - 1, x + 1));
   const back = () => setI((x) => Math.max(0, x - 1));
 
@@ -63,7 +79,7 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
       <div className="mb-4">
         {step.key === 'facts' && <FactsForm onSaved={next} />}
         {step.key === 'media' && <MediaManager />}
-        {step.key === 'generate' && <GenerateTab onDone={next} />}
+        {step.key === 'generate' && <GenerateTab academy={slug} onDone={next} />}
         {step.key === 'preview' && <PreviewTab />}
         {step.key === 'publish' && <PublishTab slug={slug} />}
       </div>
@@ -76,12 +92,28 @@ export default function OnboardingWizard({ slug, onExit }: { slug: string; onExi
           {i === 0 ? t('studio.wizard.skip') : t('studio.wizard.prev')}
         </button>
         {i < STEPS.length - 1 ? (
-          <button className="btn-primary" onClick={next}>
-            {t('studio.wizard.next')}
-            <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">
-              arrow_forward
-            </span>
-          </button>
+          <span className="flex flex-col items-end gap-1">
+            {!gate.ok && (
+              <span className="text-xs text-on-surface-variant" role="status">
+                {t(
+                  gate.reason === 'GENERATING'
+                    ? 'studio.wizard.waitGenerating'
+                    : 'studio.wizard.generateFirst',
+                )}
+              </span>
+            )}
+            <button
+              className="btn-primary"
+              onClick={next}
+              disabled={!gate.ok}
+              data-action="wizard-next"
+            >
+              {t('studio.wizard.next')}
+              <span className="material-symbols-outlined text-[20px] rtl:-scale-x-100">
+                arrow_forward
+              </span>
+            </button>
+          </span>
         ) : (
           <button className="btn-primary" onClick={onExit}>
             <span className="material-symbols-outlined text-[20px]">done_all</span>

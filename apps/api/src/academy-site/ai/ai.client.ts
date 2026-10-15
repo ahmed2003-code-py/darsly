@@ -121,6 +121,15 @@ interface AiCallOverrides {
 export class AiClient {
   private readonly logger = new Logger(AiClient.name);
   private client: OpenAI | null = null;
+  /**
+   * After the provider refuses the account (no credits, billing off, a bad
+   * key), nothing will succeed until a person fixes it. Every feature that
+   * calls here then fails at once with the same classified error, for this
+   * long, instead of each one — every page of a paper import, every tier it
+   * escalates to — asking again only to be refused.
+   */
+  static readonly ACCOUNT_PAUSE_MS = 60_000;
+  private accountRefused: { until: number; message: string } | null = null;
 
   constructor(
     private readonly config: AcademySiteConfig,
@@ -315,6 +324,15 @@ export class AiClient {
     if (!this.config.apiKey) {
       throw new AiJobError('OPENAI_API_KEY is not configured', 'TERMINAL');
     }
+    if (this.accountRefused && Date.now() < this.accountRefused.until) {
+      throw new AiJobError(
+        this.accountRefused.message,
+        'TERMINAL',
+        undefined,
+        undefined,
+        'ACCOUNT',
+      );
+    }
     const model = opts.model || this.config.model;
     const reasoning = isReasoningModel(model);
     const detail = opts.imageDetail ?? 'high';
@@ -370,6 +388,17 @@ export class AiClient {
       // bad key — comes back as a 429 or a 401 and is TERMINAL, never retried
       // as if it were a rate limit. A true rate limit keeps its Retry-After.
       const f = classifyProviderError(e);
+      if (f.kind === 'ACCOUNT') {
+        this.accountRefused = {
+          until: Date.now() + AiClient.ACCOUNT_PAUSE_MS,
+          message:
+            `OpenAI request failed${f.status ? ` (${f.status})` : ''} [ACCOUNT${f.code ? ` ${f.code}` : ''}]: ` +
+            'the provider refuses this account; calls paused',
+        };
+        this.logger.error(
+          `AI provider refuses the account (${f.status ?? '-'} ${f.code ?? ''}): calls paused for ${AiClient.ACCOUNT_PAUSE_MS / 1000}s`,
+        );
+      }
       throw new AiJobError(
         `OpenAI request failed${f.status ? ` (${f.status})` : ''} [${f.kind}${f.code ? ` ${f.code}` : ''}]: ` +
           this.redact(String(e?.message ?? e)),

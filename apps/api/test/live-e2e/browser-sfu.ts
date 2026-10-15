@@ -87,6 +87,22 @@ window.sfu = (() => {
       });
     },
     list(id) { return [...(S.get(id)?.tracks.values() ?? [])]; },
+    /** Every session's connection and what it carries — for a failed test's dump. */
+    diag() {
+      return [...S.entries()].map(([id, s]) => ({
+        id,
+        connection: s.pc.connectionState,
+        ice: s.pc.iceConnectionState,
+        signaling: s.pc.signalingState,
+        transceivers: s.pc.getTransceivers().map((t) => ({
+          mid: t.mid,
+          direction: t.direction,
+          current: t.currentDirection,
+          recv: t.receiver.track ? t.receiver.track.readyState + (t.receiver.track.muted ? '/muted' : '') : null,
+          send: t.sender.track ? t.sender.track.kind + ':' + t.sender.track.readyState : null,
+        })),
+      }));
+    },
     /** Live published tracks of a session, by kind of media. */
     published(id) {
       const s = S.get(id);
@@ -165,5 +181,6 @@ export async function browserSfu(page: Page) {
     page.evaluate((a) => (window as any).sfu.published(a), sid) as Promise<
       { trackName: string; kind: string | null }[]
     >;
-  return { client, published };
+  const diag = () => page.evaluate(() => (window as any).sfu.diag());
+  return { client, published, diag };
 }

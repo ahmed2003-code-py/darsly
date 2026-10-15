@@ -4,14 +4,25 @@ import { useTranslation } from 'react-i18next';
 import { AxiosError } from 'axios';
 import { api } from '../../../lib/api';
 import { ErrorNote } from '../../../components/ui';
+import type { SiteOverview } from './types';
+import {
+  generationErrorKey,
+  initialPalette,
+  rememberPalette,
+  retryHelps,
+  type PaletteKey,
+} from './studioFlow';
 
 interface Job {
   id: string;
   status: 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
   stage: string | null;
   attempts: number;
-  error: string | null;
+  /** A stable code (never the provider's own words): studioFlow.generationErrorKey. */
+  errorCode: string | null;
+  paletteKey: string | null;
   costCents: number;
+  createdAt: string;
 }
 
 /**
@@ -21,7 +32,7 @@ interface Job {
  * animations — so there is nothing left to pick between except colour. These
  * mirror `pipeline/color-palettes.ts` on the server exactly.
  */
-const PALETTES = [
+const PALETTES: { key: PaletteKey; primary: string; accent: string }[] = [
   { key: 'royal', primary: '#2f5fe0', accent: '#7c3aed' },
   { key: 'teal', primary: '#0d9488', accent: '#0891b2' },
   { key: 'sunset', primary: '#ea580c', accent: '#db2777' },
@@ -30,13 +41,49 @@ const PALETTES = [
   { key: 'amber', primary: '#d97706', accent: '#ca8a04' },
   { key: 'sky', primary: '#2563eb', accent: '#0ea5e9' },
   { key: 'slate', primary: '#475569', accent: '#2563eb' },
-] as const;
+];
 
-export default function GenerateTab({ onDone }: { onDone?: () => void }) {
+const STAGES = ['copy', 'assemble'] as const;
+
+export default function GenerateTab({
+  academy,
+  onDone,
+}: {
+  /** The academy's slug: the colour picked is kept for it across steps and reloads. */
+  academy: string;
+  onDone?: () => void;
+}) {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const [paletteKey, setPaletteKey] = useState<(typeof PALETTES)[number]['key']>('royal');
+  const overview = useQuery<SiteOverview>({
+    queryKey: ['studio-overview'],
+    queryFn: async () => (await api.get('/academy/site')).data,
+    retry: false,
+  });
+  const [paletteKey, setPaletteKey] = useState<PaletteKey>(() =>
+    initialPalette(academy, overview.data?.lastJob?.paletteKey),
+  );
+  // The overview may arrive after the first paint: start from the last
+  // generation's colour then, unless the teacher has already picked one.
+  const [picked, setPicked] = useState(false);
+  useEffect(() => {
+    if (!picked && overview.data)
+      setPaletteKey(initialPalette(academy, overview.data.lastJob?.paletteKey));
+  }, [overview.data, academy, picked]);
+  const pick = (k: PaletteKey) => {
+    setPicked(true);
+    setPaletteKey(k);
+    rememberPalette(academy, k);
+  };
+
+  // A generation already under way (a reload, the other tab): followed, not restarted.
   const [jobId, setJobId] = useState<string | null>(null);
+  const running = overview.data?.lastJob;
+  useEffect(() => {
+    if (!jobId && running && (running.status === 'QUEUED' || running.status === 'RUNNING')) {
+      setJobId(running.id);
+    }
+  }, [running, jobId]);
 
   const job = useQuery<Job>({
     queryKey: ['studio-job', jobId],
@@ -53,8 +100,18 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
     if (status && ['SUCCEEDED', 'FAILED', 'CANCELED'].includes(status)) {
       qc.invalidateQueries({ queryKey: ['studio-overview'] });
       qc.invalidateQueries({ queryKey: ['studio-draft'] });
+      qc.invalidateQueries({ queryKey: ['studio-preview'] });
     }
   }, [status, qc]);
+
+  // How long it has been working — said, so a slow run never looks frozen.
+  const [now, setNow] = useState(() => Date.now());
+  const active = !!job.data && (job.data.status === 'QUEUED' || job.data.status === 'RUNNING');
+  useEffect(() => {
+    if (!active) return;
+    const h = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(h);
+  }, [active]);
 
   const generate = useMutation({
     mutationFn: async () =>
@@ -64,7 +121,10 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
           lang: i18n.language === 'en' ? 'en' : 'ar',
         })
       ).data as Job,
-    onSuccess: (j) => setJobId(j.id),
+    onSuccess: (j) => {
+      setJobId(j.id);
+      qc.invalidateQueries({ queryKey: ['studio-overview'] });
+    },
     onError: (e: AxiosError) => {
       if (e.response?.status === 409) qc.invalidateQueries({ queryKey: ['studio-overview'] });
     },
@@ -74,25 +134,48 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-job', jobId] }),
   });
 
-  const active = job.data && (job.data.status === 'QUEUED' || job.data.status === 'RUNNING');
-  const stageLabel =
-    job.data?.stage === 'copy'
-      ? t('studio.generate.stageCopy')
-      : job.data?.stage === 'assemble'
-        ? t('studio.generate.stageAssemble')
-        : t('studio.generate.working');
-
   if (active) {
+    const stageIndex = job.data!.stage ? STAGES.indexOf(job.data!.stage as never) : -1;
+    const elapsed = Math.max(0, Math.round((now - new Date(job.data!.createdAt).getTime()) / 1000));
     return (
-      <div className="card flex flex-col items-center gap-4 py-12 text-center">
+      <div className="card flex flex-col items-center gap-4 py-12 text-center" aria-busy>
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary-fixed border-t-primary" />
         <div>
-          <p className="font-heading text-lg font-bold">{t('studio.generate.generating')}</p>
+          <p className="font-heading text-lg font-bold" role="status">
+            {t('studio.generate.generating')}
+          </p>
           <p className="mt-1 text-sm text-on-surface-variant">
-            {job.data?.status === 'QUEUED' ? t('studio.generate.queued') : stageLabel}
+            {job.data!.status === 'QUEUED'
+              ? t('studio.generate.queued')
+              : t('studio.generate.elapsed', { seconds: elapsed })}
           </p>
         </div>
-        {job.data?.status === 'QUEUED' && (
+        {/* The steps, so the teacher sees it move rather than one spinner. */}
+        <ol className="flex flex-wrap justify-center gap-2 text-xs">
+          {STAGES.map((s, i) => (
+            <li
+              key={s}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${
+                i < stageIndex
+                  ? 'bg-primary-fixed text-on-primary-fixed-variant'
+                  : i === stageIndex
+                    ? 'bg-primary text-on-primary'
+                    : 'bg-surface-container text-on-surface-variant'
+              }`}
+            >
+              <span aria-hidden className="material-symbols-outlined text-[14px]">
+                {i < stageIndex
+                  ? 'check'
+                  : i === stageIndex
+                    ? 'progress_activity'
+                    : 'radio_button_unchecked'}
+              </span>
+              {t(s === 'copy' ? 'studio.generate.stageCopy' : 'studio.generate.stageAssemble')}
+            </li>
+          ))}
+        </ol>
+        <p className="text-xs text-on-surface-variant">{t('studio.generate.usually')}</p>
+        {job.data!.status === 'QUEUED' && (
           <button
             className="btn-secondary"
             onClick={() => cancel.mutate()}
@@ -128,6 +211,7 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
   }
 
   const failed = job.data?.status === 'FAILED';
+  const code = failed ? job.data!.errorCode : null;
   const is409 = (generate.error as AxiosError)?.response?.status === 409;
   return (
     <div className="card">
@@ -144,10 +228,11 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
             <button
               key={p.key}
               type="button"
-              onClick={() => setPaletteKey(p.key)}
+              onClick={() => pick(p.key)}
               aria-pressed={on}
               aria-label={t(`studio.generate.palettes.${p.key}`)}
               title={t(`studio.generate.palettes.${p.key}`)}
+              data-palette={p.key}
               className={`group flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
                 on
                   ? 'border-primary shadow-glow'
@@ -169,18 +254,25 @@ export default function GenerateTab({ onDone }: { onDone?: () => void }) {
       </div>
 
       {failed && (
-        <div className="mb-4 rounded-xl border border-error/30 bg-error-container/30 p-3 text-sm text-error">
+        <div
+          role="alert"
+          className="mb-4 rounded-xl border border-error/30 bg-error-container/30 p-3 text-sm text-error"
+        >
           <p className="font-bold">{t('studio.generate.failedTitle')}</p>
-          <p className="mt-0.5">{job.data?.error ?? t('studio.generate.failedGeneric')}</p>
+          <p className="mt-0.5">{t(generationErrorKey(code))}</p>
+          {!retryHelps(code) && <p className="mt-1 text-xs">{t('studio.generate.retryLater')}</p>}
         </div>
       )}
       <ErrorNote error={generate.error && !is409 ? generate.error : null} />
       {is409 && <p className="mb-3 text-sm text-amber-600">{t('studio.generate.oneActive')}</p>}
 
+      {/* The colour is only a choice: this is what makes the page. */}
+      <p className="mb-3 text-xs text-on-surface-variant">{t('studio.generate.colorNotEnough')}</p>
       <button
         className="btn-primary"
         onClick={() => generate.mutate()}
         disabled={generate.isPending}
+        data-action="generate"
       >
         <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
         {generate.isPending

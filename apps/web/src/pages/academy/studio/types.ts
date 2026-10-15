@@ -26,7 +26,15 @@ export interface SiteOverview {
   version: number;
   moderationApproved: boolean;
   moderationReason: string | null;
-  lastJob: { id: string; status: string; stage: string | null } | null;
+  lastJob: {
+    id: string;
+    status: string;
+    stage: string | null;
+    /** A failed generation's stable code (never the provider's text). */
+    errorCode?: string | null;
+    /** The colour the last generation was asked for. */
+    paletteKey?: string | null;
+  } | null;
   /** Quality-gate result for the current draft: errors block a publish. */
   quality: { errors: string[]; warnings: string[] } | null;
   /** One line from the designer on why the page looks the way it does. */

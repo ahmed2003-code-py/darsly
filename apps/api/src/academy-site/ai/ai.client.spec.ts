@@ -210,3 +210,59 @@ describe('recording each call', () => {
     await expect(call(client)).resolves.toMatchObject({ data: {} });
   });
 });
+
+describe('a provider that refuses the account', () => {
+  const config = {
+    enabled: true,
+    apiKey: 'test',
+    model: 'gpt-5',
+    priceInPerMToken: 125,
+    priceOutPerMToken: 1000,
+  } as any;
+  const quota = () =>
+    Object.assign(new Error('You exceeded your current quota'), {
+      status: 429,
+      error: { code: 'insufficient_quota', type: 'insufficient_quota' },
+    });
+  const ask = (ai: AiClient) =>
+    ai.completeStructured({
+      messages: [{ role: 'user', content: 'x' }],
+      schemaName: 's',
+      schema: { type: 'object' },
+    });
+
+  it('no credits (a 429 insufficient_quota) is TERMINAL and named ACCOUNT — not a rate limit', async () => {
+    const ai = new AiClient(config);
+    (ai as any).client = { responses: { create: jest.fn().mockRejectedValue(quota()) } };
+    const err = (await ask(ai).catch((e) => e)) as AiJobError;
+    expect(err).toBeInstanceOf(AiJobError);
+    expect(err.errorClass).toBe('TERMINAL');
+    expect(err.providerKind).toBe('ACCOUNT');
+    expect(err.message).toMatch(/\[ACCOUNT insufficient_quota\]/);
+  });
+
+  it('a true rate limit stays RETRYABLE, with the wait it asked for', async () => {
+    const ai = new AiClient(config);
+    const busy = Object.assign(new Error('Rate limit'), {
+      status: 429,
+      error: { code: 'rate_limit_exceeded' },
+      headers: { 'retry-after': '7' },
+    });
+    (ai as any).client = { responses: { create: jest.fn().mockRejectedValue(busy) } };
+    const err = (await ask(ai).catch((e) => e)) as AiJobError;
+    expect(err.errorClass).toBe('RETRYABLE');
+    expect(err.providerKind).toBe('RATE_LIMIT');
+    expect(err.retryAfterMs).toBe(7000);
+  });
+
+  it('after an account refusal, further calls fail at once without asking the provider', async () => {
+    const ai = new AiClient(config);
+    const create = jest.fn().mockRejectedValue(quota());
+    (ai as any).client = { responses: { create } };
+    await ask(ai).catch(() => undefined);
+    const again = (await ask(ai).catch((e) => e)) as AiJobError;
+    expect(again.providerKind).toBe('ACCOUNT');
+    expect(again.errorClass).toBe('TERMINAL');
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});

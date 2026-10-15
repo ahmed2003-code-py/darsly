@@ -1,32 +1,57 @@
 import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AcademyProvider, { useAcademy } from '../../components/AcademyProvider';
+import Layout from '../../components/Layout';
+import ColorModeToggle from '../../components/ColorModeToggle';
 import { Reveal, Stagger, StaggerItem } from '../../components/motion';
 import { EmptyState, Spinner } from '../../components/ui';
 import { api, apiOrigin } from '../../lib/api';
 import { egp } from '../../lib/format';
-import { AcademyCourseCard, useAcademyCourses } from '../../lib/academy';
-import { useTranslation } from 'react-i18next';
+import { AcademyCourseCard, useAcademyCourses, useMyAcademies } from '../../lib/academy';
+import { setStudioSuspended } from '../../lib/studio';
+import { courseYearsLabel, storefrontView, studentLookSuspended } from '../../lib/storefront';
+import { useAuthStore } from '../../stores/auth';
 
-/** Public, academy-branded landing at /a/:slug. When the academy has published
- *  an AI-generated site, that page is shown (full-viewport); otherwise the
- *  built-in storefront is the fallback. */
+/**
+ * `/a/:slug` — an academy's public page.
+ *
+ * Published in the Studio: that site, full screen, in the teacher's own
+ * colours (the student's look stands down for it). Not published: the academy
+ * in the current Darsly experience — inside the app for someone signed in
+ * (their account, their navigation, their look), in the public frame for a
+ * visitor. See lib/storefront.ts for why the old standalone fallback went.
+ */
 export default function AcademyStorefrontPage() {
   const { slug = '' } = useParams();
+  const signedIn = useAuthStore((s) => !!s.accessToken);
   const site = useQuery<{ published: boolean }>({
     queryKey: ['pub-site-status', slug],
     queryFn: async () => (await api.get(`/a/${slug}/site-status`)).data,
     retry: false,
   });
+  const view = site.isLoading
+    ? null
+    : storefrontView({ published: !!site.data?.published, signedIn });
 
-  if (site.isLoading) {
+  // Only the published site is the teacher's to colour; the fallback keeps the
+  // reader's own look. Stood down while the site is open, restored on leaving.
+  const suspend = studentLookSuspended(view);
+  useEffect(() => {
+    if (!suspend) return;
+    setStudioSuspended(true);
+    return () => setStudioSuspended(false);
+  }, [suspend]);
+
+  if (!view) {
     return (
       <div className="grid min-h-screen place-items-center">
         <Spinner />
       </div>
     );
   }
-  if (site.data?.published) {
+  if (view === 'SITE') {
     return (
       <iframe
         title={slug}
@@ -35,30 +60,60 @@ export default function AcademyStorefrontPage() {
       />
     );
   }
-  return (
+  const body = (
     <AcademyProvider slug={slug}>
-      <Storefront slug={slug} />
+      <Storefront slug={slug} signedIn={view === 'APP'} />
     </AcademyProvider>
+  );
+  return view === 'APP' ? <Layout>{body}</Layout> : <PublicFrame>{body}</PublicFrame>;
+}
+
+/** A visitor's frame: the platform's tokens and light/dark switch, a way to sign in. */
+function PublicFrame({ children }: { children: React.ReactNode }) {
+  const { t, i18n } = useTranslation();
+  return (
+    <div className="min-h-screen bg-surface text-on-surface" dir={i18n.dir()}>
+      <header className="glass sticky top-0 z-40">
+        <div className="mx-auto flex h-16 max-w-container items-center gap-3 px-4 sm:px-6">
+          <Link to="/" className="font-heading text-xl font-extrabold text-primary">
+            {t('brand')}
+          </Link>
+          <div className="ms-auto flex items-center gap-2">
+            <ColorModeToggle />
+            <Link to="/login" className="btn-secondary px-4 py-2 text-sm">
+              {t('storefront.login')}
+            </Link>
+            <Link to="/register" className="btn-primary hidden px-4 py-2 text-sm sm:inline-flex">
+              {t('storefront.register')}
+            </Link>
+          </div>
+        </div>
+      </header>
+      {children}
+    </div>
   );
 }
 
-function Storefront({ slug }: { slug: string }) {
-  const { t } = useTranslation();
+function Storefront({ slug, signedIn }: { slug: string; signedIn: boolean }) {
+  const { t, i18n } = useTranslation();
   const { branding, isLoading, error } = useAcademy();
   const { data: courses, isLoading: coursesLoading } = useAcademyCourses(slug);
+  const mine = useMyAcademies();
+  // The academy's own staff are told their Studio page is not live yet.
+  const isStaff = signedIn && !!mine.data?.some((a) => a.slug === slug);
 
   if (isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center">
+      <div className="grid min-h-[50vh] place-items-center">
         <Spinner />
       </div>
     );
   }
   if (error || !branding) {
     return (
-      <div dir="rtl" className="grid min-h-screen place-items-center bg-surface p-6 text-center">
+      <div className="grid min-h-[60vh] place-items-center p-6 text-center">
         <div className="max-w-sm space-y-3">
-          <div className="text-4xl">🔍</div>
+          <span className="material-symbols-outlined text-5xl text-outline">search_off</span>
           <h1 className="font-heading text-xl font-bold">{t('storefront.notFound')}</h1>
           <p className="text-sm text-on-surface-variant">{t('storefront.notFoundBody')}</p>
           <Link to="/discover" className="btn-primary mt-2">
@@ -69,139 +124,82 @@ function Storefront({ slug }: { slug: string }) {
     );
   }
 
-  const accent = branding.colorPrimary || '#4A32C9';
   const initial = branding.name?.trim()?.charAt(0) ?? '?';
-
   return (
-    <div dir="rtl" className="min-h-screen bg-surface">
-      {/* Slim top bar — academy identity + sign-in */}
-      <header className="glass sticky top-0 z-40">
-        <div className="mx-auto flex h-16 max-w-container items-center gap-3 px-6">
-          <AcademyMark logoUrl={branding.logoUrl} initial={initial} accent={accent} size={9} />
-          <span className="font-heading text-lg font-bold tracking-tight">{branding.name}</span>
-          <div className="ms-auto flex items-center gap-2">
-            <Link to="/login" className="btn-secondary px-4 py-2 text-sm">
-              {t('storefront.login')}
-            </Link>
-          </div>
+    <div className="mx-auto w-full max-w-container px-4 py-6 sm:px-6" dir={i18n.dir()}>
+      {isStaff && (
+        <div
+          role="status"
+          className="mb-5 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          <span className="material-symbols-outlined">visibility_off</span>
+          <span className="min-w-0 flex-1">{t('storefront.notLiveForStaff')}</span>
+          <Link to="/academy/studio" className="btn-secondary px-3 py-1.5 text-xs">
+            {t('storefront.openStudio')}
+          </Link>
         </div>
-      </header>
+      )}
 
-      {/* Branded hero — academy color, not platform color */}
-      <section
-        className="relative overflow-hidden"
-        style={{ background: branding.coverUrl ? undefined : accent }}
-      >
+      {/* The academy's identity, on the platform's own surfaces. */}
+      <section className="card relative mb-8 overflow-hidden p-0">
         {branding.coverUrl && (
-          <>
-            <img
-              src={branding.coverUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <span className="absolute inset-0" style={{ background: accent, opacity: 0.82 }} />
-          </>
+          <img src={branding.coverUrl} alt="" className="h-40 w-full object-cover sm:h-52" />
         )}
-        <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.10)_1px,transparent_0)] [background-size:24px_24px]" />
-        <div className="relative mx-auto flex max-w-container flex-col gap-5 px-6 py-14 text-white sm:py-20">
-          <Reveal className="flex items-center gap-4">
-            <AcademyMark
-              logoUrl={branding.logoUrl}
-              initial={initial}
-              accent={accent}
-              size={16}
-              onLight
-            />
-            <div>
-              <h1 className="display leading-tight text-white">{branding.name}</h1>
-              {branding.tagline && (
-                <p className="mt-1 max-w-xl text-white/85">{branding.tagline}</p>
-              )}
-            </div>
-          </Reveal>
-          <Reveal delay={0.06} className="flex flex-wrap gap-3 pt-2">
-            <span className="rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold">
+        <div className="flex items-center gap-4 p-5 sm:p-6">
+          <span className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl bg-primary-fixed font-heading text-2xl font-bold text-on-primary-fixed">
+            {branding.logoUrl ? (
+              <img src={branding.logoUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              initial
+            )}
+          </span>
+          <div className="min-w-0">
+            <h1 className="font-heading text-2xl font-bold tracking-tight">{branding.name}</h1>
+            {branding.tagline && <p className="mt-1 text-on-surface-variant">{branding.tagline}</p>}
+            <p className="mt-2 text-sm text-on-surface-variant">
               {t('storefront.courseCount', { count: courses?.length ?? 0 })}
-            </span>
-            <span className="rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-sm font-semibold">
-              {branding.language === 'en' ? 'English' : t('storefront.inArabic')}
-            </span>
-          </Reveal>
+            </p>
+          </div>
         </div>
       </section>
 
-      {/* Courses */}
-      <main className="mx-auto max-w-container px-6 py-10">
-        <Reveal className="mb-6 flex items-center gap-2">
-          <span className="h-5 w-1 rounded-full" style={{ background: accent }} />
-          <h2 className="font-heading text-2xl font-bold tracking-tight">
-            {t('storefront.courses')}
-          </h2>
-        </Reveal>
+      <Reveal className="mb-4 flex items-center gap-2">
+        <span className="h-5 w-1 rounded-full bg-primary" />
+        <h2 className="font-heading text-xl font-bold tracking-tight">{t('storefront.courses')}</h2>
+      </Reveal>
+      {coursesLoading ? (
+        <Spinner />
+      ) : !courses?.length ? (
+        <EmptyState icon="menu_book" title={t('storefront.noCourses')} />
+      ) : (
+        <Stagger className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {courses.map((c) => (
+            <StaggerItem key={c.id} className="h-full">
+              <CourseCard course={c} />
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
 
-        {coursesLoading ? (
-          <Spinner />
-        ) : !courses?.length ? (
-          <EmptyState icon="menu_book" title={t('storefront.noCourses')} />
-        ) : (
-          <Stagger className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {courses.map((c) => (
-              <StaggerItem key={c.id} className="h-full">
-                <CourseCard course={c} accent={accent} />
-              </StaggerItem>
-            ))}
-          </Stagger>
-        )}
-      </main>
-
-      <footer className="border-t border-outline-variant py-8 text-center text-sm text-on-surface-variant">
-        {t('storefront.poweredBy')}{' '}
-        <Link to="/discover" className="font-semibold" style={{ color: accent }}>
-          {t('brand')}
-        </Link>
-      </footer>
+      {!signedIn && (
+        <p className="mt-10 text-center text-sm text-on-surface-variant">
+          {t('storefront.poweredBy')}{' '}
+          <Link to="/discover" className="font-semibold text-primary">
+            {t('brand')}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
 
-function AcademyMark({
-  logoUrl,
-  initial,
-  accent,
-  size,
-  onLight,
-}: {
-  logoUrl: string | null;
-  initial: string;
-  accent: string;
-  size: number;
-  onLight?: boolean;
-}) {
-  const cls = `grid shrink-0 place-items-center overflow-hidden rounded-xl font-heading font-bold`;
-  const style = onLight
-    ? {
-        width: `${size * 0.25}rem`,
-        height: `${size * 0.25}rem`,
-        background: 'rgba(255,255,255,0.14)',
-        border: '1px solid rgba(255,255,255,0.2)',
-        color: '#fff',
-      }
-    : {
-        width: `${size * 0.25}rem`,
-        height: `${size * 0.25}rem`,
-        background: accent,
-        color: '#fff',
-      };
-  return (
-    <span className={cls} style={style}>
-      {logoUrl ? <img src={logoUrl} alt="" className="h-full w-full object-cover" /> : initial}
-    </span>
-  );
-}
-
-function CourseCard({ course: c, accent }: { course: AcademyCourseCard; accent: string }) {
-  const { t } = useTranslation();
+function CourseCard({ course: c }: { course: AcademyCourseCard }) {
+  const { t, i18n } = useTranslation();
   const monthly = c.pricingModel === 'MONTHLY_SUBSCRIPTION';
+  const en = i18n.language.startsWith('en');
+  // The years come as grades[] (the API stopped sending a single `grade`).
+  const years = courseYearsLabel(c.grades, i18n.language);
+  const subject = c.subject ? (en ? c.subject.nameEn : c.subject.nameAr) : null;
   return (
     <Link
       to={`/course/${c.id}`}
@@ -211,16 +209,17 @@ function CourseCard({ course: c, accent }: { course: AcademyCourseCard; accent: 
         {c.thumbnailUrl ? (
           <img src={c.thumbnailUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
-          <span className="grid h-full place-items-center text-4xl" style={{ color: accent }}>
+          <span className="grid h-full place-items-center text-primary">
             <span className="material-symbols-outlined text-5xl">menu_book</span>
           </span>
         )}
       </div>
       <div className="flex flex-1 flex-col p-4">
-        <p className="truncate text-xs" style={{ color: accent }}>
-          {c.subject ? c.subject.nameAr : '—'}
-          {c.grade ? ` · ${c.grade.nameAr}` : ''}
-        </p>
+        {(subject || years) && (
+          <p className="truncate text-xs text-primary">
+            {[subject, years].filter(Boolean).join(' · ')}
+          </p>
+        )}
         <h3 className="mt-0.5 line-clamp-2 font-heading font-bold">{c.title}</h3>
         {c.teacherName && <p className="mt-1 text-xs text-outline">{c.teacherName}</p>}
         <div className="mt-auto flex items-center justify-between pt-3">

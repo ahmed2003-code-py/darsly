@@ -8,7 +8,8 @@ import { LessonAudio } from './lessonAudio';
 import { SpeakerCapture } from './speakerCapture';
 import { idbPieceStore } from './lessonAudioStore';
 import { PieceOutbox, type UploadOwed } from './lessonAudioOutbox';
-import { primeLessonAudio } from './lessonAudioContext';
+import { lessonAudioContext, primeLessonAudio } from './lessonAudioContext';
+import { DeviceMuteJudge, peakOf } from './deviceMute';
 import { beginOp, markOp } from './liveTimings';
 
 /**
@@ -148,7 +149,14 @@ export interface RtcState {
     bonus?: number;
     guest?: boolean;
   }[];
-  tracks: { id: string; userId: string; kind: Kind; role: 'TEACHER' | 'STUDENT' }[];
+  /** `muted`: published but switched off by its sender (still pulled, so unmuting is instant). */
+  tracks: {
+    id: string;
+    userId: string;
+    kind: Kind;
+    role: 'TEACHER' | 'STUDENT';
+    muted?: boolean;
+  }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
   notJoined?: { userId: string; name: string; guest: boolean }[];
   /** Moderators only: students asking for a seat in a full class. */
@@ -290,6 +298,25 @@ export function useCloudflareMeeting(
   const desired = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
   const working = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
   const [pendingDevice, setPendingDevice] = useState<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  /**
+   * My microphone muted on the device itself (a laptop's mute key, the
+   * system's mute): the switch shows it off and the room hears it is off.
+   */
+  const [micDeviceMuted, setMicDeviceMuted] = useState(false);
+  const micDeviceMutedRef = useRef(false);
+  /** My camera paused by the device (a privacy key that stops its frames). */
+  const [camDeviceMuted, setCamDeviceMuted] = useState(false);
+  /** Send the microphone muted ahead of the first unmute, so that one is instant too. */
+  const warmMic = useRef(false);
+  /** The mute last asked of the server, per kind, while one is in flight. */
+  const muteWanted = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  const muteBusy = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  /** What the server was last told (at publish, or by a mute call that went through). */
+  const muteTold = useRef<{ AUDIO?: boolean; VIDEO?: boolean }>({});
+  /** Device events (ended / mute / unmute), set up once per track. */
+  const deviceWatchRef = useRef<((kind: Kind, t: MediaStreamTrack) => void) | null>(null);
+  const applyMicRef = useRef<(() => boolean) | null>(null);
+  const convergeRef = useRef<((kind: 'AUDIO' | 'VIDEO') => Promise<void>) | null>(null);
   /** The self-view, on screen before the SFU has confirmed the camera. */
   const localPreview = useRef<MediaStreamTrack | null>(null);
   /** Bumped whenever a remote or local track appears or goes, to re-render tiles. */
@@ -616,13 +643,17 @@ export function useCloudflareMeeting(
         const r = (
           await api.post(`${base}/connections/${c.id}/publish`, {
             offer: { type: 'offer', sdp: offer.sdp },
-            tracks: [{ mid: tr.mid, kind }],
+            // A microphone sent switched off (joined muted) is published
+            // muted: shown off, and on at once when it is switched on.
+            tracks: [{ mid: tr.mid, kind, ...(track.enabled ? {} : { muted: true }) }],
           })
         ).data;
         await c.pc.setRemoteDescription(r.sessionDescription);
         const prev = local.current.get(kind);
         if (prev && prev.track !== track) prev.track.stop();
         local.current.set(kind, { track, mid: tr.mid });
+        if (kind === 'AUDIO' || kind === 'VIDEO') muteTold.current[kind] = !track.enabled;
+        deviceWatchRef.current?.(kind, track);
       });
     },
     [base],
@@ -720,6 +751,122 @@ export function useCloudflareMeeting(
   const unpublishRef = useRef<typeof unpublish | null>(null);
   unpublishRef.current = unpublish;
 
+  /**
+   * Tell the room my mute. The switch has already acted on the track itself
+   * (instant); this only updates what the others' lists show. The last wish
+   * wins: presses made while one is in flight are not each sent.
+   */
+  const syncMute = useCallback(
+    (kind: 'AUDIO' | 'VIDEO', muted: boolean, force = false) => {
+      // Already what the server holds: nothing to send (a press back and
+      // forth while one call is in flight still sends the last one).
+      if (!force && !muteBusy.current[kind] && muteTold.current[kind] === muted) return;
+      muteWanted.current[kind] = muted;
+      if (muteBusy.current[kind]) return;
+      muteBusy.current[kind] = true;
+      void (async () => {
+        try {
+          while (muteWanted.current[kind] !== undefined) {
+            const m = muteWanted.current[kind]!;
+            delete muteWanted.current[kind];
+            const c = send.current;
+            const l = local.current.get(kind);
+            if (!c || c.closed || !l?.mid) break;
+            await api
+              .post(`${base}/connections/${c.id}/mute`, { mid: l.mid, muted: m })
+              .then(() => {
+                muteTold.current[kind] = m;
+              })
+              .catch(() => {
+                delete muteTold.current[kind];
+              });
+          }
+        } finally {
+          muteBusy.current[kind] = false;
+        }
+      })();
+    },
+    [base],
+  );
+
+  /** My microphone is really being heard: sent, switched on, not muted on the device. */
+  const micAudible = () => {
+    const l = local.current.get('AUDIO');
+    return !!l && l.track.readyState === 'live' && l.track.enabled && !micDeviceMutedRef.current;
+  };
+
+  /**
+   * The microphone as wanted, at once — the way a call app does it: the
+   * track stays sent and is switched on or off in place (no device to open,
+   * no SFU round trip), then the room is told. False when nothing is sent yet.
+   */
+  const applyMic = useCallback(() => {
+    const l = local.current.get('AUDIO');
+    if (!l || l.track.readyState !== 'live') return false;
+    l.track.enabled = !!desired.current.AUDIO;
+    const on = micAudible();
+    setMicOn(on);
+    syncMute('AUDIO', !on);
+    return true;
+  }, [syncMute]);
+  applyMicRef.current = applyMic;
+
+  /** The device muted (or unmuted) my microphone: shown and told, never fought. */
+  const markMicDeviceMuted = useCallback(
+    (v: boolean) => {
+      if (micDeviceMutedRef.current === v) return;
+      micDeviceMutedRef.current = v;
+      setMicDeviceMuted(v);
+      const l = local.current.get('AUDIO');
+      if (!l || !l.track.enabled) return;
+      if (v) setNotice('MIC_DEVICE_MUTED');
+      setMicOn(!v);
+      syncMute('AUDIO', v);
+    },
+    [syncMute],
+  );
+
+  // What the device does to my camera and microphone reaches the switches:
+  // unplugged or taken away (ended), or paused by the device (mute / unmute).
+  deviceWatchRef.current = (kind, t) => {
+    if (kind !== 'AUDIO' && kind !== 'VIDEO') return;
+    const w = t as MediaStreamTrack & { __darslyWatched?: boolean };
+    if (w.__darslyWatched) return;
+    w.__darslyWatched = true;
+    const mine = () => local.current.get(kind)?.track === t;
+    t.addEventListener('ended', () => {
+      if (!mine()) return;
+      desired.current[kind] = false;
+      if (kind === 'AUDIO') {
+        markMicDeviceMuted(false);
+        setMicOn(false);
+        setNotice('MIC_LOST');
+      } else {
+        setCamDeviceMuted(false);
+        setCamOn(false);
+        setNotice('CAM_LOST');
+      }
+      void unpublishRef.current?.(kind);
+    });
+    t.addEventListener('mute', () => {
+      if (!mine()) return;
+      if (kind === 'AUDIO') markMicDeviceMuted(true);
+      else {
+        setCamDeviceMuted(true);
+        setNotice('CAM_DEVICE_MUTED');
+        syncMute('VIDEO', true);
+      }
+    });
+    t.addEventListener('unmute', () => {
+      if (!mine()) return;
+      if (kind === 'AUDIO') markMicDeviceMuted(false);
+      else {
+        setCamDeviceMuted(false);
+        syncMute('VIDEO', false);
+      }
+    });
+  };
+
   /** Everything this browser sends, stopped (revoked, left, or ended). */
   const stopSending = useCallback(async () => {
     for (const [, l] of local.current) l.track.stop();
@@ -766,6 +913,9 @@ export function useCloudflareMeeting(
 
   const join = useCallback(
     async (access: CloudflareAccess, o: { mic: boolean; cam: boolean; owner?: boolean }) => {
+      // From the "join" click: the audio context that tells a device-muted
+      // microphone (and later captures the lesson) starts here.
+      primeLessonAudio();
       setError(null);
       leaving.current = false;
       ice.current = access.iceServers ?? [];
@@ -783,12 +933,19 @@ export function useCloudflareMeeting(
             await publish('VIDEO', cam);
             setCamOn(true);
           }
+          desired.current.AUDIO = o.mic;
           if (o.mic) {
             const mic = await getMic().catch(() => null);
             if (mic) {
               await publish('AUDIO', mic);
-              setMicOn(true);
+              applyMicRef.current?.();
             } else setNotice('MIC_FAILED');
+          } else if (await micPermissionGranted()) {
+            // Joined muted: the microphone goes out switched off now, so the
+            // first unmute is as instant as every other (only when the browser
+            // already has the permission — nothing is asked here).
+            warmMic.current = true;
+            void convergeRef.current?.('AUDIO');
           }
           // Capturing the lesson's words follows the server's answer (below):
           // this only says this page is the one allowed to do it.
@@ -928,12 +1085,20 @@ export function useCloudflareMeeting(
             else if (s.me.policy) {
               for (const kind of [...local.current.keys()]) {
                 if (!s.me.policy.publish[kind]) {
+                  if (kind === 'AUDIO' || kind === 'VIDEO') desired.current[kind] = false;
                   if (kind === 'AUDIO') setMicOn(false);
                   if (kind === 'VIDEO') setCamOn(false);
                   await unpublishRef.current?.(kind);
                 }
               }
             }
+          }
+          // The room's view of my microphone drifted from the switch (a mute
+          // call lost, a connection replaced): told again.
+          const mic = local.current.get('AUDIO');
+          const mine = s.participants.find((p) => p.userId === s.me.userId);
+          if (mic?.mid && mine && !muteBusy.current.AUDIO && mine.audio !== micAudible()) {
+            syncMute('AUDIO', !micAudible(), true);
           }
           await reconcile().catch(() => undefined);
         },
@@ -1005,7 +1170,17 @@ export function useCloudflareMeeting(
       clearInterval(net);
       if (h) clearTimeout(h);
     };
-  }, [enabled, joined, liveSessionId, fetchState, reconcile, teardown, stopSending, reconnect]);
+  }, [
+    enabled,
+    joined,
+    liveSessionId,
+    fetchState,
+    reconcile,
+    teardown,
+    stopSending,
+    reconnect,
+    syncMute,
+  ]);
 
   // The teacher's camera layer: down on a weak link, back up when it recovers.
   useEffect(() => {
@@ -1275,9 +1450,14 @@ export function useCloudflareMeeting(
       const me = stateRef.current?.me.userId;
       const mics: { userId: string; track: MediaStreamTrack }[] = [];
       const mic = local.current.get('AUDIO')?.track;
-      if (mic && me) mics.push({ userId: me, track: mic });
-      for (const p of pulled.current.values())
-        if (p.kind === 'AUDIO' && p.track) mics.push({ userId: p.userId, track: p.track });
+      // A muted microphone is still sent (silence): it is not the lesson.
+      if (mic && me && micAudible()) mics.push({ userId: me, track: mic });
+      const mutedIds = new Set(
+        (stateRef.current?.tracks ?? []).filter((t) => t.muted).map((t) => t.id),
+      );
+      for (const [id, p] of pulled.current)
+        if (p.kind === 'AUDIO' && p.track && !mutedIds.has(id))
+          mics.push({ userId: p.userId, track: p.track });
       if (la instanceof SpeakerCapture) la.setTracks(mics);
       else la?.setTracks(mics.map((m) => m.track));
     };
@@ -1311,14 +1491,20 @@ export function useCloudflareMeeting(
     async (kind: 'AUDIO' | 'VIDEO') => {
       if (working.current[kind]) return;
       working.current[kind] = true;
-      setPendingDevice((p) => ({ ...p, [kind]: true }));
+      // Sending the microphone ahead (muted) is not a press: no spinner for it.
+      if (kind === 'VIDEO' || desired.current.AUDIO)
+        setPendingDevice((p) => ({ ...p, [kind]: true }));
       try {
         for (let i = 0; i < 6; i++) {
           const want = !!desired.current[kind];
           const have = local.current.has(kind);
-          if (want === have) break;
+          // The microphone is sent once and then switched in place (applyMic);
+          // here it is only opened and sent — when wanted, or sent ahead muted.
+          if (kind === 'AUDIO') {
+            if (have || (!want && !warmMic.current)) break;
+          } else if (want === have) break;
           const op = beginOp(kind === 'VIDEO' ? 'camera' : 'mic');
-          if (!want) {
+          if (!want && kind === 'VIDEO') {
             if (kind === 'VIDEO') setCamOn(false);
             else setMicOn(false);
             await unpublish(kind);
@@ -1327,6 +1513,12 @@ export function useCloudflareMeeting(
           }
           const me = stateRef.current?.me;
           if (!me?.canPublish || (me.policy && !me.policy.publish[kind])) {
+            if (kind === 'AUDIO' && !want) {
+              // Only sending ahead: not allowed yet is nothing to say.
+              warmMic.current = false;
+              markOp(op, kind, 'failed');
+              break;
+            }
             setNotice(
               kind === 'AUDIO' && me?.policy?.micBlocked ? 'MIC_BLOCKED' : 'NOT_ALLOWED_TO_SPEAK',
             );
@@ -1338,10 +1530,12 @@ export function useCloudflareMeeting(
           try {
             track = kind === 'VIDEO' ? await getCam(me.role === 'TEACHER') : await getMic();
           } catch (e) {
+            const asked = !!desired.current[kind];
             desired.current[kind] = false;
             markOp(op, kind, 'failed');
             if (kind === 'AUDIO') {
-              setNotice('MIC_FAILED');
+              warmMic.current = false;
+              if (asked) setNotice('MIC_FAILED');
               break;
             }
             setNotice('CAM_FAILED');
@@ -1360,8 +1554,9 @@ export function useCloudflareMeeting(
             break;
           }
           markOp(op, kind, 'deviceReady');
-          // Asked off again while the device was opening: nothing to send.
-          if (!desired.current[kind]) {
+          // Asked off again while the camera was opening: nothing to send. (A
+          // microphone still goes out — switched off — so its next "on" is instant.)
+          if (kind === 'VIDEO' && !desired.current[kind]) {
             track.stop();
             markOp(op, kind, 'unpublished');
             continue;
@@ -1376,6 +1571,7 @@ export function useCloudflareMeeting(
             bump();
             markOp(op, kind, 'localPreview');
           }
+          if (kind === 'AUDIO') track.enabled = !!desired.current.AUDIO;
           try {
             markOp(op, kind, 'publishRequest');
             await publish(kind, track);
@@ -1388,7 +1584,9 @@ export function useCloudflareMeeting(
                 void api.post(`${base}/device-report`, { camera: null }).catch(() => undefined);
               }
             } else {
-              setMicOn(true);
+              warmMic.current = false;
+              // Pressed again while it was being sent: the last press wins.
+              applyMic();
             }
           } catch (e) {
             track.stop();
@@ -1397,7 +1595,9 @@ export function useCloudflareMeeting(
             if (kind === 'VIDEO') setCamOn(false);
             markOp(op, kind, 'failed');
             const code = errCode(e) === 'NOT_ALLOWED_TO_SPEAK' ? 'NOT_ALLOWED_TO_SPEAK' : null;
-            setNotice(code ?? (kind === 'VIDEO' ? 'CAM_FAILED' : 'MIC_FAILED'));
+            const sentAhead = kind === 'AUDIO' && warmMic.current && !desired.current.AUDIO;
+            if (kind === 'AUDIO') warmMic.current = false;
+            if (!sentAhead) setNotice(code ?? (kind === 'VIDEO' ? 'CAM_FAILED' : 'MIC_FAILED'));
             bump();
             break;
           }
@@ -1407,17 +1607,74 @@ export function useCloudflareMeeting(
         setPendingDevice((p) => ({ ...p, [kind]: false }));
         // A device another path changed (a revoke) keeps the switch truthful.
         if (kind === 'VIDEO') setCamOn(local.current.has('VIDEO'));
-        else setMicOn(local.current.has('AUDIO'));
+        else setMicOn(micAudible());
       }
     },
-    [publish, unpublish, base, bump],
+    [publish, unpublish, base, bump, applyMic],
   );
+  convergeRef.current = converge;
 
   const toggleMic = useCallback(async () => {
-    const now = desired.current.AUDIO ?? local.current.has('AUDIO');
+    primeLessonAudio();
+    const l = local.current.get('AUDIO');
+    // What the switch shows now: the last press while the first send is under
+    // way, otherwise the track itself.
+    const now = working.current.AUDIO
+      ? !!desired.current.AUDIO
+      : !!l && l.track.readyState === 'live' && l.track.enabled;
     desired.current.AUDIO = !now;
+    if (!now && micDeviceMutedRef.current) setNotice('MIC_DEVICE_MUTED');
+    // Sent already: on or off at once. Not yet: opened and sent (once).
+    if (applyMic()) return;
+    if (working.current.AUDIO) setPendingDevice((p) => ({ ...p, AUDIO: !now }));
     await converge('AUDIO');
-  }, [converge]);
+  }, [converge, applyMic]);
+
+  // A microphone muted on the device (a laptop's mute key) sends exact digital
+  // silence and no event: listened for, so the switch and the room follow it.
+  useEffect(() => {
+    if (!enabled || !joined) return;
+    const judge = new DeviceMuteJudge();
+    const buf = new Float32Array(1024);
+    let cur: MediaStreamTrack | null = null;
+    let src: MediaStreamAudioSourceNode | null = null;
+    let an: AnalyserNode | null = null;
+    const h = setInterval(() => {
+      const t = local.current.get('AUDIO')?.track ?? null;
+      if (t !== cur) {
+        src?.disconnect();
+        src = null;
+        an = null;
+        cur = t;
+        judge.reset();
+        markMicDeviceMuted(false);
+      }
+      const ctx = lessonAudioContext();
+      if (!t || t.readyState !== 'live' || !ctx) return;
+      // Our own mute sends zeros too, and a suspended context reads zeros:
+      // neither is the device's mute.
+      if (!t.enabled || t.muted || ctx.state !== 'running') {
+        judge.feed(null, Date.now());
+        return;
+      }
+      if (!an) {
+        try {
+          src = ctx.createMediaStreamSource(new MediaStream([t]));
+          an = ctx.createAnalyser();
+          an.fftSize = 1024;
+          src.connect(an);
+        } catch {
+          return;
+        }
+      }
+      an.getFloatTimeDomainData(buf);
+      markMicDeviceMuted(judge.feed(peakOf(buf), Date.now()));
+    }, 250);
+    return () => {
+      clearInterval(h);
+      src?.disconnect();
+    };
+  }, [enabled, joined, markMicDeviceMuted]);
 
   const toggleCam = useCallback(async () => {
     const now = desired.current.VIDEO ?? local.current.has('VIDEO');
@@ -1620,7 +1877,7 @@ export function useCloudflareMeeting(
         local: true,
         owner: p.role === 'TEACHER',
         audio: micOn,
-        video: camOn,
+        video: camOn && !camDeviceMuted,
         screen: sharing,
         track: local.current.get('VIDEO')?.track ?? localPreview.current ?? null,
         screenTrack: local.current.get('SCREEN')?.track ?? null,
@@ -1668,7 +1925,10 @@ export function useCloudflareMeeting(
     notice,
     canShare,
     micOn,
-    camOn,
+    camOn: camOn && !camDeviceMuted,
+    /** My microphone / camera muted or paused by the device itself (shown, not fought). */
+    micDeviceMuted,
+    camDeviceMuted,
     sharing,
     startPreview,
     join,
@@ -1732,4 +1992,14 @@ export function useCloudflareMeeting(
     resumeAudio,
     connection,
   };
+}
+
+/** The browser already lets this site use the microphone (so opening it asks nothing). */
+async function micPermissionGranted(): Promise<boolean> {
+  try {
+    const p = await navigator.permissions?.query({ name: 'microphone' });
+    return p?.state === 'granted';
+  } catch {
+    return false;
+  }
 }

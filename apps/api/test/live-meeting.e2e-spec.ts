@@ -720,6 +720,53 @@ describe('the meeting, in a real browser', () => {
     }
     await waitFor('one microphone', async () => (await teacherTracks(sid, tid, 'AUDIO')) === 1);
     note('microphone toggling: one track', (await sfuPublished(sid, tid, 'audio')) === 1);
+
+    // Mute and unmute act at once, as in any call app: the track is switched in
+    // place (no device to open, no SFU round trip), stays published, and the
+    // room is told after.
+    const flip = async (from: string, to: string) => {
+      const t0 = Date.now();
+      await click(teacher, from);
+      await waitFor(`mic switched to "${to}"`, () => label(teacher, to), 5_000, 20);
+      return Date.now() - t0;
+    };
+    const muteMs = await flip(EN.meeting.muteMic, EN.meeting.unmuteMic);
+    await waitFor(
+      'the room sees the microphone off',
+      () =>
+        prisma.liveRtcTrack.findFirst({
+          where: {
+            sessionId: sid,
+            userId: tid,
+            kind: 'AUDIO',
+            closedAt: null,
+            mutedAt: { not: null },
+          },
+        }),
+      10_000,
+    );
+    const stillSent = await sfuPublished(sid, tid, 'audio');
+    const unmuteMs = await flip(EN.meeting.unmuteMic, EN.meeting.muteMic);
+    await waitFor(
+      'the room sees the microphone on',
+      () =>
+        prisma.liveRtcTrack.findFirst({
+          where: { sessionId: sid, userId: tid, kind: 'AUDIO', closedAt: null, mutedAt: null },
+        }),
+      10_000,
+    );
+    note('microphone mute/unmute is instant and keeps one published track', true, {
+      muteMs,
+      unmuteMs,
+      stillSent,
+      tracks: await teacherTracks(sid, tid, 'AUDIO'),
+    });
+    expect(stillSent).toBe(1);
+    expect(await teacherTracks(sid, tid, 'AUDIO')).toBe(1);
+    // A click is a few tens of ms in headless Chrome; the old path waited for
+    // the device and the SFU (seconds).
+    expect(muteMs).toBeLessThan(1_500);
+    expect(unmuteMs).toBeLessThan(1_500);
     expect(await sfuPublished(sid, tid, 'audio')).toBe(1);
 
     // ── Recording: confirmed, and never flickering back to "start" ──────────

@@ -953,7 +953,13 @@ export default function Classroom(props: ClassroomProps) {
                   icon={meeting.micOn ? 'mic' : 'mic_off'}
                   off={!meeting.micOn}
                   busy={!!cf?.pendingDevice.AUDIO}
-                  label={meeting.micOn ? t('meeting.muteMic') : t('meeting.unmuteMic')}
+                  label={
+                    cf?.micDeviceMuted
+                      ? t('meeting.micDeviceMuted')
+                      : meeting.micOn
+                        ? t('meeting.muteMic')
+                        : t('meeting.unmuteMic')
+                  }
                   onClick={meeting.toggleMic}
                 />
               )}

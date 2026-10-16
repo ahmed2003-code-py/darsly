@@ -3504,6 +3504,10 @@ model LiveRtcTrack {
   mid          String
   createdAt    DateTime          @default(now())
   closedAt     DateTime?
+  /// Muted by its sender: still published (unmuting is instant), shown as off.
+  mutedAt      DateTime?
+  /// Time spent muted before `mutedAt`, so "how long they spoke" stays true.
+  mutedMs      Int               @default(0)
 
   @@unique([connectionId, trackName])
   @@index([sessionId, roomName, closedAt])

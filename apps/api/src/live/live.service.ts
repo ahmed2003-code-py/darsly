@@ -3318,7 +3318,7 @@ export class LiveService {
       }),
       this.prisma.liveRtcTrack.findMany({
         where: { sessionId: id, kind: 'AUDIO', connection: { role: 'STUDENT' } },
-        select: { userId: true, createdAt: true, closedAt: true },
+        select: { userId: true, createdAt: true, closedAt: true, mutedAt: true, mutedMs: true },
       }),
       this.prisma.liveHand.findMany({
         where: { sessionId: id },
@@ -3331,7 +3331,9 @@ export class LiveService {
       const end = Math.min(t.closedAt?.getTime() ?? runEnd, runEnd);
       const cur = spoke.get(t.userId) ?? { count: 0, sec: 0 };
       cur.count += 1;
-      cur.sec += Math.max(0, Math.round((end - t.createdAt.getTime()) / 1000));
+      // A muted microphone is still published: its muted time is not speaking.
+      const muted = t.mutedMs + (t.mutedAt ? Math.max(0, end - t.mutedAt.getTime()) : 0);
+      cur.sec += Math.max(0, Math.round((end - t.createdAt.getTime() - muted) / 1000));
       spoke.set(t.userId, cur);
     }
     const raised = new Map(hands.map((h) => [h.userId, h.raisedCount]));

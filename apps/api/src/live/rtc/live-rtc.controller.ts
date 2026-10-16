@@ -17,6 +17,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -57,6 +58,13 @@ class PublishTrackDto {
   @IsString() @MaxLength(16) @Matches(/^[0-9a-zA-Z_-]+$/) mid: string;
   @IsIn(['AUDIO', 'VIDEO', 'SCREEN', 'SCREEN_AUDIO']) kind:
     'AUDIO' | 'VIDEO' | 'SCREEN' | 'SCREEN_AUDIO';
+  /** Sent muted (published, shown as off) — a microphone joined muted. */
+  @IsOptional() @IsBoolean() muted?: boolean;
+}
+
+class MuteDto {
+  @IsString() @MaxLength(16) @Matches(/^[0-9a-zA-Z_-]+$/) mid: string;
+  @IsBoolean() muted: boolean;
 }
 
 class PublishDto {
@@ -252,6 +260,20 @@ export class LiveRtcController {
   ) {
     limit(u.sub);
     return this.rtc.closeTracks(u.sub, id, cid, dto);
+  }
+
+  @Post('live/:id/rtc/connections/:cid/mute')
+  @GuestAllowed()
+  @Roles(Role.STUDENT, Role.TEACHER)
+  @ApiOperation({ summary: 'Mute or unmute a track this person sends (it stays published)' })
+  mute(
+    @CurrentUser() u: JwtPayload,
+    @Param('id') id: string,
+    @Param('cid') cid: string,
+    @Body() dto: MuteDto,
+  ) {
+    limit(u.sub);
+    return this.rtc.setMuted(u.sub, id, cid, dto);
   }
 
   @Delete('live/:id/rtc/connections/:cid')

@@ -56,6 +56,8 @@ export function maxSpeakers(env: NodeJS.ProcessEnv = process.env): number {
 /** What each side of the class may send. */
 const TEACHER_KINDS: readonly LiveTrackKind[] = ['AUDIO', 'VIDEO', 'SCREEN', 'SCREEN_AUDIO'];
 const STUDENT_KINDS: readonly LiveTrackKind[] = ['AUDIO', 'VIDEO'];
+/** What a sender can mute without unpublishing (the device stays open, nothing is sent). */
+const MUTABLE_KINDS: readonly LiveTrackKind[] = ['AUDIO', 'VIDEO'];
 
 /**
  * The teacher's camera goes out in two layers: `h` (720p, up to 1.2 Mbps) and
@@ -145,7 +147,7 @@ export interface RtcState {
     bonus?: number;
     guest?: boolean;
   }[];
-  tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role }[];
+  tracks: { id: string; userId: string; kind: LiveTrackKind; role: Role; muted: boolean }[];
   /** Moderators only: who holds a seat and is not in the room yet. */
   notJoined?: { userId: string; name: string; guest: boolean }[];
   /** Moderators only: students asking for a seat in a full class, and the capacity picture. */
@@ -540,7 +542,10 @@ export class LiveRtcService {
     userId: string,
     sessionId: string,
     connectionId: string,
-    input: { offer: CfSessionDescription; tracks: { mid: string; kind: LiveTrackKind }[] },
+    input: {
+      offer: CfSessionDescription;
+      tracks: { mid: string; kind: LiveTrackKind; muted?: boolean }[];
+    },
   ) {
     const g = await this.gate(userId, sessionId);
     const c = await this.connection(g, userId, connectionId, 'SEND');
@@ -602,6 +607,9 @@ export class LiveRtcService {
           kind: t.kind,
           trackName: t.trackName,
           mid: t.mid,
+          // A microphone sent muted (joined muted): published now, so the
+          // first unmute is instant — shown as off until then.
+          mutedAt: t.muted && MUTABLE_KINDS.includes(t.kind) ? now : null,
         })),
       }),
     ]);
@@ -823,6 +831,49 @@ export class LiveRtcService {
     return { sessionDescription: res.sessionDescription ?? null };
   }
 
+  /**
+   * The sender's mute: the track stays published and its sender's page sends
+   * silence (track.enabled = false), so muting and unmuting take effect at
+   * once, the way any call app behaves. This only tells the room — the
+   * participant list shows the microphone off — and keeps the time spoken true.
+   */
+  async setMuted(
+    userId: string,
+    sessionId: string,
+    connectionId: string,
+    input: { mid: string; muted: boolean },
+  ) {
+    const g = await this.gate(userId, sessionId);
+    const c = await this.connection(g, userId, connectionId, 'SEND');
+    const t = await this.prisma.liveRtcTrack.findFirst({
+      where: { connectionId: c.id, mid: input.mid, closedAt: null },
+      select: { id: true, kind: true, mutedAt: true },
+    });
+    if (!t || !MUTABLE_KINDS.includes(t.kind)) {
+      throw new ConflictException({
+        message: 'That track is no longer being sent',
+        code: 'RTC_TRACKS_GONE',
+      });
+    }
+    const now = new Date();
+    const res = input.muted
+      ? await this.prisma.liveRtcTrack.updateMany({
+          where: { id: t.id, mutedAt: null },
+          data: { mutedAt: now },
+        })
+      : t.mutedAt
+        ? await this.prisma.liveRtcTrack.updateMany({
+            where: { id: t.id, mutedAt: t.mutedAt },
+            data: {
+              mutedAt: null,
+              mutedMs: { increment: Math.max(0, now.getTime() - t.mutedAt.getTime()) },
+            },
+          })
+        : { count: 0 };
+    if (res.count) this.changed(sessionId);
+    return { muted: input.muted };
+  }
+
   // ── The class as the page draws it ─────────────────────────────────────────
 
   async state(userId: string, sessionId: string): Promise<RtcState> {
@@ -837,7 +888,13 @@ export class LiveRtcService {
           closedAt: null,
           connection: { closedAt: null, closeReason: null },
         },
-        select: { id: true, userId: true, kind: true, connection: { select: { role: true } } },
+        select: {
+          id: true,
+          userId: true,
+          kind: true,
+          mutedAt: true,
+          connection: { select: { role: true } },
+        },
         orderBy: { createdAt: 'asc' },
       }),
       // In the room = connected to it in this run (a lobby that fetched the
@@ -894,8 +951,10 @@ export class LiveRtcService {
     const nameOf = new Map(users.map((u) => [u.id, u.fullName]));
     const handOf = new Map(hands.map((h) => [h.userId, h.state]));
     const myHand = handOf.get(userId) ?? 'IDLE';
+    // A muted track is still published (and still pulled, so unmuting is
+    // instant on the receiving side too) but the person shows as off.
     const has = (uid: string, kinds: LiveTrackKind[]) =>
-      tracks.some((t) => t.userId === uid && kinds.includes(t.kind));
+      tracks.some((t) => t.userId === uid && kinds.includes(t.kind) && !t.mutedAt);
     const myPolicy = await this.policyOf(g, userId);
     // Everyone's policy in this run: moderators see the controls; everyone
     // else sees only the cameras meant for them.
@@ -908,7 +967,7 @@ export class LiveRtcService {
         pol.of(t.userId).videoAudience === 'EVERYONE',
     );
     const shown = (uid: string, kinds: LiveTrackKind[]) =>
-      visible.some((t) => t.userId === uid && kinds.includes(t.kind));
+      visible.some((t) => t.userId === uid && kinds.includes(t.kind) && !t.mutedAt);
     const notJoined = g.moderator
       ? await this.notJoined(sessionId, new Set(roleOf.keys()))
       : undefined;
@@ -1003,6 +1062,7 @@ export class LiveRtcService {
         userId: t.userId,
         kind: t.kind,
         role: t.connection.role === 'STUDENT' ? 'STUDENT' : 'TEACHER',
+        muted: !!t.mutedAt,
       })),
       ...(notJoined ? { notJoined } : {}),
       ...(admissions ? { admissions } : {}),

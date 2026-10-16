@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth';
 import type { NavItem } from './nav';
 import ColorModeToggle from '../ColorModeToggle';
@@ -36,18 +36,24 @@ export default function Sidebar({
   return (
     <div className="shell-sidebar flex h-full flex-col">
       {/* Brand block. The tile is the real mark, themed rather than a fixed
-          image; the wordmark and role line come and go with the labels. */}
-      <div className="shell-brand flex items-center gap-3 px-5 py-6">
+          image; the wordmark and role line come and go with the labels. It
+          is the way home, as a logo is everywhere: this role's first page. */}
+      <Link
+        to={nav[0]?.to ?? '/'}
+        onClick={onNavigate}
+        aria-label={t('brand')}
+        className="shell-brand flex items-center gap-3 rounded-xl px-5 py-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      >
         <span className="brand-tile h-11 w-11 shrink-0" aria-hidden />
         {labels && (
           <div className="min-w-0">
-            <h1 className="font-heading text-xl font-bold tracking-tight text-on-surface">
+            <p className="font-heading text-xl font-bold tracking-tight text-on-surface">
               {t('brand')}
-            </h1>
+            </p>
             <p className="text-xs text-on-surface-variant">{roleLabel}</p>
           </div>
         )}
-      </div>
+      </Link>
 
       <nav className="shell-nav min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3">
         {nav.map((item) => (

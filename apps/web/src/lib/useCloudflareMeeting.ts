@@ -34,6 +34,13 @@ import { beginOp, markOp } from './liveTimings';
 const HEARTBEAT_MS = 30_000;
 /** A safety net under the socket: state is re-read at least this often. */
 const STATE_POLL_MS = 20_000;
+/**
+ * The poll while the realtime socket is not connected (a network that blocks
+ * WebSockets, a socket still connecting): the state is all the page has, so
+ * it is read more often — or a teacher who just joined saw no tile of their
+ * own, and a student no teacher, for up to the full 20 seconds.
+ */
+const STATE_POLL_NO_SOCKET_MS = 5_000;
 /** How long a connection may sit disconnected before it is rebuilt. */
 const RECONNECT_AFTER_MS = 4_000;
 /** The capturing tab's heartbeat (its lease lasts 30 s on the server). */
@@ -971,7 +978,16 @@ export function useCloudflareMeeting(
     sock?.on('live:nudge', onNudge);
     sock?.on('live:removed', onRemoved);
     sock?.on('connect', refresh);
-    const poll = setInterval(refresh, STATE_POLL_MS);
+    // Joined: the room as it is now, with us in it — the state read before
+    // joining did not have us yet, and the socket may never tell us.
+    refresh();
+    let lastPoll = Date.now();
+    const poll = setInterval(() => {
+      const due = sock?.connected ? STATE_POLL_MS : STATE_POLL_NO_SOCKET_MS;
+      if (Date.now() - lastPoll < due) return;
+      lastPoll = Date.now();
+      refresh();
+    }, STATE_POLL_NO_SOCKET_MS);
     const net = setInterval(() => {
       // Said out loud (aria-live on the page) while a connection is down.
       const down = [recv.current, send.current].some((c) => c && !c.closed && c.downSince != null);
@@ -1688,6 +1704,12 @@ export function useCloudflareMeeting(
     ready: enabled,
     // Cloudflare only:
     rtc: state,
+    /**
+     * Read the room now — after the teacher's own change (recording started
+     * or stopped), so this tab claims the capture at once instead of when the
+     * socket or the poll gets round to telling it.
+     */
+    refreshState: () => void fetchState(),
     hands: (state?.participants ?? []).filter((p) => p.hand !== 'IDLE' && p.role === 'STUDENT'),
     raiseHand,
     lowerHand,

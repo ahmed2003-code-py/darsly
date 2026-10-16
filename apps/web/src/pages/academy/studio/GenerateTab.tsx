@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AxiosError } from 'axios';
 import { api } from '../../../lib/api';
@@ -129,6 +129,19 @@ export default function GenerateTab({
       if (e.response?.status === 409) qc.invalidateQueries({ queryKey: ['studio-overview'] });
     },
   });
+  // `disabled` lands only on the next render; a double click is two clicks
+  // before it. One request at a time, decided at the click (the server also
+  // refuses a second job — AI_JOB_ACTIVE).
+  const submitting = useRef(false);
+  const startGenerate = () => {
+    if (submitting.current) return;
+    submitting.current = true;
+    generate.mutate(undefined, {
+      onSettled: () => {
+        submitting.current = false;
+      },
+    });
+  };
   const cancel = useMutation({
     mutationFn: async () => (await api.post(`/academy/site/jobs/${jobId}/cancel`)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio-job', jobId] }),
@@ -270,7 +283,7 @@ export default function GenerateTab({
       <p className="mb-3 text-xs text-on-surface-variant">{t('studio.generate.colorNotEnough')}</p>
       <button
         className="btn-primary"
-        onClick={() => generate.mutate()}
+        onClick={startGenerate}
         disabled={generate.isPending}
         data-action="generate"
       >

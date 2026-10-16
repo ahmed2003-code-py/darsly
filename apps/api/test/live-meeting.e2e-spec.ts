@@ -32,6 +32,7 @@ import { randomUUID } from 'crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { Browser, BrowserContext, Page } from 'puppeteer-core';
 import { browserSfu } from './live-e2e/browser-sfu';
+import { launchChrome, reloadMounted } from './live-e2e/harness';
 
 jest.setTimeout(20 * 60_000);
 
@@ -199,29 +200,23 @@ beforeAll(async () => {
   // ── The browser and its SFU ───────────────────────────────────────────────
   const wav = join(OUT, 'tone.wav');
   toneWav(wav);
-  const puppeteer = require('puppeteer-core');
-  browser = await puppeteer.launch({
-    executablePath: CHROME,
-    headless: true,
-    // A profile of its own, every run: never another Chrome's.
-    userDataDir: join(OUT, `profile-${Date.now()}`),
-    args: [
-      '--use-fake-ui-for-media-stream',
-      '--use-fake-device-for-media-stream',
-      `--use-file-for-fake-audio-capture=${wav}`,
-      // Chrome's Local Network Access checks gate connections to loopback
-      // behind a permission headless Chrome cannot grant: an asset load or the
-      // classroom's WebSocket was refused now and then
-      // (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS / ERR_NETWORK_ACCESS_DENIED),
-      // which left a blank page, or a classroom that only heard of changes by
-      // its 20-second poll. Everything here is on this machine, on purpose.
-      '--disable-features=WebRtcHideLocalIpsWithMdns,LocalNetworkAccessChecks,LocalNetworkAccessChecksWarn,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests',
-      // WebRTC over the loopback too: inside this machine's sandbox a socket
-      // on the LAN interface could be refused, which left a peer at ICE "new".
-      '--allow-loopback-in-peer-connection',
-      '--no-first-run',
-    ],
-  });
+  // A profile of its own, every run: never another Chrome's.
+  browser = await launchChrome(OUT, [
+    '--use-fake-ui-for-media-stream',
+    '--use-fake-device-for-media-stream',
+    `--use-file-for-fake-audio-capture=${wav}`,
+    // Chrome's Local Network Access checks gate connections to loopback
+    // behind a permission headless Chrome cannot grant: an asset load or the
+    // classroom's WebSocket was refused now and then
+    // (net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS / ERR_NETWORK_ACCESS_DENIED),
+    // which left a blank page, or a classroom that only heard of changes by
+    // its 20-second poll. Everything here is on this machine, on purpose.
+    '--disable-features=WebRtcHideLocalIpsWithMdns,LocalNetworkAccessChecks,LocalNetworkAccessChecksWarn,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults,BlockInsecurePrivateNetworkRequests',
+    // WebRTC over the loopback too: inside this machine's sandbox a socket
+    // on the LAN interface could be refused, which left a peer at ICE "new".
+    '--allow-loopback-in-peer-connection',
+    '--no-first-run',
+  ]);
   const sfuPage = await (await browser.createBrowserContext()).newPage();
   sfu = await browserSfu(sfuPage);
 
@@ -317,8 +312,8 @@ beforeAll(async () => {
       await app.listen(0, '127.0.0.1');
       break;
     } catch (e) {
-      if (i >= 4 || (e as NodeJS.ErrnoException).code !== 'EACCES') throw e;
-      await sleep(1_000);
+      if (i >= 7 || (e as NodeJS.ErrnoException).code !== 'EACCES') throw e;
+      await sleep(1_000 * (i + 1));
     }
   }
   const port = (app.getHttpServer().address() as { port: number }).port;
@@ -807,6 +802,19 @@ describe('the meeting, in a real browser', () => {
       'second span',
       async () => (await prisma.liveCaptureSpan.count({ where: { sessionId: sid } })) === 2,
     );
+    // …and this tab, the one that pressed Start, is the one capturing again.
+    await waitFor(
+      'the teacher tab captures again',
+      () =>
+        prisma.liveCaptureLease.findFirst({
+          where: {
+            sessionId: sid,
+            releasedAt: null,
+            lastBeatAt: { gt: new Date(Date.now() - 15_000) },
+          },
+        }),
+      30_000,
+    );
     note('start → stop → start: two spans, capture follows each', true);
 
     // ── A second teacher tab: refused, nothing duplicated ──────────────────
@@ -834,7 +842,7 @@ describe('the meeting, in a real browser', () => {
     await sleep(8_000);
     const beforeReload = await prisma.liveAudioSegment.count({ where: { sessionId: sid } });
     const reloadAt = Date.now();
-    await teacher.reload({ waitUntil: 'domcontentloaded' });
+    await reloadMounted(teacher);
     await enterClassroom(teacher);
     await waitFor(
       'the interrupted piece arrives',

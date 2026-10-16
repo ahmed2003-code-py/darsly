@@ -57,7 +57,8 @@ export function classifyHttpFailure(
   retryAfter?: string | number | null,
 ): ProviderFailure {
   const c = code ? String(code).slice(0, 60) : null;
-  if (status === 401 || status === 403 || (c && ACCOUNT_CODES.has(c))) {
+  // 402 Payment Required is billing, whatever code came with it.
+  if (status === 401 || status === 402 || status === 403 || (c && ACCOUNT_CODES.has(c))) {
     return { kind: 'ACCOUNT', status, code: c };
   }
   if (status === 429) {

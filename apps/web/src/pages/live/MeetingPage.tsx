@@ -152,6 +152,8 @@ export default function MeetingPage() {
     },
     onSuccess: (data, kind) => {
       if (kind === 'start' && data?.id) setPress((p) => (p ? { ...p, recId: data.id } : p));
+      // The room as it is now: the capture follows the click, not the next push.
+      if (meeting.provider === 'cloudflare') meeting.refreshState();
     },
     onError: (e) => {
       setPress(null);

@@ -242,7 +242,7 @@ describe('L1: asking for a summary survives a refusal from the queue', () => {
 
 describe('L1: the queue can scope a clash to one piece of work', () => {
   const build = (active: { academyWide: number; sameInput: number }) => {
-    const prisma = {
+    const prisma: any = {
       aiJob: {
         count: jest.fn(async ({ where }: any) =>
           where.input ? active.sameInput : active.academyWide,
@@ -250,6 +250,9 @@ describe('L1: the queue can scope a clash to one piece of work', () => {
         aggregate: jest.fn(async () => ({ _sum: { costCents: 0 } })),
         create: jest.fn(async ({ data }: any) => ({ id: 'new', ...data })),
       },
+      // enqueue checks and creates under one advisory lock, in a transaction.
+      $executeRaw: jest.fn(async () => 0),
+      $transaction: jest.fn(async (fn: (tx: unknown) => unknown) => fn(prisma)),
     };
     const service = new AiJobService(
       prisma as never,

@@ -65,17 +65,27 @@ export class AiJobService {
         code: 'AI_DISABLED',
       });
     }
-    const busy = opts.sameInput
-      ? await this.hasActiveJobFor(type, opts.sameInput.path, opts.sameInput.equals)
-      : await this.hasActiveJob(academyId, opts.conflictsWith);
-    if (busy) {
-      throw new ConflictException({
-        message: 'A generation job is already in progress for this academy',
-        code: 'AI_JOB_ACTIVE',
-      });
-    }
-    await this.assertWithinBudget();
-    return this.prisma.aiJob.create({ data: { academyId, type, input, status: 'QUEUED' } });
+    // The check and the create are one step, serialised per academy (or per
+    // piece of work, for `sameInput`). They used to be two: a double click on
+    // "Generate" sent two requests that both found nothing running and both
+    // queued a job — two generations, two bills, one page rewritten twice.
+    const lockKey = opts.sameInput
+      ? `ai-job:${type}:${opts.sameInput.path}:${opts.sameInput.equals}`
+      : `ai-job:${academyId}`;
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const busy = opts.sameInput
+        ? await this.hasActiveJobFor(type, opts.sameInput.path, opts.sameInput.equals, tx)
+        : await this.hasActiveJob(academyId, opts.conflictsWith, tx);
+      if (busy) {
+        throw new ConflictException({
+          message: 'A generation job is already in progress for this academy',
+          code: 'AI_JOB_ACTIVE',
+        });
+      }
+      await this.assertWithinBudget(tx);
+      return tx.aiJob.create({ data: { academyId, type, input, status: 'QUEUED' } });
+    });
   }
 
   /** Fetch a job scoped to an academy (status polling); null if not theirs. */
@@ -84,8 +94,13 @@ export class AiJobService {
   }
 
   /** An active job of `type` about one particular thing — see `sameInput`. */
-  hasActiveJobFor(type: AiJobType, path: string, equals: string): Promise<boolean> {
-    return this.prisma.aiJob
+  hasActiveJobFor(
+    type: AiJobType,
+    path: string,
+    equals: string,
+    db: Pick<PrismaService, 'aiJob'> = this.prisma,
+  ): Promise<boolean> {
+    return db.aiJob
       .count({
         where: {
           type,
@@ -96,8 +111,12 @@ export class AiJobService {
       .then((n) => n > 0);
   }
 
-  hasActiveJob(academyId: string, types?: AiJobType[]): Promise<boolean> {
-    return this.prisma.aiJob
+  hasActiveJob(
+    academyId: string,
+    types?: AiJobType[],
+    db: Pick<PrismaService, 'aiJob'> = this.prisma,
+  ): Promise<boolean> {
+    return db.aiJob
       .count({
         where: {
           academyId,
@@ -110,12 +129,12 @@ export class AiJobService {
 
   /** Month-to-date platform AI spend must stay under the configured ceiling
    *  (0 = uncapped). */
-  async assertWithinBudget(): Promise<void> {
+  async assertWithinBudget(db: Pick<PrismaService, 'aiJob'> = this.prisma): Promise<void> {
     const cap = this.config.monthlyBudgetCents;
     if (cap <= 0) return;
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const agg = await this.prisma.aiJob.aggregate({
+    const agg = await db.aiJob.aggregate({
       _sum: { costCents: true },
       where: { createdAt: { gte: monthStart } },
     });

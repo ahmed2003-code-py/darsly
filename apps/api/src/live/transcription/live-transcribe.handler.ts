@@ -146,12 +146,12 @@ export class LiveTranscribeHandler implements AiJobHandler {
     try {
       for (let round = 0; round < MAX_ROUNDS && !account && !rateLimited; round++) {
         const todo = // Every run of the class: a reopened class's earlier runs are owed too.
-        (
-          await this.prisma.liveAudioSegment.findMany({
-            where: { sessionId: liveSessionId, text: null, error: null },
-            orderBy: { seq: 'asc' },
-          })
-        ).filter((p) => !owed.has(p.id));
+          (
+            await this.prisma.liveAudioSegment.findMany({
+              where: { sessionId: liveSessionId, text: null, error: null },
+              orderBy: { seq: 'asc' },
+            })
+          ).filter((p) => !owed.has(p.id));
         if (!todo.length) {
           const wait = windowClosesAt - Date.now();
           if (wait <= 0) break;

@@ -326,7 +326,9 @@ beforeAll(async () => {
 }, 10 * 60_000);
 
 afterAll(async () => {
-  writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
+  // Only a run that happened has a report (and a folder to put it in): on a
+  // machine without Chrome — CI — the suite skipped before making either.
+  if (ready) writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 2));
   await browser?.close().catch(() => undefined);
   await app?.close().catch(() => undefined);
 });

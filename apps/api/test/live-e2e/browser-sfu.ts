@@ -1,4 +1,5 @@
 import type { Page } from 'puppeteer-core';
+import { CloudflareRealtimeError } from '../../src/live/providers/cloudflare-realtime.client';
 
 /**
  * A real SFU for the browser E2E, in a browser.
@@ -13,6 +14,11 @@ import type { Page } from 'puppeteer-core';
  * Simulcast is not received by a browser: the layers are stripped from the
  * offer it answers, and the sender falls back to one layer, as it would with
  * any peer that cannot take them.
+ *
+ * Like Cloudflare, it refuses to renegotiate a session whose connection is
+ * not connected yet — "Session appears to be disconnected", HTTP 410 — which
+ * is what a page that sent its microphone right after its camera met in
+ * production (2026-10-16). Every refusal is counted (`refusedDisconnected`).
  */
 const PAGE_SCRIPT = `
 window.sfu = (() => {
@@ -27,6 +33,19 @@ window.sfu = (() => {
   const one = (id) => { const s = S.get(id); if (!s) throw new Error('no session ' + id); return s; };
   // One negotiation at a time per session, like the real SFU's.
   const serial = (s, fn) => { const run = s.q.then(fn, fn); s.q = run.catch(() => undefined); return run; };
+  // Cloudflare's rule: a session already negotiated is renegotiated only once
+  // its connection is up (a short grace for the two ends' lag).
+  const connected = (s) => new Promise((r) => {
+    if (!s.negotiated || s.pc.connectionState === 'connected') return r(true);
+    const end = Date.now() + 2000;
+    const tick = () => {
+      if (s.pc.connectionState === 'connected') return r(true);
+      if (Date.now() > end) return r(false);
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+  const refuse = () => { const e = new Error('SESSION_DISCONNECTED'); throw e; };
   return {
     newSession(id) {
       const pc = new RTCPeerConnection({ iceServers: [], bundlePolicy: 'max-bundle' });
@@ -35,6 +54,8 @@ window.sfu = (() => {
     push(id, sdp, tracks) {
       const s = one(id);
       return serial(s, async () => {
+        if (!(await connected(s))) refuse();
+        s.negotiated = true;
         await s.pc.setRemoteDescription({ type: 'offer', sdp: noSimulcast(sdp) });
         for (const t of tracks) {
           const tr = s.pc.getTransceivers().find((x) => x.mid === t.mid);
@@ -51,6 +72,8 @@ window.sfu = (() => {
     pull(id, items) {
       const s = one(id);
       return serial(s, async () => {
+        if (!(await connected(s))) refuse();
+        s.negotiated = true;
         const trs = items.map((it) => {
           const src = S.get(it.sessionId);
           const live = src && [...src.tracks.values()].some((t) => t.trackName === it.trackName && t.status === 'active');
@@ -79,6 +102,7 @@ window.sfu = (() => {
           if (t.location === 'local') s.published.delete(t.trackName);
         }
         if (!sdp) return null;
+        if (!(await connected(s))) refuse();
         await s.pc.setRemoteDescription({ type: 'offer', sdp: noSimulcast(sdp) });
         const a = await s.pc.createAnswer();
         await s.pc.setLocalDescription(a);
@@ -119,6 +143,23 @@ export async function browserSfu(page: Page) {
   await page.evaluate(PAGE_SCRIPT);
   let n = 0;
   type Sdp = { type: string; sdp: string };
+  const stats = { refusedDisconnected: 0 };
+  /** The page's refusal, as Cloudflare's client reports it (410 → RTC_SESSION_EXPIRED). */
+  const asCloudflare = async <T>(p: Promise<T>): Promise<T> => {
+    try {
+      return await p;
+    } catch (e) {
+      if (/SESSION_DISCONNECTED/.test(String((e as Error)?.message))) {
+        stats.refusedDisconnected++;
+        throw new CloudflareRealtimeError(
+          'rejected',
+          410,
+          'session_error: Session appears to be disconnected',
+        );
+      }
+      throw e;
+    }
+  };
   const client = {
     configured: true,
     turnConfigured: false,
@@ -129,11 +170,8 @@ export async function browserSfu(page: Page) {
       return id;
     },
     pushTracks: async (sid: string, offer: Sdp, tracks: { mid: string; trackName: string }[]) => {
-      const sdp = await page.evaluate(
-        (a, b, c) => (window as any).sfu.push(a, b, c),
-        sid,
-        offer.sdp,
-        tracks,
+      const sdp = await asCloudflare(
+        page.evaluate((a, b, c) => (window as any).sfu.push(a, b, c), sid, offer.sdp, tracks),
       );
       return {
         sessionDescription: { type: 'answer', sdp },
@@ -141,10 +179,12 @@ export async function browserSfu(page: Page) {
       };
     },
     pullTracks: async (sid: string, tracks: { sessionId: string; trackName: string }[]) => {
-      const r = (await page.evaluate(
-        (a, b) => (window as any).sfu.pull(a, b),
-        sid,
-        tracks.map((t) => ({ sessionId: t.sessionId, trackName: t.trackName })),
+      const r = (await asCloudflare(
+        page.evaluate(
+          (a, b) => (window as any).sfu.pull(a, b),
+          sid,
+          tracks.map((t) => ({ sessionId: t.sessionId, trackName: t.trackName })),
+        ),
       )) as { sdp: string; mids: (string | null)[] };
       return {
         requiresImmediateRenegotiation: true,
@@ -164,11 +204,13 @@ export async function browserSfu(page: Page) {
       mids: string[],
       opts: { force: boolean; sessionDescription?: Sdp },
     ) => {
-      const sdp = await page.evaluate(
-        (a, b, c) => (window as any).sfu.close(a, b, c),
-        sid,
-        mids,
-        opts.sessionDescription?.sdp ?? null,
+      const sdp = await asCloudflare(
+        page.evaluate(
+          (a, b, c) => (window as any).sfu.close(a, b, c),
+          sid,
+          mids,
+          opts.sessionDescription?.sdp ?? null,
+        ),
       );
       return sdp ? { sessionDescription: { type: 'answer', sdp } } : {};
     },
@@ -182,5 +224,5 @@ export async function browserSfu(page: Page) {
       { trackName: string; kind: string | null }[]
     >;
   const diag = () => page.evaluate(() => (window as any).sfu.diag());
-  return { client, published, diag };
+  return { client, published, diag, stats };
 }

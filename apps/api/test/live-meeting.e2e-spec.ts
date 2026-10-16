@@ -767,6 +767,19 @@ describe('the meeting, in a real browser', () => {
     // the device and the SFU (seconds).
     expect(muteMs).toBeLessThan(1_500);
     expect(unmuteMs).toBeLessThan(1_500);
+
+    // Joining (camera, then the microphone sent ahead), toggling the camera
+    // and the microphone: never a renegotiation on a connection not yet up —
+    // Cloudflare answers that with 410 "Session appears to be disconnected"
+    // and the page used to rebuild the whole connection (2026-10-16).
+    note(
+      'no renegotiation refused as "disconnected" (Cloudflare 410)',
+      sfu.stats.refusedDisconnected === 0,
+      {
+        ...sfu.stats,
+      },
+    );
+    expect(sfu.stats.refusedDisconnected).toBe(0);
     expect(await sfuPublished(sid, tid, 'audio')).toBe(1);
 
     // ── Recording: confirmed, and never flickering back to "start" ──────────

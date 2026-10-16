@@ -10,6 +10,7 @@ import { idbPieceStore } from './lessonAudioStore';
 import { PieceOutbox, type UploadOwed } from './lessonAudioOutbox';
 import { lessonAudioContext, primeLessonAudio } from './lessonAudioContext';
 import { DeviceMuteJudge, peakOf } from './deviceMute';
+import { untilConnected } from './rtcReady';
 import { beginOp, markOp } from './liveTimings';
 
 /**
@@ -481,6 +482,7 @@ export function useCloudflareMeeting(
 
         if (drop.length) {
           await conn.run(async () => {
+            await untilConnected(conn.pc);
             const mids: string[] = [];
             for (const id of drop) {
               const p = pulled.current.get(id)!;
@@ -513,6 +515,7 @@ export function useCloudflareMeeting(
 
         if (add.length) {
           await conn.run(async () => {
+            await untilConnected(conn.pc);
             let r: any;
             try {
               r = (
@@ -623,6 +626,7 @@ export function useCloudflareMeeting(
   const pushOn = useCallback(
     async (c: Conn, kind: Kind, track: MediaStreamTrack) => {
       await c.run(async () => {
+        await untilConnected(c.pc);
         // The teacher's camera goes out in two layers (simulcast): 720p and a
         // quarter of it. Each student receives the one their link can carry.
         const encodings: RTCRtpEncodingParameters[] | undefined =
@@ -710,6 +714,7 @@ export function useCloudflareMeeting(
         return;
       }
       await c.run(async () => {
+        await untilConnected(c.pc);
         const tr = c.pc.getTransceivers().find((x) => x.mid === l.mid);
         try {
           tr?.stop();
@@ -1011,14 +1016,21 @@ export function useCloudflareMeeting(
     localPreview.current = null;
     for (const id of [...audioEls.current.keys()]) dropAudio(id);
     pulled.current.clear();
-    await Promise.all([closeConn(send), closeConn(recv)]);
+    // Off the screen now: the connections close (pc.close) at once, and the
+    // server is told after — a slow SFU used to hold a half-torn-down class
+    // on screen for seconds (camera gone, switches still "on").
+    const closing = Promise.all([closeConn(send), closeConn(recv)]);
     setJoined(false);
+    setMicOn(false);
+    setCamOn(false);
+    setSharing(false);
+    await closing;
   }, [closeConn, dropAudio, stopCapture]);
 
   const leave = useCallback(async () => {
     leaving.current = true;
-    await teardown();
-    await api.post(`/live/${liveSessionId}/leave`).catch(() => undefined);
+    // The page leaves at once; the server hears of it in the background.
+    void teardown().then(() => api.post(`/live/${liveSessionId}/leave`).catch(() => undefined));
   }, [teardown, liveSessionId]);
 
   /** Rebuild a dropped connection: a new SFU session, everything pulled or sent again. */
